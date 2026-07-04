@@ -516,7 +516,10 @@ export default function App() {
     serviceKey:'', serviceName:'', subServiceKey:'', subServiceName:'', date:'', timeKey:'', notes:'',
   });
 
-  const [theme, setTheme] = useState(() => localStorage.getItem('sndk_theme') || 'dark');
+  const [theme, setTheme] = useState(() => {
+    const h = new Date().getHours();
+    return h >= 6 && h < 18 ? 'light' : 'dark';
+  });
   Object.assign(C, theme === 'light' ? LIGHT_THEME : DARK_THEME);
   const toggleTheme = () => setTheme(t => {
     const next = t === 'dark' ? 'light' : 'dark';
