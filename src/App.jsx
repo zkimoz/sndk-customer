@@ -434,6 +434,16 @@ const BOOKING_YEAR_OPTIONS = (() => {
   return Array.from({ length: yr - 1930 + 1 }, (_, i) => yr - i);
 })();
 
+const sortByEn = arr => [...arr].sort((a, b) =>
+  (a.name_en || a.name_ar || '').localeCompare(b.name_en || b.name_ar || '', 'en', { sensitivity: 'base' })
+);
+const brandLabel = (b, lang) => lang === 'en'
+  ? (b.name_en || b.name_ar || '')
+  : (b.name_en && b.name_ar ? `${b.name_en} · ${b.name_ar}` : (b.name_ar || b.name_en || ''));
+const catLabel = (c, lang) => lang === 'en'
+  ? (c.name_en || c.name_ar || '')
+  : (c.name_en && c.name_ar ? `${c.name_en} · ${c.name_ar}` : (c.name_ar || c.name_en || ''));
+
 const DARK_THEME = {
   bg:'#111111', panel:'#1A1A1A', card:'#2F2F2F', input:'#3A3A3A',
   border:'rgba(255,203,116,0.18)', borderFocus:'rgba(255,203,116,0.70)',
@@ -2298,8 +2308,8 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, goOrd
                 onFocus={e=>e.target.style.borderColor=C.borderFocus}
                 onBlur={e=>e.target.style.borderColor=C.border}>
                 <option value="">{lang==='ar'?'اختر النوع':'Select Brand'}</option>
-                {(carBrands.length > 0 ? carBrands : CAR_BRANDS.map(b => ({ id:b.key, name_ar:b.ar, name_en:b.en })))
-                  .map(b => { const v=b.name_ar||b.name_en; return <option key={b.id} value={v}>{lang==='ar'?v:(b.name_en||b.name_ar)}</option>; })}
+                {sortByEn(carBrands.length > 0 ? carBrands : CAR_BRANDS.map(b => ({ id:b.key, name_ar:b.ar, name_en:b.en })))
+                  .map(b => { const v=b.name_ar||b.name_en; return <option key={b.id} value={v}>{brandLabel(b, lang)}</option>; })}
               </select>
             </div>
             {/* Category dropdown - filtered by brand */}
@@ -2313,7 +2323,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, goOrd
                 onFocus={e=>e.target.style.borderColor=C.borderFocus}
                 onBlur={e=>e.target.style.borderColor=C.border}>
                 <option value="">{lang==='ar'?'اختر الفئة':'Select Category'}</option>
-                {profileFilteredCats.map(c => { const v=c.name_ar||c.name_en; return <option key={c.id} value={v}>{lang==='ar'?v:(c.name_en||c.name_ar)}</option>; })}
+                {sortByEn(profileFilteredCats).map(c => { const v=c.name_ar||c.name_en; return <option key={c.id} value={v}>{catLabel(c, lang)}</option>; })}
               </select>
             </div>
             {/* Year dropdown */}
@@ -2429,7 +2439,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, goOrd
                               className="w-full px-3 py-2.5 rounded-xl text-sm outline-none appearance-none cursor-pointer"
                               style={inputStyle} onFocus={e=>Object.assign(e.target.style,focusStyle)} onBlur={e=>e.target.style.borderColor=C.border}>
                               <option value="">{isRtl?'اختر النوع':'Select Brand'}</option>
-                              {carBrands.map(b => { const v=b.name_ar||b.name_en; return <option key={b.id} value={v}>{isRtl?v:(b.name_en||b.name_ar)}</option>; })}
+                              {sortByEn(carBrands).map(b => { const v=b.name_ar||b.name_en; return <option key={b.id} value={v}>{brandLabel(b, lang)}</option>; })}
                             </select>
                             {/* Category */}
                             <select value={editCarForm.car_category}
@@ -2438,7 +2448,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, goOrd
                               className="w-full px-3 py-2.5 rounded-xl text-sm outline-none appearance-none cursor-pointer"
                               style={{ ...inputStyle, opacity: editCarForm.car_type ? 1 : 0.4 }} onFocus={e=>Object.assign(e.target.style,focusStyle)} onBlur={e=>e.target.style.borderColor=C.border}>
                               <option value="">{isRtl?'اختر الفئة':'Select Category'}</option>
-                              {editFilteredCats.map(c => { const v=c.name_ar||c.name_en; return <option key={c.id} value={v}>{isRtl?v:(c.name_en||c.name_ar)}</option>; })}
+                              {sortByEn(editFilteredCats).map(c => { const v=c.name_ar||c.name_en; return <option key={c.id} value={v}>{catLabel(c, lang)}</option>; })}
                             </select>
                             {/* Year */}
                             <select value={editCarForm.production_year}
@@ -2723,8 +2733,8 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
           }}
           className={`${C.inputCls} appearance-none cursor-pointer`} style={{ background: C.input, border: `1px solid ${C.border}` }}>
           <option value="">{tr.selectBrand}</option>
-          {(carBrands.length > 0 ? carBrands : CAR_BRANDS.map(b => ({ id: b.key, name_ar: b.ar, name_en: b.en })))
-            .map(b => { const v=b.name_ar||b.name_en; return <option key={b.id} value={v}>{lang==='ar'?v:(b.name_en||b.name_ar)}</option>; })}
+          {sortByEn(carBrands.length > 0 ? carBrands : CAR_BRANDS.map(b => ({ id: b.key, name_ar: b.ar, name_en: b.en })))
+            .map(b => { const v=b.name_ar||b.name_en; return <option key={b.id} value={v}>{brandLabel(b, lang)}</option>; })}
         </select>
       </Field>
       <Field label={tr.carCategory}>
@@ -2734,7 +2744,7 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
           className={`${C.inputCls} appearance-none cursor-pointer`}
           style={{ background: C.input, border: `1px solid ${C.border}`, opacity: formData.carBrandKey ? 1 : 0.4 }}>
           <option value="">{tr.selectCategory}</option>
-          {filteredCats.map(c => { const v=c.name_ar||c.name_en; return <option key={c.id} value={v}>{lang==='ar'?v:(c.name_en||c.name_ar)}</option>; })}
+          {sortByEn(filteredCats).map(c => { const v=c.name_ar||c.name_en; return <option key={c.id} value={v}>{catLabel(c, lang)}</option>; })}
         </select>
       </Field>
       <Field label={tr.carYear}>
