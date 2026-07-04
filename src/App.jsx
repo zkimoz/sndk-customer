@@ -1821,9 +1821,18 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange }) {
 }
 
 // ── HOME VIEW ──────────────────────────────────────────────────────────
-// Edit this array to change announcements shown on the home card (empty = no banner)
+// ── Home card announcement ───────────────────────────────────────────────
+// bg: CSS background of the card. overlay: dark tint for text readability.
+// Empty array → normal maroon hero card.
 const HOME_ANNOUNCEMENTS = [
-  { emoji:'🇪🇬', ar:'مبروك لمصر للتأهل للدور الـ 16 🎉', en:"Congratulations Egypt — Round of 16! 🎉" },
+  {
+    emoji: '🇪🇬',
+    ar:  'مبروك لمصر للتأهل للدور الـ 16 🎉',
+    en:  'Congratulations Egypt — Round of 16! 🎉',
+    bg:  'linear-gradient(180deg, #CE1126 33.33%, #FFFFFF 33.33% 66.67%, #000000 66.67%)',
+    overlay: 'rgba(0,0,0,0.48)',
+    shadow: 'rgba(206,17,38,0.45)',
+  },
 ];
 
 function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, serviceCategories }) {
@@ -1832,29 +1841,43 @@ function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, service
     setFormData(p => ({ ...p, serviceKey: cat.id, serviceName: cat.ar }));
     goServices?.();
   };
+  const ann = HOME_ANNOUNCEMENTS[0] || null;
   return (
     <div className="p-4 md:p-8 space-y-6 max-w-4xl md:mx-auto">
       <div className="relative rounded-2xl overflow-hidden p-6 md:p-8 min-h-[150px] md:min-h-[190px] flex flex-col justify-between"
-        style={{ background:C.heroBg, border:`1px solid ${C.gold}30`, boxShadow:`0 0 48px ${C.heroShadow}` }}>
-        <div className="absolute bottom-0 end-0 -mb-4 -me-4 opacity-10 pointer-events-none"><Car size={200} color="#FFCB74"/></div>
-        <div className="absolute inset-0 pointer-events-none" style={{ background:C.heroOverlay(isRtl) }}/>
+        style={{
+          background: ann ? ann.bg : C.heroBg,
+          border: `1px solid ${ann ? 'rgba(255,255,255,0.18)' : `${C.gold}30`}`,
+          boxShadow: `0 0 48px ${ann ? ann.shadow : C.heroShadow}`,
+        }}>
+        {/* Dark overlay for readability */}
+        <div className="absolute inset-0 pointer-events-none"
+          style={{ background: ann ? ann.overlay : C.heroOverlay(isRtl) }}/>
+        {/* Decorative: flag emoji watermark OR car icon */}
+        {ann
+          ? <div className="absolute bottom-0 end-0 text-[170px] leading-none opacity-15 pointer-events-none select-none -mb-4 -me-4">{ann.emoji}</div>
+          : <div className="absolute bottom-0 end-0 -mb-4 -me-4 opacity-10 pointer-events-none"><Car size={200} color="#FFCB74"/></div>
+        }
+        {/* Main text */}
         <div className="relative">
-          <p className="text-xs font-semibold tracking-widest uppercase mb-1.5" style={{ color:`${C.gold}90` }}>QATAR · VIP</p>
-          <h1 className="text-white font-black text-2xl md:text-3xl leading-tight">{tr.greeting}</h1>
-          <p className="text-sm mt-1" style={{ color:'rgba(246,246,246,0.60)' }}>{tr.greetingSub}</p>
+          {ann ? (
+            <>
+              <p className="text-[10px] font-black uppercase tracking-[3px] mb-2" style={{ color:'rgba(255,203,116,0.85)' }}>
+                {lang==='ar' ? '📢 إعلان' : '📢 ANNOUNCEMENT'}
+              </p>
+              <h1 className="text-white font-black text-2xl md:text-3xl leading-snug drop-shadow-lg">
+                {lang==='ar' ? ann.ar : ann.en}
+              </h1>
+            </>
+          ) : (
+            <>
+              <p className="text-xs font-semibold tracking-widest uppercase mb-1.5" style={{ color:`${C.gold}90` }}>QATAR · VIP</p>
+              <h1 className="text-white font-black text-2xl md:text-3xl leading-tight">{tr.greeting}</h1>
+              <p className="text-sm mt-1" style={{ color:'rgba(246,246,246,0.60)' }}>{tr.greetingSub}</p>
+            </>
+          )}
         </div>
-        {/* ── Announcements ── */}
-        {HOME_ANNOUNCEMENTS.length > 0 && (
-          <div className="relative mt-4 space-y-2">
-            {HOME_ANNOUNCEMENTS.map((ann, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-xl px-4 py-2.5"
-                style={{ background:'rgba(255,255,255,0.12)', backdropFilter:'blur(8px)', border:'1px solid rgba(255,255,255,0.18)' }}>
-                <span className="text-2xl leading-none">{ann.emoji}</span>
-                <p className="text-white font-bold text-sm leading-snug">{lang==='ar' ? ann.ar : ann.en}</p>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Buttons */}
         <div className="relative flex gap-3 mt-5">
           <button onClick={()=>onBookNow()}
             className="px-6 py-2.5 rounded-xl font-black text-sm transition-all active:scale-95 hover:scale-[1.06] hover:brightness-110"
@@ -1863,9 +1886,9 @@ function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, service
           </button>
           <button onClick={goServices}
             className="px-5 py-2.5 rounded-xl font-semibold text-sm transition-all active:scale-95 hover:scale-[1.06]"
-            style={{ border:`1px solid #EFDFBB55`, color:'#EFDFBB' }}
-            onMouseEnter={e=>{e.currentTarget.style.background='#EFDFBB';e.currentTarget.style.color=C.gold;}}
-            onMouseLeave={e=>{e.currentTarget.style.background='';e.currentTarget.style.color='#EFDFBB';}}>
+            style={{ border:`1px solid rgba(255,255,255,0.3)`, color:'#fff' }}
+            onMouseEnter={e=>{e.currentTarget.style.background='rgba(255,255,255,0.15)';}}
+            onMouseLeave={e=>{e.currentTarget.style.background='';}}>
             {tr.allServices}
           </button>
         </div>
