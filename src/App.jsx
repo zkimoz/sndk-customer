@@ -1872,16 +1872,22 @@ function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, service
     <div className="p-4 md:p-8 space-y-6 max-w-4xl md:mx-auto">
       <div className="relative rounded-2xl overflow-hidden p-6 md:p-8 min-h-[150px] md:min-h-[190px] flex flex-col justify-between"
         style={{
-          ...(ann?.image_url
+          ...(!ann?.video_url && ann?.image_url
             ? { backgroundImage:`url(${ann.image_url})`, backgroundSize:'cover', backgroundPosition:'center' }
-            : { background: annStyle ? annStyle.bg : C.heroBg }),
+            : { background: ann?.video_url ? '#000' : (annStyle ? annStyle.bg : C.heroBg) }),
           border: `1px solid ${annStyle ? 'rgba(255,255,255,0.18)' : `${C.gold}30`}`,
           boxShadow: `0 0 48px ${annStyle ? annStyle.shadow : C.heroShadow}`,
-          transition: 'background 0.35s ease, box-shadow 0.35s ease',
+          transition: 'box-shadow 0.35s ease',
         }}>
+        {/* Video background */}
+        {ann?.video_url && (
+          <video key={ann.video_url} src={ann.video_url}
+            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+            autoPlay muted loop playsInline/>
+        )}
         {/* Overlay */}
         <div className="absolute inset-0 pointer-events-none"
-          style={{ background: ann?.image_url ? 'rgba(0,0,0,0.52)' : (annStyle ? annStyle.overlay : C.heroOverlay(isRtl)) }}/>
+          style={{ background: (ann?.video_url || ann?.image_url) ? 'rgba(0,0,0,0.52)' : (annStyle ? annStyle.overlay : C.heroOverlay(isRtl)) }}/>
 
         {/* Fading content layer */}
         <div className="contents" style={{ opacity: fading ? 0 : 1, transition: 'opacity 0.35s ease' }}>
