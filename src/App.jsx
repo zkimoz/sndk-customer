@@ -504,7 +504,7 @@ export default function App() {
   const [allSubServices, setAllSubServices]       = useState([]);
   const [cart, setCart] = useState([]); // [{id, name, catId, catName}]
   const [cartOpen, setCartOpen] = useState(false);
-  const [homeAnnouncement, setHomeAnnouncement] = useState(null);
+  const [homeAnnouncements, setHomeAnnouncements] = useState([]);
   const [pendingQuotCount, setPendingQuotCount] = useState(0);
   const addToCart    = (catId, subId, subName, catName) =>
     setCart(p => p.find(x => x.id === subId) ? p : [...p, { id: subId, name: subName, catId, catName }]);
@@ -563,9 +563,9 @@ export default function App() {
     supabase.from('services').select('*').eq('is_active', true)
       .order('sort_order', { ascending:true, nullsFirst:false }).order('id')
       .then(({ data }) => { if (data) setAllSubServices(data); });
-    // Load active announcement
-    supabase.from('announcements').select('*').eq('is_active', true).order('id', { ascending:false }).limit(1)
-      .then(({ data }) => { if (data?.length) setHomeAnnouncement(data[0]); });
+    // Load all active announcements for slideshow
+    supabase.from('announcements').select('*').eq('is_active', true).order('id', { ascending:false })
+      .then(({ data }) => { if (data?.length) setHomeAnnouncements(data); });
     return () => subscription.unsubscribe();
   }, []);
 
@@ -792,7 +792,7 @@ export default function App() {
 
           {/* Page Content */}
           <main className="flex-1 overflow-y-auto pb-24 md:pb-8">
-            {page==='home'    && <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncement={homeAnnouncement}/>}
+            {page==='home'    && <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements}/>}
             {page==='services'&& <ServicesView lang={lang} tr={tr} isRtl={isRtl} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart}/>}
             {page==='profile' && user && <ProfileView lang={lang} tr={tr} isRtl={isRtl} profile={profile} user={user} onBook={(car)=>bookFromProfile(car)} goServices={goServices} goOrders={goOrders} onProfileUpdated={()=>fetchProfile(user.id)} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories}/>}
             {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount}/>}
@@ -1836,14 +1836,38 @@ const ANN_PRESETS = {
   purple: { bg:'linear-gradient(135deg,#4c1d95 0%,#5b21b6 100%)',                              overlay:'rgba(0,0,0,0.3)',  shadow:'rgba(76,29,149,0.5)'  },
 };
 
-function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, serviceCategories, homeAnnouncement }) {
+function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, serviceCategories, homeAnnouncements }) {
   const cats = serviceCategories.map(enrichCat);
   const goToCat = (cat) => {
     setFormData(p => ({ ...p, serviceKey: cat.id, serviceName: cat.ar }));
     goServices?.();
   };
-  const ann = homeAnnouncement || null;
+
+  // Slideshow state
+  const [annIdx, setAnnIdx] = useState(0);
+  const [fading, setFading] = useState(false);
+
+  useEffect(() => {
+    if (homeAnnouncements.length <= 1) { setAnnIdx(0); return; }
+    const timer = setInterval(() => {
+      setFading(true);
+      setTimeout(() => {
+        setAnnIdx(i => (i + 1) % homeAnnouncements.length);
+        setFading(false);
+      }, 350);
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [homeAnnouncements.length]);
+
+  const goSlide = (i) => {
+    if (i === annIdx) return;
+    setFading(true);
+    setTimeout(() => { setAnnIdx(i); setFading(false); }, 350);
+  };
+
+  const ann = homeAnnouncements[annIdx] || null;
   const annStyle = ann ? (ANN_PRESETS[ann.style] || ANN_PRESETS.maroon) : null;
+
   return (
     <div className="p-4 md:p-8 space-y-6 max-w-4xl md:mx-auto">
       <div className="relative rounded-2xl overflow-hidden p-6 md:p-8 min-h-[150px] md:min-h-[190px] flex flex-col justify-between"
@@ -1853,48 +1877,70 @@ function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, service
             : { background: annStyle ? annStyle.bg : C.heroBg }),
           border: `1px solid ${annStyle ? 'rgba(255,255,255,0.18)' : `${C.gold}30`}`,
           boxShadow: `0 0 48px ${annStyle ? annStyle.shadow : C.heroShadow}`,
+          transition: 'background 0.35s ease, box-shadow 0.35s ease',
         }}>
-        {/* Dark overlay for readability */}
+        {/* Overlay */}
         <div className="absolute inset-0 pointer-events-none"
           style={{ background: ann?.image_url ? 'rgba(0,0,0,0.52)' : (annStyle ? annStyle.overlay : C.heroOverlay(isRtl)) }}/>
-        {/* Decorative: flag emoji watermark OR car icon */}
-        {ann
-          ? <div className="absolute bottom-0 end-0 text-[170px] leading-none opacity-15 pointer-events-none select-none -mb-4 -me-4">{ann.emoji}</div>
-          : <div className="absolute bottom-0 end-0 -mb-4 -me-4 opacity-10 pointer-events-none"><Car size={200} color="#FFCB74"/></div>
-        }
-        {/* Main text */}
-        <div className="relative">
-          {ann ? (
-            <>
-              <p className="text-[10px] font-black uppercase tracking-[3px] mb-2" style={{ color:'rgba(255,203,116,0.85)' }}>
-                {lang==='ar' ? '📢 إعلان' : '📢 ANNOUNCEMENT'}
-              </p>
-              <h1 className="text-white font-black text-2xl md:text-3xl leading-snug drop-shadow-lg">
-                {lang==='ar' ? ann.text_ar : (ann.text_en || ann.text_ar)}
-              </h1>
-            </>
-          ) : (
-            <>
-              <p className="text-xs font-semibold tracking-widest uppercase mb-1.5" style={{ color:`${C.gold}90` }}>QATAR · VIP</p>
-              <h1 className="text-white font-black text-2xl md:text-3xl leading-tight">{tr.greeting}</h1>
-              <p className="text-sm mt-1" style={{ color:'rgba(246,246,246,0.60)' }}>{tr.greetingSub}</p>
-            </>
-          )}
+
+        {/* Fading content layer */}
+        <div className="contents" style={{ opacity: fading ? 0 : 1, transition: 'opacity 0.35s ease' }}>
+          {/* Decorative watermark */}
+          {ann
+            ? <div className="absolute bottom-0 end-0 text-[170px] leading-none opacity-15 pointer-events-none select-none -mb-4 -me-4">{ann.emoji}</div>
+            : <div className="absolute bottom-0 end-0 -mb-4 -me-4 opacity-10 pointer-events-none"><Car size={200} color="#FFCB74"/></div>
+          }
+          {/* Main text */}
+          <div className="relative">
+            {ann ? (
+              <>
+                <p className="text-[10px] font-black uppercase tracking-[3px] mb-2" style={{ color:'rgba(255,203,116,0.85)' }}>
+                  {lang==='ar' ? '📢 إعلان' : '📢 ANNOUNCEMENT'}
+                </p>
+                <h1 className="text-white font-black text-2xl md:text-3xl leading-snug drop-shadow-lg">
+                  {lang==='ar' ? ann.text_ar : (ann.text_en || ann.text_ar)}
+                </h1>
+              </>
+            ) : (
+              <>
+                <p className="text-xs font-semibold tracking-widest uppercase mb-1.5" style={{ color:`${C.gold}90` }}>QATAR · VIP</p>
+                <h1 className="text-white font-black text-2xl md:text-3xl leading-tight">{tr.greeting}</h1>
+                <p className="text-sm mt-1" style={{ color:'rgba(246,246,246,0.60)' }}>{tr.greetingSub}</p>
+              </>
+            )}
+          </div>
         </div>
-        {/* Buttons */}
-        <div className="relative flex gap-3 mt-5">
-          <button onClick={()=>onBookNow()}
-            className="px-6 py-2.5 rounded-xl font-black text-sm transition-all active:scale-95 hover:scale-[1.06] hover:brightness-110"
-            style={{ background:C.gold, color:C.btnTxt, boxShadow:`0 0 24px ${C.gold}60` }}>
-            {tr.bookNow}
-          </button>
-          <button onClick={goServices}
-            className="px-5 py-2.5 rounded-xl font-semibold text-sm transition-all active:scale-95 hover:scale-[1.06]"
-            style={{ border:`1px solid rgba(255,255,255,0.3)`, color:'#fff' }}
-            onMouseEnter={e=>{e.currentTarget.style.background='rgba(255,255,255,0.15)';}}
-            onMouseLeave={e=>{e.currentTarget.style.background='';}}>
-            {tr.allServices}
-          </button>
+
+        {/* Buttons + dots */}
+        <div className="relative flex items-end justify-between mt-5">
+          <div className="flex gap-3">
+            <button onClick={()=>onBookNow()}
+              className="px-6 py-2.5 rounded-xl font-black text-sm transition-all active:scale-95 hover:scale-[1.06] hover:brightness-110"
+              style={{ background:C.gold, color:C.btnTxt, boxShadow:`0 0 24px ${C.gold}60` }}>
+              {tr.bookNow}
+            </button>
+            <button onClick={goServices}
+              className="px-5 py-2.5 rounded-xl font-semibold text-sm transition-all active:scale-95 hover:scale-[1.06]"
+              style={{ border:`1px solid rgba(255,255,255,0.3)`, color:'#fff' }}
+              onMouseEnter={e=>{e.currentTarget.style.background='rgba(255,255,255,0.15)';}}
+              onMouseLeave={e=>{e.currentTarget.style.background='';}}>
+              {tr.allServices}
+            </button>
+          </div>
+          {/* Slide dots */}
+          {homeAnnouncements.length > 1 && (
+            <div className="flex items-center gap-1.5 pb-0.5">
+              {homeAnnouncements.map((_, i) => (
+                <button key={i} onClick={() => goSlide(i)}
+                  className="rounded-full transition-all duration-300"
+                  style={{
+                    background: i === annIdx ? '#fff' : 'rgba(255,255,255,0.4)',
+                    width: i === annIdx ? '18px' : '6px',
+                    height: '6px',
+                  }}/>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
