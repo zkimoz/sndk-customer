@@ -1821,6 +1821,11 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange }) {
 }
 
 // ── HOME VIEW ──────────────────────────────────────────────────────────
+// Edit this array to change announcements shown on the home card (empty = no banner)
+const HOME_ANNOUNCEMENTS = [
+  { emoji:'🇪🇬', ar:'مبروك لمصر للتأهل للدور الـ 16 🎉', en:"Congratulations Egypt — Round of 16! 🎉" },
+];
+
 function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, serviceCategories }) {
   const cats = serviceCategories.map(enrichCat);
   const goToCat = (cat) => {
@@ -1838,6 +1843,18 @@ function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, service
           <h1 className="text-white font-black text-2xl md:text-3xl leading-tight">{tr.greeting}</h1>
           <p className="text-sm mt-1" style={{ color:'rgba(246,246,246,0.60)' }}>{tr.greetingSub}</p>
         </div>
+        {/* ── Announcements ── */}
+        {HOME_ANNOUNCEMENTS.length > 0 && (
+          <div className="relative mt-4 space-y-2">
+            {HOME_ANNOUNCEMENTS.map((ann, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl px-4 py-2.5"
+                style={{ background:'rgba(255,255,255,0.12)', backdropFilter:'blur(8px)', border:'1px solid rgba(255,255,255,0.18)' }}>
+                <span className="text-2xl leading-none">{ann.emoji}</span>
+                <p className="text-white font-bold text-sm leading-snug">{lang==='ar' ? ann.ar : ann.en}</p>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="relative flex gap-3 mt-5">
           <button onClick={()=>onBookNow()}
             className="px-6 py-2.5 rounded-xl font-black text-sm transition-all active:scale-95 hover:scale-[1.06] hover:brightness-110"
