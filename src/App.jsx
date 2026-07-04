@@ -1848,13 +1848,15 @@ function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, service
     <div className="p-4 md:p-8 space-y-6 max-w-4xl md:mx-auto">
       <div className="relative rounded-2xl overflow-hidden p-6 md:p-8 min-h-[150px] md:min-h-[190px] flex flex-col justify-between"
         style={{
-          background: annStyle ? annStyle.bg : C.heroBg,
+          ...(ann?.image_url
+            ? { backgroundImage:`url(${ann.image_url})`, backgroundSize:'cover', backgroundPosition:'center' }
+            : { background: annStyle ? annStyle.bg : C.heroBg }),
           border: `1px solid ${annStyle ? 'rgba(255,255,255,0.18)' : `${C.gold}30`}`,
           boxShadow: `0 0 48px ${annStyle ? annStyle.shadow : C.heroShadow}`,
         }}>
         {/* Dark overlay for readability */}
         <div className="absolute inset-0 pointer-events-none"
-          style={{ background: annStyle ? annStyle.overlay : C.heroOverlay(isRtl) }}/>
+          style={{ background: ann?.image_url ? 'rgba(0,0,0,0.52)' : (annStyle ? annStyle.overlay : C.heroOverlay(isRtl)) }}/>
         {/* Decorative: flag emoji watermark OR car icon */}
         {ann
           ? <div className="absolute bottom-0 end-0 text-[170px] leading-none opacity-15 pointer-events-none select-none -mb-4 -me-4">{ann.emoji}</div>
