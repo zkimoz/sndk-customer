@@ -493,6 +493,7 @@ export default function App() {
   const [serviceCategories, setServiceCategories] = useState([]);
   const [allSubServices, setAllSubServices]       = useState([]);
   const [cart, setCart] = useState([]); // [{id, name, catId, catName}]
+  const [cartOpen, setCartOpen] = useState(false);
   const [pendingQuotCount, setPendingQuotCount] = useState(0);
   const addToCart    = (catId, subId, subName, catName) =>
     setCart(p => p.find(x => x.id === subId) ? p : [...p, { id: subId, name: subName, catId, catName }]);
@@ -592,7 +593,7 @@ export default function App() {
     setPage('booking'); setStep(2);
   };
 
-  const goHome     = () => { setPage('home'); setStep(1); resetForm(); clearCart(); setMenuOpen(false); };
+  const goHome     = () => { setPage('home'); setStep(1); resetForm(); setMenuOpen(false); };
   const goServices = () => { setPage('services'); setExpandedService(null); setMenuOpen(false); };
   const goProfile  = () => {
     if (!user) { setAuthModal('signin'); return; }
@@ -634,6 +635,59 @@ export default function App() {
               </button>
             ))}
           </nav>
+
+          {/* ── Sidebar Cart Widget (always visible, clickable) ── */}
+          <div className="px-3 pb-3">
+            <div onClick={() => setCartOpen(true)} className="rounded-2xl p-3 transition-all cursor-pointer" style={{
+              background: cart.length > 0 ? `${C.gold}18` : `${C.gold}0A`,
+              border: `1px solid ${cart.length > 0 ? `${C.gold}55` : `${C.gold}28`}`,
+              boxShadow: cart.length > 0 ? `0 2px 14px ${C.gold}22` : 'none',
+            }}>
+              <div className="flex items-center gap-2 mb-2">
+                <ShoppingCart size={14} style={{ color: cart.length > 0 ? C.gold : `${C.gold}80` }}/>
+                <span className="text-xs font-black" style={{ color: cart.length > 0 ? C.gold : C.muted }}>
+                  {isRtl ? 'سلة الخدمات' : 'Service Cart'}
+                </span>
+                {cart.length > 0 && (
+                  <span className="ms-auto text-[10px] font-black px-1.5 py-0.5 rounded-full"
+                    style={{ background:C.gold, color:C.btnTxt }}>{cart.length}</span>
+                )}
+              </div>
+              {cart.length === 0 ? (
+                <p className="text-[11px]" style={{ color:C.muted }}>
+                  {isRtl ? 'سلتك فارغة' : 'Your cart is empty'}
+                </p>
+              ) : (
+                <>
+                  <div className="space-y-1.5 mb-3">
+                    {cart.slice(0, 4).map(item => (
+                      <div key={item.id} className="flex items-center gap-2">
+                        <div className="w-1 h-1 rounded-full flex-shrink-0" style={{ background:C.gold }}/>
+                        <span className="text-[11px] truncate flex-1 font-semibold" style={{ color:C.text }}>{item.name}</span>
+                        <button onClick={e => { e.stopPropagation(); removeFromCart(item.id); }}
+                          className="flex-shrink-0 p-0.5 rounded transition-colors hover:opacity-70"
+                          style={{ color:C.muted }}>
+                          <X size={10}/>
+                        </button>
+                      </div>
+                    ))}
+                    {cart.length > 4 && (
+                      <p className="text-[10px] ps-3" style={{ color:C.muted }}>
+                        +{cart.length - 4} {isRtl ? 'خدمات أخرى' : 'more'}
+                      </p>
+                    )}
+                  </div>
+                  <button onClick={e => { e.stopPropagation(); startBooking(); }}
+                    className="w-full py-2 rounded-xl text-xs font-black transition-all active:scale-95"
+                    style={{ background:C.gold, color:C.btnTxt, boxShadow:`0 2px 10px ${C.gold}50` }}>
+                    {!user && <Lock size={10} className="inline me-1.5"/>}
+                    {isRtl ? 'احجز الكل ←' : 'Book All →'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
           <div className="px-3 py-4 space-y-2" style={{ borderTop:`1px solid ${C.border}` }}>
             {user ? (
               <div className="space-y-2">
@@ -725,7 +779,7 @@ export default function App() {
           {/* Page Content */}
           <main className="flex-1 overflow-y-auto pb-24 md:pb-8">
             {page==='home'    && <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices}/>}
-            {page==='services'&& <ServicesView lang={lang} tr={tr} isRtl={isRtl} expanded={expandedService} setExpanded={setExpandedService} user={user} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} startBooking={startBooking}/>}
+            {page==='services'&& <ServicesView lang={lang} tr={tr} isRtl={isRtl} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart}/>}
             {page==='profile' && user && <ProfileView lang={lang} tr={tr} isRtl={isRtl} profile={profile} user={user} onBook={(car)=>bookFromProfile(car)} goServices={goServices} goOrders={goOrders} onProfileUpdated={()=>fetchProfile(user.id)} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories}/>}
             {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount}/>}
             {page==='booking' && step===2 && <DetailsStep {...shared} prevStep={()=>setPage('home')}/>}
@@ -745,10 +799,97 @@ export default function App() {
               <Plus size={24} color={C.bg} strokeWidth={2.5}/>
             </button>
             <MobNavItem icon={ClipboardList} label={tr.navOrders} active={page==='orders'}  onClick={goOrders} badge={page==='orders'?0:pendingQuotCount}/>
-            <MobNavItem icon={User}        label={tr.navProfile} active={page==='profile'} onClick={goProfile}/>
+            <button onClick={() => setCartOpen(true)} className="flex flex-col items-center gap-1 px-3 py-1">
+              <div className="relative">
+                <ShoppingCart size={20} color={cart.length > 0 ? C.gold : C.dim}/>
+                {cart.length > 0 && (
+                  <span className="absolute -top-1.5 -end-1.5 min-w-[14px] h-[14px] px-0.5 rounded-full text-[8px] font-black flex items-center justify-center"
+                    style={{ background:C.gold, color:C.btnTxt }}>
+                    {cart.length > 9 ? '9+' : cart.length}
+                  </span>
+                )}
+              </div>
+              <span className="text-[9px] font-semibold" style={{ color: cart.length > 0 ? C.gold : C.dim }}>
+                {isRtl ? 'سلتي' : 'Cart'}
+              </span>
+            </button>
           </nav>
         </div>
       </div>
+
+      {/* ── App-level Cart Drawer ── */}
+      {cartOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end" style={{ background:'rgba(0,0,0,0.65)', direction:isRtl?'rtl':'ltr' }}
+          onClick={() => setCartOpen(false)}>
+          <div className="rounded-t-3xl p-5 pb-10 flex flex-col gap-4 max-h-[80vh]"
+            style={{ background:C.panel, border:`1px solid ${C.gold}25` }}
+            onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShoppingCart size={18} style={{ color:C.gold }}/>
+                <h3 className={`font-black ${C.selectCls} text-base`}>
+                  {isRtl ? 'سلة الخدمات' : 'Service Cart'}
+                </h3>
+                {cart.length > 0 && (
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background:`${C.gold}22`, color:C.gold }}>
+                    {cart.length}
+                  </span>
+                )}
+              </div>
+              <button onClick={() => setCartOpen(false)} className="p-1 rounded-lg" style={{ color:C.muted }}>
+                <X size={18}/>
+              </button>
+            </div>
+            {/* Items or empty state */}
+            {cart.length === 0 ? (
+              <div className="py-10 flex flex-col items-center gap-3">
+                <ShoppingCart size={40} style={{ color:`${C.gold}30` }}/>
+                <p className="text-sm" style={{ color:C.muted }}>
+                  {isRtl ? 'سلتك فارغة — اختر خدمة من القائمة' : 'Your cart is empty — pick a service'}
+                </p>
+                <button onClick={() => { setCartOpen(false); goServices(); }}
+                  className="mt-2 px-5 py-2.5 rounded-xl text-sm font-bold"
+                  style={{ background:`${C.gold}18`, color:C.gold, border:`1px solid ${C.gold}30` }}>
+                  {isRtl ? '← تصفح الخدمات' : 'Browse services →'}
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="overflow-y-auto flex-1 space-y-2" style={{ maxHeight:'45vh' }}>
+                  {cart.map(item => (
+                    <div key={item.id} className="flex items-center gap-3 p-3 rounded-xl"
+                      style={{ background:`${C.gold}10`, border:`1px solid ${C.gold}20` }}>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-bold ${C.selectCls} truncate`}>{item.name}</p>
+                        <p className="text-xs mt-0.5" style={{ color:C.muted }}>{item.catName}</p>
+                      </div>
+                      <button onClick={() => removeFromCart(item.id)}
+                        className="p-2 rounded-lg flex-shrink-0 transition-all active:scale-90"
+                        style={{ background:'rgba(220,50,50,0.12)', color:'#ff6b6b' }}>
+                        <Trash2 size={14}/>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-3 pt-1">
+                  <button onClick={() => { setCartOpen(false); goServices(); }}
+                    className="flex-1 py-3 rounded-xl text-sm font-bold"
+                    style={{ background:`${C.gold}15`, color:C.gold, border:`1px solid ${C.gold}25` }}>
+                    {isRtl ? '+ إضافة المزيد' : '+ Add more'}
+                  </button>
+                  <button onClick={() => { setCartOpen(false); startBooking(); }}
+                    className="flex-1 py-3 rounded-xl text-sm font-black transition-all active:scale-95"
+                    style={{ background:C.gold, color:C.btnTxt, boxShadow:`0 0 16px ${C.gold}40` }}>
+                    {!user && <Lock size={10} className="inline me-1.5"/>}
+                    {isRtl ? 'احجز الكل ←' : 'Book All →'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Mobile Drawer */}
       {menuOpen && (
@@ -1723,13 +1864,12 @@ function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, service
 }
 
 // ── SERVICES VIEW ──────────────────────────────────────────────────────
-function ServicesView({ lang, tr, isRtl, expanded, setExpanded, user, serviceCategories, allSubServices, cart, addToCart, removeFromCart, startBooking }) {
+function ServicesView({ lang, tr, isRtl, expanded, setExpanded, serviceCategories, allSubServices, cart, addToCart, removeFromCart }) {
   const loading = serviceCategories.length === 0;
-  const [cartOpen, setCartOpen] = useState(false);
 
   return (
     <div className="relative">
-      <div className="p-4 md:p-8 max-w-3xl md:mx-auto space-y-4" style={{ paddingBottom: '104px' }}>
+      <div className="p-4 md:p-8 max-w-3xl md:mx-auto space-y-4" style={{ paddingBottom: '24px' }}>
         <div className="mb-2">
           <h1 className={`text-2xl font-black ${C.selectCls}`}>{tr.allServices}</h1>
           <p className="text-sm mt-1" style={{ color:C.muted }}>{tr.browseFreely}</p>
@@ -1814,124 +1954,6 @@ function ServicesView({ lang, tr, isRtl, expanded, setExpanded, user, serviceCat
         })}
       </div>
 
-      {/* ── Persistent Cart Bar ── */}
-      <div className="fixed bottom-16 md:bottom-0 inset-x-0 z-30 px-4 pb-3 pt-2"
-        style={{ background:`linear-gradient(to top, ${C.panel} 70%, transparent)` }}>
-        <div
-          onClick={() => setCartOpen(true)}
-          className="max-w-3xl mx-auto rounded-2xl px-4 py-3 flex items-center gap-3 cursor-pointer transition-all active:scale-[0.99]"
-          style={{
-            background: cart.length > 0 ? C.card : `${C.card}90`,
-            border: `1px solid ${cart.length > 0 ? `${C.gold}45` : `${C.gold}18`}`,
-            boxShadow: cart.length > 0 ? `0 0 20px ${C.gold}20` : 'none',
-          }}>
-          {/* Cart icon + count badge */}
-          <div className="relative flex-shrink-0">
-            <ShoppingCart size={20} style={{ color: cart.length > 0 ? C.gold : C.muted }}/>
-            {cart.length > 0 && (
-              <span className="absolute -top-2 -end-2 w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center"
-                style={{ background:C.gold, color:C.btnTxt }}>{cart.length}</span>
-            )}
-          </div>
-          {/* Label */}
-          <div className="flex-1 min-w-0">
-            {cart.length === 0 ? (
-              <p className="text-sm" style={{ color:C.muted }}>{isRtl ? 'سلتك فارغة — أضف خدماتك' : 'Your cart is empty — add services'}</p>
-            ) : (
-              <div>
-                <p className="text-sm font-black" style={{ color:C.gold }}>{cart.length} {tr.cartServices}</p>
-                <p className="text-xs truncate" style={{ color:C.muted }}>{cart.map(s=>s.name).join(' · ')}</p>
-              </div>
-            )}
-          </div>
-          {/* Book button */}
-          {cart.length > 0 && (
-            <button
-              onClick={e => { e.stopPropagation(); startBooking(); }}
-              className="px-4 py-2 rounded-xl font-black text-sm flex-shrink-0 transition-all active:scale-95"
-              style={{ background:C.gold, color:C.btnTxt, boxShadow:`0 0 14px ${C.gold}45` }}>
-              {!user && <Lock size={10} className="inline me-1.5"/>}
-              {isRtl ? 'احجز' : 'Book'}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* ── Cart Drawer ── */}
-      {cartOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end" style={{ background:'rgba(0,0,0,0.65)' }}
-          onClick={() => setCartOpen(false)}>
-          <div className="rounded-t-3xl p-5 pb-10 flex flex-col gap-4 max-h-[80vh]"
-            style={{ background:C.panel, border:`1px solid ${C.gold}25` }}
-            onClick={e => e.stopPropagation()}>
-
-            {/* Drawer header */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShoppingCart size={18} style={{ color:C.gold }}/>
-                <h3 className={`font-black ${C.selectCls} text-base`}>
-                  {isRtl ? 'سلة الخدمات' : 'Service Cart'}
-                </h3>
-                {cart.length > 0 && (
-                  <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background:`${C.gold}22`, color:C.gold }}>
-                    {cart.length}
-                  </span>
-                )}
-              </div>
-              <button onClick={() => setCartOpen(false)} className="p-1 rounded-lg" style={{ color:C.muted }}>
-                <X size={18}/>
-              </button>
-            </div>
-
-            {/* Cart items or empty state */}
-            {cart.length === 0 ? (
-              <div className="py-10 flex flex-col items-center gap-3">
-                <ShoppingCart size={40} style={{ color:`${C.gold}30` }}/>
-                <p className="text-sm" style={{ color:C.muted }}>
-                  {isRtl ? 'سلتك فارغة — اختر خدمة من القائمة' : 'Your cart is empty — pick a service'}
-                </p>
-                <button onClick={() => setCartOpen(false)}
-                  className="mt-2 px-5 py-2.5 rounded-xl text-sm font-bold"
-                  style={{ background:`${C.gold}18`, color:C.gold, border:`1px solid ${C.gold}30` }}>
-                  {isRtl ? '← تصفح الخدمات' : 'Browse services →'}
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="overflow-y-auto flex-1 space-y-2" style={{ maxHeight:'45vh' }}>
-                  {cart.map(item => (
-                    <div key={item.id} className="flex items-center gap-3 p-3 rounded-xl"
-                      style={{ background:C.card, border:`1px solid ${C.gold}15` }}>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-bold ${C.selectCls} truncate`}>{item.name}</p>
-                        <p className="text-xs mt-0.5" style={{ color:C.muted }}>{item.catName}</p>
-                      </div>
-                      <button onClick={() => removeFromCart(item.id)}
-                        className="p-2 rounded-lg flex-shrink-0 transition-all active:scale-90"
-                        style={{ background:'rgba(220,50,50,0.12)', color:'#ff6b6b' }}>
-                        <Trash2 size={14}/>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-3 pt-1">
-                  <button onClick={() => setCartOpen(false)}
-                    className="flex-1 py-3 rounded-xl text-sm font-bold"
-                    style={{ background:`${C.gold}15`, color:C.gold, border:`1px solid ${C.gold}25` }}>
-                    {isRtl ? '+ إضافة المزيد' : '+ Add more'}
-                  </button>
-                  <button onClick={() => { setCartOpen(false); startBooking(); }}
-                    className="flex-1 py-3 rounded-xl text-sm font-black transition-all active:scale-95"
-                    style={{ background:C.gold, color:C.btnTxt, boxShadow:`0 0 16px ${C.gold}40` }}>
-                    {!user && <Lock size={10} className="inline me-1.5"/>}
-                    {isRtl ? 'احجز الكل ←' : 'Book All →'}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -2606,7 +2628,43 @@ function ServiceCard({ service, lang, span, onClick }) {
         </p>
       </div>
       <div className="absolute bottom-0 end-0 -mb-3 -me-3 pointer-events-none">
-        <Icon size={span===2?95:75} strokeWidth={1.1} className="md:!w-[110px] md:!h-[110px]" style={{ color:service.ic }}/>
+        {service.ar === 'صيانة دورية' ? (
+          <svg width={span===2?110:85} height={span===2?110:85} viewBox="0 0 80 92" xmlns="http://www.w3.org/2000/svg" className="md:!w-[125px] md:!h-[125px]" style={{ color:'rgba(0,0,0,0.32)' }}>
+            <defs>
+              <mask id="sandak-gear-mask">
+                <rect fill="white" width="80" height="92"/>
+                <circle cx="40" cy="22" r="8" fill="black"/>
+              </mask>
+            </defs>
+            {/* Gear — 8 wide teeth + ring, center hole */}
+            <g fill="currentColor" mask="url(#sandak-gear-mask)">
+              <circle cx="40" cy="22" r="15"/>
+              {[0,45,90,135,180,225,270,315].map(d=>(
+                <rect key={d} x="36.5" y="2" width="7" height="14" rx="2" transform={`rotate(${d} 40 22)`}/>
+              ))}
+            </g>
+            {/* Car cabin trapezoid */}
+            <path d="M23 55 L30 44 L50 44 L57 55Z" fill="currentColor"/>
+            {/* Car body */}
+            <rect x="10" y="54" width="60" height="19" rx="4" fill="currentColor"/>
+            {/* Windshield highlight */}
+            <path d="M26 54 L32 46 L48 46 L54 54Z" fill="rgba(255,255,255,0.25)"/>
+            {/* Left headlight */}
+            <rect x="12" y="57" width="13" height="11" rx="3" fill="rgba(255,255,255,0.3)"/>
+            {/* Right headlight */}
+            <rect x="55" y="57" width="13" height="11" rx="3" fill="rgba(255,255,255,0.3)"/>
+            {/* Grille */}
+            <rect x="33" y="60" width="14" height="7" rx="2" fill="rgba(255,255,255,0.2)"/>
+            {/* Wheels */}
+            <circle cx="21" cy="79" r="10" fill="currentColor"/>
+            <circle cx="59" cy="79" r="10" fill="currentColor"/>
+            {/* Wheel rims */}
+            <circle cx="21" cy="79" r="5" fill="rgba(255,255,255,0.35)"/>
+            <circle cx="59" cy="79" r="5" fill="rgba(255,255,255,0.35)"/>
+          </svg>
+        ) : (
+          <Icon size={span===2?95:75} strokeWidth={1.1} className="md:!w-[110px] md:!h-[110px]" style={{ color:service.ic }}/>
+        )}
       </div>
       {service.key==='periodic' && (
         <div className="absolute bottom-3 start-3">
