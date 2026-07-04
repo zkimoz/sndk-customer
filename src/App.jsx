@@ -2019,26 +2019,26 @@ function ServicesView({ lang, tr, isRtl, expanded, setExpanded, serviceCategorie
               </button>
 
               {isOpen && (
-                <div>
+                <div style={{ background: C.panel, borderTop:`1px solid ${C.border}` }}>
                   {subs.length === 0 ? (
-                    <p className="px-5 py-6 text-sm text-center" style={{ color:cc.sub }}>
+                    <p className="px-5 py-6 text-sm text-center" style={{ color:C.muted }}>
                       {isRtl ? 'لا توجد خدمات متاحة حالياً' : 'No services available yet'}
                     </p>
                   ) : (
-                    <div className="divide-y" style={{ borderColor:cc.div }}>
+                    <div className="divide-y" style={{ borderColor:C.border }}>
                       {subs.map((sub, i) => {
                         const inCart = cart.some(x => x.id === sub.id);
                         const subName = sub.name?.[lang] || sub.name?.ar || '';
                         return (
                           <div key={sub.id} className="px-4 py-3.5 gap-3 flex items-start justify-between"
-                            style={{ background:i%2===0?'rgba(0,0,0,0.06)':'transparent' }}>
+                            style={{ background: i%2===0 ? `${C.border}` : 'transparent' }}>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-0.5" style={{ background: inCart ? cc.fg : cc.sub }}/>
-                                <span className="text-sm font-semibold" style={{ color: inCart ? cc.fg : cc.txt }}>{subName}</span>
+                                <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-0.5" style={{ background: inCart ? C.gold : C.muted }}/>
+                                <span className="text-sm font-semibold" style={{ color: inCart ? C.gold : C.txt }}>{subName}</span>
                               </div>
                               {(sub.description?.[lang] || sub.description?.ar) && (
-                                <p className="text-xs mt-1 ms-3.5 leading-relaxed" style={{ color:cc.sub }}>
+                                <p className="text-xs mt-1 ms-3.5 leading-relaxed" style={{ color:C.muted }}>
                                   {sub.description?.[lang] || sub.description?.ar}
                                 </p>
                               )}
@@ -2047,8 +2047,8 @@ function ServicesView({ lang, tr, isRtl, expanded, setExpanded, serviceCategorie
                               onClick={() => inCart ? removeFromCart(sub.id) : addToCart(cat.id, sub.id, subName, catName)}
                               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black flex-shrink-0 transition-all active:scale-95"
                               style={inCart
-                                ? { background:cc.fg, color:cc.bg }
-                                : { background:'transparent', border:`1px solid ${cc.fg}60`, color:cc.fg }}>
+                                ? { background:C.gold, color:C.bg }
+                                : { background:'transparent', border:`1px solid ${C.gold}60`, color:C.gold }}>
                               {inCart ? tr.cartAdded : tr.cartAdd}
                             </button>
                           </div>
