@@ -504,6 +504,7 @@ export default function App() {
   const [allSubServices, setAllSubServices]       = useState([]);
   const [cart, setCart] = useState([]); // [{id, name, catId, catName}]
   const [cartOpen, setCartOpen] = useState(false);
+  const [homeAnnouncement, setHomeAnnouncement] = useState(null);
   const [pendingQuotCount, setPendingQuotCount] = useState(0);
   const addToCart    = (catId, subId, subName, catName) =>
     setCart(p => p.find(x => x.id === subId) ? p : [...p, { id: subId, name: subName, catId, catName }]);
@@ -562,6 +563,9 @@ export default function App() {
     supabase.from('services').select('*').eq('is_active', true)
       .order('sort_order', { ascending:true, nullsFirst:false }).order('id')
       .then(({ data }) => { if (data) setAllSubServices(data); });
+    // Load active announcement
+    supabase.from('announcements').select('*').eq('is_active', true).order('id', { ascending:false }).limit(1)
+      .then(({ data }) => { if (data?.length) setHomeAnnouncement(data[0]); });
     return () => subscription.unsubscribe();
   }, []);
 
@@ -788,7 +792,7 @@ export default function App() {
 
           {/* Page Content */}
           <main className="flex-1 overflow-y-auto pb-24 md:pb-8">
-            {page==='home'    && <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices}/>}
+            {page==='home'    && <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncement={homeAnnouncement}/>}
             {page==='services'&& <ServicesView lang={lang} tr={tr} isRtl={isRtl} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart}/>}
             {page==='profile' && user && <ProfileView lang={lang} tr={tr} isRtl={isRtl} profile={profile} user={user} onBook={(car)=>bookFromProfile(car)} goServices={goServices} goOrders={goOrders} onProfileUpdated={()=>fetchProfile(user.id)} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories}/>}
             {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount}/>}
@@ -1821,38 +1825,36 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange }) {
 }
 
 // ── HOME VIEW ──────────────────────────────────────────────────────────
-// ── Home card announcement ───────────────────────────────────────────────
-// bg: CSS background of the card. overlay: dark tint for text readability.
-// Empty array → normal maroon hero card.
-const HOME_ANNOUNCEMENTS = [
-  {
-    emoji: '🇪🇬',
-    ar:  'مبروك لمصر للتأهل للدور الـ 16 🎉',
-    en:  'Congratulations Egypt — Round of 16! 🎉',
-    bg:  'linear-gradient(180deg, #CE1126 33.33%, #FFFFFF 33.33% 66.67%, #000000 66.67%)',
-    overlay: 'rgba(0,0,0,0.48)',
-    shadow: 'rgba(206,17,38,0.45)',
-  },
-];
+// ── Announcement preset styles (must match admin ANN_PRESETS) ────────────
+const ANN_PRESETS = {
+  egypt:  { bg:'linear-gradient(180deg,#CE1126 33.33%,#FFFFFF 33.33% 66.67%,#000000 66.67%)', overlay:'rgba(0,0,0,0.48)', shadow:'rgba(206,17,38,0.45)' },
+  qatar:  { bg:'linear-gradient(90deg,#8D1B3D 80%,#FFFFFF 80%)',                              overlay:'rgba(0,0,0,0.45)', shadow:'rgba(141,27,61,0.5)'  },
+  maroon: { bg:'linear-gradient(135deg,#8A1538 0%,#3D0818 100%)',                              overlay:'rgba(0,0,0,0.18)', shadow:'rgba(114,47,55,0.45)' },
+  gold:   { bg:'linear-gradient(135deg,#B8860B 0%,#7A5C0A 100%)',                              overlay:'rgba(0,0,0,0.3)',  shadow:'rgba(184,134,11,0.5)' },
+  blue:   { bg:'linear-gradient(135deg,#1e3a8a 0%,#1e40af 100%)',                              overlay:'rgba(0,0,0,0.3)',  shadow:'rgba(30,58,138,0.5)'  },
+  green:  { bg:'linear-gradient(135deg,#14532d 0%,#166534 100%)',                              overlay:'rgba(0,0,0,0.3)',  shadow:'rgba(20,83,45,0.5)'   },
+  purple: { bg:'linear-gradient(135deg,#4c1d95 0%,#5b21b6 100%)',                              overlay:'rgba(0,0,0,0.3)',  shadow:'rgba(76,29,149,0.5)'  },
+};
 
-function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, serviceCategories }) {
+function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, serviceCategories, homeAnnouncement }) {
   const cats = serviceCategories.map(enrichCat);
   const goToCat = (cat) => {
     setFormData(p => ({ ...p, serviceKey: cat.id, serviceName: cat.ar }));
     goServices?.();
   };
-  const ann = HOME_ANNOUNCEMENTS[0] || null;
+  const ann = homeAnnouncement || null;
+  const annStyle = ann ? (ANN_PRESETS[ann.style] || ANN_PRESETS.maroon) : null;
   return (
     <div className="p-4 md:p-8 space-y-6 max-w-4xl md:mx-auto">
       <div className="relative rounded-2xl overflow-hidden p-6 md:p-8 min-h-[150px] md:min-h-[190px] flex flex-col justify-between"
         style={{
-          background: ann ? ann.bg : C.heroBg,
-          border: `1px solid ${ann ? 'rgba(255,255,255,0.18)' : `${C.gold}30`}`,
-          boxShadow: `0 0 48px ${ann ? ann.shadow : C.heroShadow}`,
+          background: annStyle ? annStyle.bg : C.heroBg,
+          border: `1px solid ${annStyle ? 'rgba(255,255,255,0.18)' : `${C.gold}30`}`,
+          boxShadow: `0 0 48px ${annStyle ? annStyle.shadow : C.heroShadow}`,
         }}>
         {/* Dark overlay for readability */}
         <div className="absolute inset-0 pointer-events-none"
-          style={{ background: ann ? ann.overlay : C.heroOverlay(isRtl) }}/>
+          style={{ background: annStyle ? annStyle.overlay : C.heroOverlay(isRtl) }}/>
         {/* Decorative: flag emoji watermark OR car icon */}
         {ann
           ? <div className="absolute bottom-0 end-0 text-[170px] leading-none opacity-15 pointer-events-none select-none -mb-4 -me-4">{ann.emoji}</div>
@@ -1866,7 +1868,7 @@ function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, service
                 {lang==='ar' ? '📢 إعلان' : '📢 ANNOUNCEMENT'}
               </p>
               <h1 className="text-white font-black text-2xl md:text-3xl leading-snug drop-shadow-lg">
-                {lang==='ar' ? ann.ar : ann.en}
+                {lang==='ar' ? ann.text_ar : (ann.text_en || ann.text_ar)}
               </h1>
             </>
           ) : (
