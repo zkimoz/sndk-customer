@@ -796,7 +796,7 @@ export default function App() {
           {/* Page Content */}
           <main className="flex-1 overflow-y-auto pb-24 md:pb-8">
             {page==='home'    && <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements}/>}
-            {page==='services'&& <ServicesView lang={lang} tr={tr} isRtl={isRtl} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart}/>}
+            {page==='services'&& <ServicesView lang={lang} tr={tr} isRtl={isRtl} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} theme={theme}/>}
             {page==='profile' && user && <ProfileView lang={lang} tr={tr} isRtl={isRtl} profile={profile} user={user} onBook={(car)=>bookFromProfile(car)} goServices={goServices} goOrders={goOrders} onProfileUpdated={()=>fetchProfile(user.id)} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories}/>}
             {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount}/>}
             {page==='booking' && step===2 && <DetailsStep {...shared} prevStep={()=>setPage('home')}/>}
@@ -1973,7 +1973,8 @@ function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, service
 }
 
 // ── SERVICES VIEW ──────────────────────────────────────────────────────
-function ServicesView({ lang, tr, isRtl, expanded, setExpanded, serviceCategories, allSubServices, cart, addToCart, removeFromCart }) {
+function ServicesView({ lang, tr, isRtl, expanded, setExpanded, serviceCategories, allSubServices, cart, addToCart, removeFromCart, theme }) {
+  const btnAccent = theme === 'light' ? '#8A1538' : C.gold;
   const loading = serviceCategories.length === 0;
 
   return (
@@ -2034,8 +2035,8 @@ function ServicesView({ lang, tr, isRtl, expanded, setExpanded, serviceCategorie
                             style={{ background: i%2===0 ? `${C.border}` : 'transparent' }}>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-0.5" style={{ background: inCart ? C.gold : C.muted }}/>
-                                <span className="text-sm font-semibold" style={{ color: inCart ? C.gold : C.txt }}>{subName}</span>
+                                <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-0.5" style={{ background: inCart ? btnAccent : C.muted }}/>
+                                <span className="text-sm font-semibold" style={{ color: inCart ? btnAccent : C.txt }}>{subName}</span>
                               </div>
                               {(sub.description?.[lang] || sub.description?.ar) && (
                                 <p className="text-xs mt-1 ms-3.5 leading-relaxed" style={{ color:C.muted }}>
@@ -2047,8 +2048,8 @@ function ServicesView({ lang, tr, isRtl, expanded, setExpanded, serviceCategorie
                               onClick={() => inCart ? removeFromCart(sub.id) : addToCart(cat.id, sub.id, subName, catName)}
                               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black flex-shrink-0 transition-all active:scale-95"
                               style={inCart
-                                ? { background:C.gold, color:C.bg }
-                                : { background:'transparent', border:`1px solid ${C.gold}60`, color:C.gold }}>
+                                ? { background:btnAccent, color:'#fff' }
+                                : { background:'transparent', border:`1px solid ${btnAccent}70`, color:btnAccent }}>
                               {inCart ? tr.cartAdded : tr.cartAdd}
                             </button>
                           </div>
