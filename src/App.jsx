@@ -798,7 +798,7 @@ export default function App() {
             {page==='home'    && <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements} goOrders={goOrders} pendingQuotCount={pendingQuotCount}/>}
             {page==='services'&& <ServicesView lang={lang} tr={tr} isRtl={isRtl} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} theme={theme}/>}
             {page==='profile' && user && <ProfileView lang={lang} tr={tr} isRtl={isRtl} profile={profile} user={user} onBook={(car)=>bookFromProfile(car)} goServices={goServices} goOrders={goOrders} onProfileUpdated={()=>fetchProfile(user.id)} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories}/>}
-            {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount}/>}
+            {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount} theme={theme}/>}
             {page==='booking' && step===2 && <DetailsStep {...shared} prevStep={()=>setPage('home')}/>}
             {page==='booking' && step===3 && <ScheduleStep {...shared} prevStep={()=>setStep(2)}/>}
             {page==='booking' && step===4 && <ReviewStep   {...shared} prevStep={()=>setStep(3)} loading={loading} setLoading={setLoading}/>}
@@ -1350,7 +1350,7 @@ const requestNotifPerm = async () => {
   }
 };
 
-function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange }) {
+function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) {
   const [tab, setTab]           = useState('appts');
   const [appts, setAppts]       = useState([]);
   const [orders, setOrders]     = useState([]);
@@ -1660,7 +1660,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange }) {
                     <p className="text-sm">{isRtl ? 'لا توجد طلبات حتى الآن' : 'No orders yet'}</p>
                   </div>
                 ) : jcAppts.map((a, ai) => {
-                  const cc     = CARD_BG_CYCLE[1]; // always maroon
+                  const cc     = theme === 'light' ? CARD_BG_CYCLE[0] : CARD_BG_CYCLE[1]; // gold in light, maroon in dark
                   const jc     = a.job_cards[0];
                   const car    = a.cars;
                   const relOrd = orderByApptId[a.id];
