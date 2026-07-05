@@ -1660,7 +1660,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange }) {
                     <p className="text-sm">{isRtl ? 'لا توجد طلبات حتى الآن' : 'No orders yet'}</p>
                   </div>
                 ) : jcAppts.map((a, ai) => {
-                  const cc     = CARD_BG_CYCLE[ai % 2];
+                  const cc     = CARD_BG_CYCLE[1]; // always maroon
                   const jc     = a.job_cards[0];
                   const car    = a.cars;
                   const relOrd = orderByApptId[a.id];
