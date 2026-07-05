@@ -3224,8 +3224,9 @@ function MobNavItem({ icon:Icon, label, active, onClick, badge }) {
 
 // ── AUTH MODAL ─────────────────────────────────────────────────────────
 function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
-  const [email, setEmail]         = useState('');
-  const [password, setPassword]   = useState('');
+  const [email, setEmail]         = useState(() => localStorage.getItem('sndk_saved_email') || '');
+  const [password, setPassword]   = useState(() => localStorage.getItem('sndk_saved_pw') || '');
+  const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem('sndk_saved_email'));
   const [fullName, setFullName]   = useState('');
   const [phone, setPhone]         = useState('');
   const [loading, setLoading]     = useState(false);
@@ -3282,6 +3283,13 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
       } else {
         const { error:signInErr } = await supabase.auth.signInWithPassword({ email, password });
         if (signInErr) throw signInErr;
+        if (rememberMe) {
+          localStorage.setItem('sndk_saved_email', email);
+          localStorage.setItem('sndk_saved_pw', password);
+        } else {
+          localStorage.removeItem('sndk_saved_email');
+          localStorage.removeItem('sndk_saved_pw');
+        }
         onSuccess();
       }
     } catch(err) { setError(err.message||tr.authError); }
@@ -3420,6 +3428,16 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
               <input type="password" required value={password} onChange={e=>setPassword(e.target.value)} placeholder={tr.passwordPh} className={C.inputCls} style={inp}
                 onFocus={e=>e.target.style.borderColor='#722F37'} onBlur={e=>e.target.style.borderColor=C.border}/>
             </div>
+            {!isSignUp && (
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <div onClick={() => setRememberMe(v => !v)}
+                  className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 transition-all"
+                  style={{ background: rememberMe ? '#722F37' : 'transparent', border: `2px solid ${rememberMe ? '#722F37' : C.border}` }}>
+                  {rememberMe && <svg width="11" height="8" viewBox="0 0 11 8" fill="none"><path d="M1 4L4 7L10 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                </div>
+                <span className="text-sm" style={{ color: C.muted }}>{isRtl ? 'تذكرني' : 'Remember me'}</span>
+              </label>
+            )}
             {error&&<p className="text-sm text-center py-1 rounded-lg" style={{ color:'#f87171', background:'rgba(248,113,113,0.1)' }}>{error}</p>}
             <button type="submit" disabled={loading}
               className="w-full py-3.5 rounded-xl font-black text-sm transition-all flex items-center justify-center gap-2"
