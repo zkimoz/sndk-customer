@@ -1020,7 +1020,7 @@ const parseServices = (st) => {
   return null;
 };
 
-function SignatureModal({ isRtl, onConfirm, onClose }) {
+function SignatureModal({ isRtl, theme, onConfirm, onClose }) {
   const canvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [mode, setMode] = useState('draw');
@@ -1091,21 +1091,24 @@ function SignatureModal({ isRtl, onConfirm, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      {(() => {
+        const mc = theme === 'light' ? CARD_BG_CYCLE[0] : CARD_BG_CYCLE[1];
+        return (
       <div className="rounded-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}
-        style={{ background:C.card, border:'1px solid rgba(138,21,56,0.45)', boxShadow:'0 25px 60px rgba(0,0,0,0.6)' }}>
-        <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor:'rgba(138,21,56,0.20)' }}>
+        style={{ background:mc.bg, border:'1px solid rgba(138,21,56,0.45)', boxShadow:'0 25px 60px rgba(0,0,0,0.6)' }}>
+        <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor:mc.div }}>
           <div>
-            <h3 className={`font-black ${C.selectCls} text-base`}>{isRtl ? 'توقيع الموافقة' : 'Approval Signature'}</h3>
-            <p className="text-xs mt-0.5" style={{ color:C.muted }}>{isRtl ? 'وقّع للتأكيد على موافقتك' : 'Sign to confirm your approval'}</p>
+            <h3 className="font-black text-base" style={{ color:mc.txt }}>{isRtl ? 'توقيع الموافقة' : 'Approval Signature'}</h3>
+            <p className="text-xs mt-0.5" style={{ color:mc.sub }}>{isRtl ? 'وقّع للتأكيد على موافقتك' : 'Sign to confirm your approval'}</p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg transition-all" style={{ color:C.muted }}>
+          <button onClick={onClose} className="p-1.5 rounded-lg transition-all" style={{ color:mc.sub }}>
             <X size={18}/>
           </button>
         </div>
         <div className="px-5 pt-4 flex gap-2">
           {[{ k:'draw', ar:'✍️ رسم التوقيع', en:'✍️ Draw' }, { k:'type', ar:'⌨️ كتابة الاسم', en:'⌨️ Type Name' }].map(m => (
             <button key={m.k} onClick={() => setMode(m.k)} className="flex-1 py-2 rounded-xl text-xs font-bold transition-all"
-              style={{ background:mode===m.k?'#8A1538':C.input, color:mode===m.k?'#fff':C.muted }}>
+              style={{ background:mode===m.k?'#8A1538':'rgba(0,0,0,0.12)', color:mode===m.k?'#fff':mc.sub }}>
               {isRtl ? m.ar : m.en}
             </button>
           ))}
@@ -1146,6 +1149,8 @@ function SignatureModal({ isRtl, onConfirm, onClose }) {
           </button>
         </div>
       </div>
+        );
+      })()}
     </div>
   );
 }
@@ -1660,7 +1665,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                     <p className="text-sm">{isRtl ? 'لا توجد طلبات حتى الآن' : 'No orders yet'}</p>
                   </div>
                 ) : jcAppts.map((a, ai) => {
-                  const cc     = theme === 'light' ? CARD_BG_CYCLE[0] : CARD_BG_CYCLE[1]; // gold in light, maroon in dark
+                  const cc     = CARD_BG_CYCLE[1]; // always maroon
                   const jc     = a.job_cards[0];
                   const car    = a.cars;
                   const relOrd = orderByApptId[a.id];
@@ -1821,6 +1826,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
       {sigModal.open && (
         <SignatureModal
           isRtl={isRtl}
+          theme={theme}
           onConfirm={approveWithSignature}
           onClose={() => setSigModal({ open:false, orderId:null })}
         />
