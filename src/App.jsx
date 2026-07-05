@@ -1366,6 +1366,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   const [orders, setOrders]     = useState([]);
   const [loading, setLoading]   = useState(true);
   const [cancellingId, setCancellingId] = useState(null);
+  const [openVideoId, setOpenVideoId] = useState(null);
   const seenIdsRef = useRef(new Set());
 
   const APPT_ST = {
@@ -1722,15 +1723,14 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                       {/* ── فيديو استلام السيارة ── */}
                       {jc.reception_video_url && (
                         <div className="px-4 pt-3">
-                          <details className="group">
-                            <summary className="flex items-center gap-2 cursor-pointer list-none">
-                              <button className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
-                                style={{ background:'rgba(0,0,0,0.10)', border:`1px solid ${cc.fg}50`, color:cc.txt }}>
-                                🎥 {isRtl ? 'مشاهدة فيديو استلام السيارة' : 'Watch Reception Video'}
-                              </button>
-                            </summary>
-                            <video src={jc.reception_video_url} controls className="w-full rounded-xl mt-2" style={{ maxHeight:220 }}/>
-                          </details>
+                          <button onClick={() => setOpenVideoId(id => id === jc.id ? null : jc.id)}
+                            className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
+                            style={{ background:'rgba(0,0,0,0.10)', border:`1px solid ${cc.fg}50`, color:cc.txt }}>
+                            🎥 {isRtl ? 'مشاهدة فيديو استلام السيارة' : 'Watch Reception Video'}
+                          </button>
+                          {openVideoId === jc.id && (
+                            <video src={jc.reception_video_url} controls autoPlay className="w-full rounded-xl mt-2" style={{ maxHeight:220 }}/>
+                          )}
                         </div>
                       )}
 
