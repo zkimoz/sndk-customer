@@ -2584,14 +2584,16 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, goOrd
                               {BOOKING_YEAR_OPTIONS.map(y => <option key={y} value={String(y)}>{y}</option>)}
                             </select>
                             {/* Plate */}
-                            <input value={editCarForm.plate_number} onChange={e=>setEditCarForm(f=>({...f,plate_number:e.target.value}))}
-                              placeholder={tr.prof_plate_ph}
-                              className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+                            <input value={editCarForm.plate_number}
+                              onChange={e=>setEditCarForm(f=>({...f,plate_number:e.target.value.replace(/[^A-Za-z0-9]/g,'').toUpperCase()}))}
+                              placeholder={tr.prof_plate_ph} dir="ltr"
+                              className="w-full px-3 py-2.5 rounded-xl text-sm outline-none font-mono"
                               style={inputStyle} onFocus={e=>Object.assign(e.target.style,focusStyle)} onBlur={e=>e.target.style.borderColor=C.border}/>
                             {/* Chassis */}
                             <div>
-                              <input value={editCarForm.chassis_number} onChange={e=>setEditCarForm(f=>({...f,chassis_number:e.target.value.toUpperCase().slice(0,17)}))}
-                                placeholder={tr.prof_chassis_ph} maxLength={17}
+                              <input value={editCarForm.chassis_number}
+                                onChange={e=>setEditCarForm(f=>({...f,chassis_number:e.target.value.replace(/[^A-Za-z0-9]/g,'').toUpperCase().slice(0,17)}))}
+                                placeholder={tr.prof_chassis_ph} maxLength={17} dir="ltr"
                                 className="w-full px-3 py-2.5 rounded-xl text-sm outline-none font-mono"
                                 style={inputStyle} onFocus={e=>Object.assign(e.target.style,focusStyle)} onBlur={e=>e.target.style.borderColor=C.border}/>
                               <p className="text-[10px] mt-0.5 text-end" style={{ color: editCarForm.chassis_number?.length===17 ? '#22c55e' : C.dim }}>
