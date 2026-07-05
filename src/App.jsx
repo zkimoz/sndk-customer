@@ -1387,7 +1387,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   const loadData = async () => {
     if (!user) { setLoading(false); return; }
     const { data: apptData } = await supabase.from('appointments')
-      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number), job_cards(id, job_number, job_status, customer_complaints, work_done, mileage_in, mileage_out)')
+      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number), job_cards(id, job_number, job_status, customer_complaints, work_done, mileage_in, mileage_out, reception_video_url)')
       .eq('profile_id', user.id)
       .order('appointment_date', { ascending: false });
     setAppts(apptData || []);
@@ -1718,6 +1718,21 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           <span className="text-[10px] font-mono" style={{ color:cc.sub }}>{jc.job_number}</span>
                         </div>
                       </div>
+
+                      {/* ── فيديو استلام السيارة ── */}
+                      {jc.reception_video_url && (
+                        <div className="px-4 pt-3">
+                          <details className="group">
+                            <summary className="flex items-center gap-2 cursor-pointer list-none">
+                              <button className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
+                                style={{ background:'rgba(0,0,0,0.10)', border:`1px solid ${cc.fg}50`, color:cc.txt }}>
+                                🎥 {isRtl ? 'مشاهدة فيديو استلام السيارة' : 'Watch Reception Video'}
+                              </button>
+                            </summary>
+                            <video src={jc.reception_video_url} controls className="w-full rounded-xl mt-2" style={{ maxHeight:220 }}/>
+                          </details>
+                        </div>
+                      )}
 
                       {/* ── عرض السعر + موافقة ── */}
                       {relOrd?.sent_to_customer ? (
