@@ -1092,7 +1092,7 @@ function SignatureModal({ isRtl, theme, onConfirm, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose}>
       {(() => {
-        const mc = theme === 'light' ? CARD_BG_CYCLE[0] : CARD_BG_CYCLE[1];
+        const mc = CARD_BG_CYCLE[0]; // always gold
         return (
       <div className="rounded-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}
         style={{ background:mc.bg, border:'1px solid rgba(138,21,56,0.45)', boxShadow:'0 25px 60px rgba(0,0,0,0.6)' }}>
