@@ -1092,8 +1092,8 @@ function SignatureModal({ isRtl, onConfirm, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="rounded-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}
-        style={{ background:C.card, border:`1px solid ${C.gold}50`, boxShadow:'0 25px 60px rgba(0,0,0,0.6)' }}>
-        <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor:`${C.gold}25` }}>
+        style={{ background:C.card, border:'1px solid rgba(138,21,56,0.45)', boxShadow:'0 25px 60px rgba(0,0,0,0.6)' }}>
+        <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor:'rgba(138,21,56,0.20)' }}>
           <div>
             <h3 className={`font-black ${C.selectCls} text-base`}>{isRtl ? 'توقيع الموافقة' : 'Approval Signature'}</h3>
             <p className="text-xs mt-0.5" style={{ color:C.muted }}>{isRtl ? 'وقّع للتأكيد على موافقتك' : 'Sign to confirm your approval'}</p>
@@ -1105,7 +1105,7 @@ function SignatureModal({ isRtl, onConfirm, onClose }) {
         <div className="px-5 pt-4 flex gap-2">
           {[{ k:'draw', ar:'✍️ رسم التوقيع', en:'✍️ Draw' }, { k:'type', ar:'⌨️ كتابة الاسم', en:'⌨️ Type Name' }].map(m => (
             <button key={m.k} onClick={() => setMode(m.k)} className="flex-1 py-2 rounded-xl text-xs font-bold transition-all"
-              style={{ background:mode===m.k?C.gold:C.input, color:mode===m.k?'#EFDFBB':C.muted }}>
+              style={{ background:mode===m.k?'#8A1538':C.input, color:mode===m.k?'#fff':C.muted }}>
               {isRtl ? m.ar : m.en}
             </button>
           ))}
@@ -1114,7 +1114,7 @@ function SignatureModal({ isRtl, onConfirm, onClose }) {
           {mode === 'draw' ? (
             <div>
               <canvas ref={canvasRef} className="w-full rounded-xl touch-none block"
-                style={{ height:150, border:`2px dashed ${C.gold}60`, cursor:'crosshair', background:'#fff' }}
+                style={{ height:150, border:'2px dashed rgba(138,21,56,0.50)', cursor:'crosshair', background:'#fff' }}
                 onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
                 onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw}
               />
@@ -1130,7 +1130,7 @@ function SignatureModal({ isRtl, onConfirm, onClose }) {
               <input value={typedName} onChange={e => setTypedName(e.target.value)}
                 placeholder={isRtl ? 'أدخل اسمك الكامل...' : 'Enter your full name...'}
                 className={`w-full px-4 py-3.5 rounded-xl ${C.selectCls} outline-none`}
-                style={{ background:C.input, border:`1px solid ${C.gold}50`, fontSize:20, fontFamily:'Georgia, serif', fontStyle:'italic' }}
+                style={{ background:C.input, border:'1px solid rgba(138,21,56,0.45)', fontSize:20, fontFamily:'Georgia, serif', fontStyle:'italic' }}
                 dir="rtl"
               />
               <p className="text-xs mt-2" style={{ color:C.muted }}>
@@ -1138,7 +1138,7 @@ function SignatureModal({ isRtl, onConfirm, onClose }) {
               </p>
             </div>
           )}
-          <button onClick={confirm} disabled={saving} className="w-full py-3.5 rounded-xl font-black text-sm transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60" style={{ background:C.gold, color:'#EFDFBB' }}>
+          <button onClick={confirm} disabled={saving} className="w-full py-3.5 rounded-xl font-black text-sm transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60" style={{ background:'#8A1538', color:'#fff' }}>
             {saving
               ? <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"/>{isRtl ? 'جاري الحفظ...' : 'Saving...'}</>
               : isRtl ? '✅ تأكيد الموافقة والتوقيع' : '✅ Confirm Approval & Sign'
