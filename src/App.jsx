@@ -1359,7 +1359,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange }) {
   const seenIdsRef = useRef(new Set());
 
   const APPT_ST = {
-    pending:     { label:tr.apptPending,     bg:'rgba(234,179,8,0.15)',   text:'#eab308' },
+    pending:     { label:tr.apptPending,     bg:'rgba(138,21,56,0.18)',   text:'#8A1538' },
     confirmed:   { label:tr.apptConfirmed,   bg:'rgba(59,130,246,0.15)',  text:'#60a5fa' },
     in_progress: { label:tr.apptInProgress,  bg:'rgba(249,115,22,0.15)',  text:'#f97316' },
     completed:   { label:tr.apptCompleted,   bg:'rgba(34,197,94,0.15)',   text:'#22c55e' },
