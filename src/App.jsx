@@ -972,19 +972,24 @@ export default function App() {
 }
 
 // ── MY ORDERS VIEW ────────────────────────────────────────────────────
-function PaymentRow({ label, amount, status, canPay, disabledHint, onPay, tr, isRtl }) {
+function PaymentRow({ label, amount, status, canPay, disabledHint, onPay, tr, isRtl, cc }) {
   const PAY_ST = {
     paid:    { bg:'rgba(34,197,94,0.15)',  text:'#22c55e', label: tr.ordPaid },
     pending: { bg:'rgba(234,179,8,0.15)',  text:'#eab308', label: tr.ordPayPending },
     unpaid:  { bg:'rgba(100,116,139,0.12)', text:'#94a3b8', label: tr.ordPayReq },
   };
   const st = PAY_ST[status] || PAY_ST.unpaid;
+  const labelColor = cc ? cc.sub : C.muted;
+  const amountColor = cc ? cc.fg  : C.gold;
+  const divColor    = cc ? cc.div : C.border;
+  const btnBg       = cc ? cc.fg  : C.gold;
+  const btnTxt      = cc ? cc.bg  : C.btnTxt;
   return (
     <div className="px-4 py-3 flex items-center justify-between gap-3"
-      style={{ borderTop:`1px solid ${C.border}` }}>
+      style={{ borderTop:`1px solid ${divColor}` }}>
       <div>
-        <p className="text-[11px] font-semibold" style={{ color:C.muted }}>{label}</p>
-        <p className="text-base font-black" style={{ color:C.gold }}>
+        <p className="text-[11px] font-semibold" style={{ color:labelColor }}>{label}</p>
+        <p className="text-base font-black" style={{ color:amountColor }}>
           {amount.toFixed(3)} {tr.ordQar}
         </p>
       </div>
@@ -1001,12 +1006,12 @@ function PaymentRow({ label, amount, status, canPay, disabledHint, onPay, tr, is
       {status === 'unpaid' && canPay && (
         <button onClick={onPay}
           className="px-4 py-2 rounded-xl text-xs font-black transition-all active:scale-95 hover:brightness-110"
-          style={{ background:C.gold, color:C.btnTxt }}>
+          style={{ background:btnBg, color:btnTxt }}>
           {tr.ordPayReq}
         </button>
       )}
       {status === 'unpaid' && !canPay && disabledHint && (
-        <span className="text-[10px] text-end" style={{ color:C.dim, maxWidth:'100px' }}>{disabledHint}</span>
+        <span className="text-[10px] text-end" style={{ color:labelColor, opacity:0.55, maxWidth:'100px' }}>{disabledHint}</span>
       )}
     </div>
   );
@@ -1790,7 +1795,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                               status={relOrd.parts_payment_status || 'unpaid'}
                               canPay={relOrd.customer_approved && relOrd.status !== 'draft'}
                               onPay={() => requestPayment(relOrd.id, 'parts')}
-                              tr={tr} isRtl={isRtl}
+                              tr={tr} isRtl={isRtl} cc={cc}
                             />
                           )}
                           {Number(relOrd.total_labor_price) > 0 && (
@@ -1801,7 +1806,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                               canPay={['ready','delivered','completed'].includes(relOrd.status) && (relOrd.parts_payment_status||'paid')==='paid'}
                               disabledHint={isRtl ? 'متاح بعد انتهاء الإصلاح ودفع القطع' : 'Available after repair & parts paid'}
                               onPay={() => requestPayment(relOrd.id, 'labor')}
-                              tr={tr} isRtl={isRtl}
+                              tr={tr} isRtl={isRtl} cc={cc}
                             />
                           )}
                         </div>
