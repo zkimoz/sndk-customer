@@ -2388,7 +2388,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, goOrd
 
       {/* Add Car Form */}
       {showAddCar && (
-        <div className="rounded-2xl p-5 space-y-4" style={{ background:CARD_BG_CYCLE[0].bg, border:`1px solid ${CARD_BG_CYCLE[0].fg}50` }}>
+        <div className="rounded-2xl p-5 space-y-4" style={{ background:CARD_BG_CYCLE[1].bg, border:`1px solid ${CARD_BG_CYCLE[1].fg}50` }}>
           <h3 className={`font-black text-base ${C.selectCls} flex items-center gap-2`}>
             <Car size={16} style={{ color:C.gold }}/>{tr.prof_add_car}
           </h3>
@@ -2476,16 +2476,16 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, goOrd
             <Loader2 size={18} className="animate-spin"/>{isRtl?'جاري التحميل...':'Loading...'}
           </div>
         ) : cars.length === 0 ? (
-          <div className="rounded-2xl p-6 text-center space-y-3" style={{ background:CARD_BG_CYCLE[0].bg, border:`1px solid ${CARD_BG_CYCLE[0].fg}30` }}>
-            <Car size={40} style={{ color:CARD_BG_CYCLE[0].fg, opacity:0.5, margin:'0 auto' }}/>
-            <p className="text-sm" style={{ color:CARD_BG_CYCLE[0].sub }}>{tr.noCars}</p>
+          <div className="rounded-2xl p-6 text-center space-y-3" style={{ background:CARD_BG_CYCLE[1].bg, border:`1px solid ${CARD_BG_CYCLE[1].fg}30` }}>
+            <Car size={40} style={{ color:CARD_BG_CYCLE[1].fg, opacity:0.5, margin:'0 auto' }}/>
+            <p className="text-sm" style={{ color:CARD_BG_CYCLE[1].sub }}>{tr.noCars}</p>
             <button onClick={()=>setShowAddCar(true)} className="px-5 py-2 rounded-xl font-bold text-sm" style={{ background:C.gold, color:C.btnTxt }}>{tr.prof_add_car}</button>
           </div>
         ) : (
           <div className="space-y-3">
             {cars.map((car, carIdx) => {
-              const cc     = CARD_BG_CYCLE[carIdx % 2];
-              const iconCC = CARD_BG_CYCLE[(carIdx + 1) % 2];
+              const cc     = CARD_BG_CYCLE[1]; // always maroon
+              const iconCC = CARD_BG_CYCLE[0]; // gold icon for contrast
               const isOpen = expandedCar === car.id;
               const carHistory = history[car.id];
               return (
