@@ -2241,6 +2241,10 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, goOrd
   };
 
   const saveEditCar = async (carId) => {
+    if (!editCarForm.plate_number?.trim()) {
+      alert(isRtl ? 'رقم اللوحة مطلوب' : 'Plate number is required');
+      return;
+    }
     setSavingCar(true);
     let registration_image_url = editCarForm.registration_image_url;
     if (registrationEditFile) {
@@ -2583,12 +2587,18 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, goOrd
                               <option value="">{isRtl?'اختر السنة':'Select Year'}</option>
                               {BOOKING_YEAR_OPTIONS.map(y => <option key={y} value={String(y)}>{y}</option>)}
                             </select>
-                            {/* Plate */}
-                            <input value={editCarForm.plate_number}
-                              onChange={e=>setEditCarForm(f=>({...f,plate_number:e.target.value.replace(/[^A-Za-z0-9]/g,'').toUpperCase()}))}
-                              placeholder={tr.prof_plate_ph} dir="ltr"
-                              className="w-full px-3 py-2.5 rounded-xl text-sm outline-none font-mono"
-                              style={inputStyle} onFocus={e=>Object.assign(e.target.style,focusStyle)} onBlur={e=>e.target.style.borderColor=C.border}/>
+                            {/* Plate (required) */}
+                            <div>
+                              <p className="text-[10px] mb-1 font-semibold" style={{ color:C.muted }}>
+                                {tr.prof_plate} <span style={{ color:'#ef4444' }}>*</span>
+                              </p>
+                              <input value={editCarForm.plate_number}
+                                onChange={e=>setEditCarForm(f=>({...f,plate_number:e.target.value.replace(/[^A-Za-z0-9]/g,'').toUpperCase()}))}
+                                placeholder={tr.prof_plate_ph} dir="ltr"
+                                className="w-full px-3 py-2.5 rounded-xl text-sm outline-none font-mono"
+                                style={{ ...inputStyle, borderColor: !editCarForm.plate_number?.trim() ? 'rgba(239,68,68,0.4)' : C.border }}
+                                onFocus={e=>Object.assign(e.target.style,focusStyle)} onBlur={e=>e.target.style.borderColor=editCarForm.plate_number?.trim()?C.border:'rgba(239,68,68,0.4)'}/>
+                            </div>
                             {/* Chassis */}
                             <div>
                               <input value={editCarForm.chassis_number}
