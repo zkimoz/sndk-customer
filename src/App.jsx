@@ -795,7 +795,7 @@ export default function App() {
 
           {/* Page Content */}
           <main className="flex-1 overflow-y-auto pb-24 md:pb-8">
-            {page==='home'    && <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements}/>}
+            {page==='home'    && <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements} goOrders={goOrders} pendingQuotCount={pendingQuotCount}/>}
             {page==='services'&& <ServicesView lang={lang} tr={tr} isRtl={isRtl} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} theme={theme}/>}
             {page==='profile' && user && <ProfileView lang={lang} tr={tr} isRtl={isRtl} profile={profile} user={user} onBook={(car)=>bookFromProfile(car)} goServices={goServices} goOrders={goOrders} onProfileUpdated={()=>fetchProfile(user.id)} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories}/>}
             {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount}/>}
@@ -1392,6 +1392,8 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange }) {
       if (seenIdsRef.current.size === 0) {
         loaded.filter(o => o.sent_to_customer).forEach(o => seenIdsRef.current.add(o.id));
       }
+      // auto-switch to orders tab if there are any active orders
+      if (loaded.some(o => o.sent_to_customer)) setTab('orders');
       const pending = loaded.filter(o => o.sent_to_customer && !o.customer_approved && !o.customer_rejected).length;
       onCountChange?.(pending);
     }
@@ -1839,7 +1841,7 @@ const ANN_PRESETS = {
   purple: { bg:'linear-gradient(135deg,#4c1d95 0%,#5b21b6 100%)',                              overlay:'rgba(0,0,0,0.3)',  shadow:'rgba(76,29,149,0.5)'  },
 };
 
-function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, serviceCategories, homeAnnouncements }) {
+function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, serviceCategories, homeAnnouncements, user, goOrders, pendingQuotCount }) {
   const cats = serviceCategories.map(enrichCat);
   const goToCat = (cat) => {
     setFormData(p => ({ ...p, serviceKey: cat.id, serviceName: cat.ar }));
@@ -1952,6 +1954,29 @@ function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, service
           )}
         </div>
       </div>
+
+      {/* Orders notification banner */}
+      {user && pendingQuotCount > 0 && (
+        <button onClick={goOrders}
+          className="w-full rounded-2xl px-5 py-4 flex items-center gap-3 transition-all active:scale-[0.98] text-start"
+          style={{ background:'rgba(138,21,56,0.10)', border:'1.5px solid rgba(138,21,56,0.35)' }}>
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background:'rgba(138,21,56,0.18)' }}>
+            <ClipboardList size={20} style={{ color:'#8A1538' }}/>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-black text-sm" style={{ color:'#8A1538' }}>
+              {isRtl
+                ? `عندك ${pendingQuotCount} طلب ينتظر موافقتك`
+                : `${pendingQuotCount} order awaiting your approval`}
+            </p>
+            <p className="text-xs mt-0.5" style={{ color:'rgba(138,21,56,0.65)' }}>
+              {isRtl ? 'اضغط لمراجعة عرض السعر' : 'Tap to review the quotation'}
+            </p>
+          </div>
+          {isRtl ? <ChevronLeft size={18} style={{ color:'#8A1538', flexShrink:0 }}/> : <ChevronRight size={18} style={{ color:'#8A1538', flexShrink:0 }}/>}
+        </button>
+      )}
 
       {cats.length > 0 && (
         <div>
