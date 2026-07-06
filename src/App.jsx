@@ -410,6 +410,31 @@ const DEFAULT_CAT_STYLES = [
   { icon:Wrench },
   { icon:Search },
 ];
+// ── Push Notifications ────────────────────────────────────────────────────
+const VAPID_PUBLIC_KEY = 'BI7jNwdDx9eYM2bVIWSytWhDiZcmYI_8HFYc4fqF97vbej-zxPIXfS0nP8mrjQJPzeGcO76tN26vBK8vvg3qPRE';
+function urlBase64ToUint8Array(b64) {
+  const pad = '='.repeat((4 - b64.length % 4) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+async function registerPushSubscription(userId) {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') return;
+    const existing = await reg.pushManager.getSubscription();
+    const sub = existing || await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    });
+    await supabase.from('push_subscriptions').upsert(
+      { user_id: userId, subscription: sub.toJSON(), updated_at: new Date().toISOString() },
+      { onConflict: 'user_id' }
+    );
+  } catch (e) { /* silent — push not supported or denied */ }
+}
+
 const CARD_BG_CYCLE = [
   { bg:'#FFCB74', ic:'rgba(17,17,17,0.12)', fg:'#111111', txt:'#111111', sub:'rgba(17,17,17,0.55)', div:'rgba(17,17,17,0.10)' },
   { bg:'#722F37', ic:'rgba(255,203,116,0.15)', fg:'#FFCB74', txt:'#ffffff', sub:'rgba(255,255,255,0.60)', div:'rgba(255,255,255,0.08)' },
@@ -544,12 +569,12 @@ export default function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
+      if (session?.user) { fetchProfile(session.user.id); registerPushSubscription(session.user.id); }
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') { setShowNewPassword(true); return; }
       setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
+      if (session?.user) { fetchProfile(session.user.id); if (event === 'SIGNED_IN') registerPushSubscription(session.user.id); }
       else { setProfile(null); }
     });
     // Load dynamic car brands, categories, and brand-category links
