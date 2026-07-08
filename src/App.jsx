@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
+import AnimatedLogo from './AnimatedLogo';
 import {
   Settings, Search, ShieldCheck, PackageSearch, Sparkles, Car, Cog, Droplets,
   CheckCircle2, Loader2, Globe, Bell, Home, Plus, Phone,
@@ -1252,9 +1253,8 @@ function openQuotationPDF(order, linked, profile, jobCard) {
 
 <div class="header">
   <div>
-    <div class="brand-ar">سندك</div>
-    <div class="brand-en">SNDK</div>
-    <div class="brand-sub">Premium Car Services — Qatar</div>
+    <img src="${window.location.origin}/logo-static.png" alt="SNDK" style="height:48px;display:block"/>
+    <div class="brand-sub" style="margin-top:4px">Premium Car Services — Qatar</div>
   </div>
   <div class="doc-info">
     <div class="doc-title-ar">أمر الشغل / Job Card</div>
@@ -3326,6 +3326,9 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
       <div className="w-full max-w-sm rounded-2xl p-6 space-y-5 shadow-2xl" style={{ background:C.panel, border:`1px solid ${C.border}` }}>
 
         {/* Header */}
+        <div className="w-24 h-24 mx-auto -mb-2" style={{ pointerEvents:'none' }}>
+          <AnimatedLogo />
+        </div>
         <div className="flex items-center justify-between">
           <div>
             <h2 className={`text-xl font-black ${C.selectCls}`}>
