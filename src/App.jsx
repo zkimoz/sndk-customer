@@ -658,9 +658,8 @@ export default function App() {
         {/* ══ DESKTOP SIDEBAR ══ */}
         <aside className="hidden md:flex md:flex-col md:w-60 md:flex-shrink-0 md:h-full"
           style={{ background:C.panel, borderInlineEnd:`1px solid ${C.border}` }}>
-          <div className="px-6 py-7" style={{ borderBottom:`1px solid ${C.border}` }}>
-            <p className="font-black text-2xl tracking-wide leading-none" style={{ color:C.textAccent }}>{isRtl?'سندك':'SNDK'}</p>
-            <p className="text-[10px] tracking-widest uppercase mt-1" style={{ color:`${C.textAccent}88` }}>{tr.tagline}</p>
+          <div className="flex items-center justify-center p-1" style={{ borderBottom:`1px solid ${C.border}` }}>
+            <img src="/logo-animated.gif" alt="SNDK" style={{ width:'100%', height:'auto' }}/>
           </div>
           <nav className="flex-1 px-3 py-5 space-y-1">
             {[
@@ -774,7 +773,7 @@ export default function App() {
             <button onClick={()=>setMenuOpen(true)} className="p-2 rounded-lg transition-colors" style={{ color:C.gold }}>
               <Menu size={22}/>
             </button>
-            <p className="font-black text-lg tracking-wide" style={{ color:C.textAccent }}>{isRtl?'سندك':'SNDK'}</p>
+            <img src="/logo-animated.gif" alt="SNDK" style={{ height:34, width:'auto' }}/>
             <div className="flex items-center gap-1">
               <button onClick={toggleTheme} className="p-2 rounded-lg transition-colors" style={{ color:C.gold }}>
                 {theme==='dark' ? <Sun size={17}/> : <Moon size={17}/>}
@@ -939,7 +938,7 @@ export default function App() {
           <div className="absolute inset-0" style={{ background:'rgba(0,0,0,0.65)', backdropFilter:'blur(4px)' }} onClick={()=>setMenuOpen(false)}/>
           <div className="relative w-72 h-full flex flex-col shadow-2xl" style={{ background:C.panel }}>
             <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom:`1px solid ${C.border}` }}>
-              <p className="font-black text-xl" style={{ color:C.textAccent }}>{isRtl?'سندك':'SNDK'}</p>
+              <img src="/logo-animated.gif" alt="SNDK" style={{ height:38, width:'auto' }}/>
               <button onClick={()=>setMenuOpen(false)} style={{ color:C.muted }}><X size={20}/></button>
             </div>
             <nav className="flex-1 p-3 space-y-1">
@@ -3322,11 +3321,11 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" dir={isRtl?'rtl':'ltr'} style={{ background:'rgba(0,0,0,0.75)', backdropFilter:'blur(8px)' }}>
-      <div className="w-full max-w-sm rounded-2xl p-6 space-y-5 shadow-2xl" style={{ background:C.panel, border:`1px solid ${C.border}` }}>
+      <div className="w-full max-w-md rounded-2xl p-6 space-y-5 shadow-2xl" style={{ background:C.panel, border:`1px solid ${C.border}` }}>
 
         {/* Header */}
         <div className="mx-auto -mb-2">
-          <img src="/logo-animated-still.png" alt="SNDK" className="mx-auto" style={{ width:180, height:'auto' }}/>
+          <img src="/logo-animated.gif" alt="SNDK" className="mx-auto w-full" style={{ height:'auto' }}/>
         </div>
         <div className="flex items-center justify-between">
           <div>
