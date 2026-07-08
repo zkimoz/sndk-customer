@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
-import AnimatedLogo from './AnimatedLogo';
 import {
   Settings, Search, ShieldCheck, PackageSearch, Sparkles, Car, Cog, Droplets,
   CheckCircle2, Loader2, Globe, Bell, Home, Plus, Phone,
@@ -3326,8 +3325,8 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
       <div className="w-full max-w-sm rounded-2xl p-6 space-y-5 shadow-2xl" style={{ background:C.panel, border:`1px solid ${C.border}` }}>
 
         {/* Header */}
-        <div className="w-24 h-24 mx-auto -mb-2" style={{ pointerEvents:'none' }}>
-          <AnimatedLogo />
+        <div className="mx-auto -mb-2">
+          <img src="/logo-animated-still.png" alt="SNDK" className="mx-auto" style={{ width:180, height:'auto' }}/>
         </div>
         <div className="flex items-center justify-between">
           <div>
