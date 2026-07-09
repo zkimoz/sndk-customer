@@ -1316,7 +1316,8 @@ ${(partItems.length > 0 || laborItems.length > 0) ? `
       ${[...partItems, ...laborItems].map((item, i) => {
         const nameAr = item.item_name?.ar || item.item_name?.en || '—';
         const nameEn = item.item_name?.en || '';
-        const lineTotal = (Number(item.sell_price) * Number(item.quantity)).toFixed(3);
+        const discountPct = Number(item.discount_pct||0);
+        const lineTotal = (Number(item.sell_price) * Number(item.quantity) * (1 - Math.min(discountPct,100)/100)).toFixed(3);
         return `<tr>
           <td style="color:#999;font-size:11px">${i+1}</td>
           <td>
@@ -1326,7 +1327,7 @@ ${(partItems.length > 0 || laborItems.length > 0) ? `
             ${item.part_number ? `<span style="font-size:10px;color:#aaa;display:block;font-family:monospace">${item.part_number}</span>` : ''}
           </td>
           <td style="text-align:center;font-weight:600">${item.quantity}</td>
-          <td dir="ltr" style="font-size:12px;font-weight:600">${Number(item.sell_price).toFixed(3)}</td>
+          <td dir="ltr" style="font-size:12px;font-weight:600">${Number(item.sell_price).toFixed(3)}${discountPct>0?`<br><span style="color:#dc2626;font-size:10px">-${discountPct.toFixed(0)}%</span>`:''}</td>
           <td dir="ltr" style="font-weight:700;color:#8A1538">${lineTotal}</td>
         </tr>`;
       }).join('')}
