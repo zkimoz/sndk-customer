@@ -42,7 +42,7 @@ const T = {
     password:'كلمة المرور', passwordPh:'كلمة مرور قوية',
     noAccount:'ليس لديك حساب؟', hasAccount:'لديك حساب بالفعل؟',
     confirmEmailMsg:'تم إرسال رابط التأكيد على بريدك الإلكتروني',
-    myAccount:'حسابي', authError:'خطأ في البريد أو كلمة المرور',
+    myAccount:'حسابي', authError:'خطأ في البريد أو كلمة المرور', phoneAlreadyUsed:'رقم الجوال ده مسجل بحساب تاني بالفعل',
     forgotPw:'نسيت كلمة المرور؟',
     forgotTitle:'استرجاع كلمة المرور',
     forgotByEmail:'عن طريق الإيميل',
@@ -190,7 +190,7 @@ const T = {
     password:'Password', passwordPh:'Strong password',
     noAccount:"Don't have an account?", hasAccount:'Already have an account?',
     confirmEmailMsg:'Check your email to activate your account',
-    myAccount:'My Account', authError:'Invalid email or password',
+    myAccount:'My Account', authError:'Invalid email or password', phoneAlreadyUsed:'This phone number is already registered to another account',
     forgotPw:'Forgot password?',
     forgotTitle:'Reset Password',
     forgotByEmail:'Via Email',
@@ -3409,7 +3409,12 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
         const { data, error:signUpErr } = await supabase.auth.signUp({ email, password });
         if (signUpErr) throw signUpErr;
         if (data.user) {
-          await supabase.from('profiles').insert([{ id:data.user.id, full_name:fullName, phone_number:phone, user_role:'customer', language_preference:isRtl?'ar':'en' }]);
+          const { error:profileErr } = await supabase.from('profiles')
+            .insert([{ id:data.user.id, full_name:fullName, phone_number:phone, user_role:'customer', language_preference:isRtl?'ar':'en' }]);
+          if (profileErr) {
+            if (profileErr.code === '23505') throw new Error(tr.phoneAlreadyUsed);
+            throw new Error(tr.authError);
+          }
         }
         setDone(true);
       } else {
@@ -3424,7 +3429,11 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
         }
         onSuccess();
       }
-    } catch(err) { setError(err.message||tr.authError); }
+    } catch(err) {
+      const msg = err?.message;
+      const isUsable = msg && msg.trim() && msg.trim() !== '{}';
+      setError(isUsable ? msg : tr.authError);
+    }
     finally { setLoading(false); }
   };
 
