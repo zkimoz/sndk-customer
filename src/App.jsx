@@ -3142,14 +3142,29 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
 
 // ── STEP 3 · SCHEDULE ─────────────────────────────────────────────────
 function ScheduleStep({ lang, tr, formData, setFormData, setStep, prevStep }) {
+  const isRtl = lang === 'ar';
   const today = new Date().toISOString().split('T')[0];
   const canGo = formData.date && formData.timeKey;
+  const dateInputRef = useRef(null);
+  const openDatePicker = () => {
+    const el = dateInputRef.current;
+    if (!el) return;
+    if (el.showPicker) el.showPicker(); else el.focus();
+  };
   return (
     <FormShell title={tr.pickTime}>
       <Field label={tr.date}>
-        <input type="date" min={today} value={formData.date} onChange={e=>setFormData(p=>({...p,date:e.target.value}))}
-          className={`${C.inputCls} ${C.colorScheme}`} style={{ background:C.input, border:`1px solid ${C.border}` }}
-          onFocus={e=>e.target.style.borderColor=C.borderFocus} onBlur={e=>e.target.style.borderColor=C.border}/>
+        <div className="relative">
+          <input ref={dateInputRef} type="date" min={today} value={formData.date} onChange={e=>setFormData(p=>({...p,date:e.target.value}))}
+            className="absolute inset-0 w-full h-full opacity-0" tabIndex={-1}/>
+          <div onClick={openDatePicker}
+            className={`${C.inputCls} cursor-pointer flex items-center`}
+            style={{ background:C.input, border:`1px solid ${C.border}`, color: formData.date ? C.text : C.muted }}>
+            {formData.date
+              ? new Date(formData.date + 'T00:00:00').toLocaleDateString(isRtl ? 'ar-QA' : 'en-QA', { year:'numeric', month:'long', day:'numeric' })
+              : (isRtl ? 'اختاري التاريخ' : 'Select a date')}
+          </div>
+        </div>
       </Field>
       <Field label={tr.selectTime}>
         <div className="grid grid-cols-2 gap-3">
