@@ -42,7 +42,7 @@ const T = {
     password:'كلمة المرور', passwordPh:'كلمة مرور قوية',
     noAccount:'ليس لديك حساب؟', hasAccount:'لديك حساب بالفعل؟',
     confirmEmailMsg:'تم إرسال رسالة تفعيل إلى بريدك الإلكتروني. يُرجى تفقّد صندوق الوارد، وفي حال عدم وصولها يُرجى التحقق من مجلد البريد غير المرغوب فيه (Junk / Spam).',
-    myAccount:'حسابي', authError:'خطأ في البريد أو كلمة المرور', phoneAlreadyUsed:'رقم الجوال ده مسجل بحساب تاني بالفعل',
+    myAccount:'حسابي', authError:'خطأ في البريد أو كلمة المرور', phoneAlreadyUsed:'رقم الجوال هذا مسجل بحساب آخر بالفعل',
     forgotPw:'نسيت كلمة المرور؟',
     forgotTitle:'استرجاع كلمة المرور',
     forgotByEmail:'عن طريق الإيميل',
@@ -3162,7 +3162,7 @@ function ScheduleStep({ lang, tr, formData, setFormData, setStep, prevStep }) {
             style={{ background:C.input, border:`1px solid ${C.border}`, color: formData.date ? C.text : C.muted }}>
             {formData.date
               ? new Date(formData.date + 'T00:00:00').toLocaleDateString(isRtl ? 'ar-QA' : 'en-QA', { year:'numeric', month:'long', day:'numeric' })
-              : (isRtl ? 'اختاري التاريخ' : 'Select a date')}
+              : (isRtl ? 'اختر التاريخ' : 'Select a date')}
           </div>
         </div>
       </Field>
