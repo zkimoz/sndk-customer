@@ -1881,9 +1881,9 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
 
                       {/* placeholder for spacing if no quotation yet */}
                       {!relOrd?.sent_to_customer && (
-                        <div className="px-4 py-3 flex items-center gap-2" style={{ color:C.dim }}>
-                          <Loader2 size={12} className="animate-spin opacity-50"/>
-                          <span className="text-xs">{isRtl ? 'جاري إعداد عرض السعر...' : 'Preparing quotation...'}</span>
+                        <div className="px-4 py-3 flex items-center gap-2" style={{ color:C.gold }}>
+                          <Loader2 size={12} className="animate-spin"/>
+                          <span className="text-xs font-bold">{isRtl ? 'جاري إعداد عرض السعر...' : 'Preparing quotation...'}</span>
                         </div>
                       )}
                     </div>
