@@ -1775,8 +1775,8 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           {(() => {
                             const PRIORITY_STYLE = {
                               high:   { label: isRtl?'أولوية قصوى':'Critical', bg:'#dc2626', text:'#ffffff' },
-                              medium: { label: isRtl?'أولوية متوسطة':'Medium', bg:'#eab308', text:'#1c1300' },
-                              low:    { label: isRtl?'أولوية منخفضة':'Low',    bg:cc.fg,      text:'#ffffff' },
+                              medium: { label: isRtl?'أولوية متوسطة':'Medium', bg:'#f97316', text:'#ffffff' },
+                              low:    { label: isRtl?'أولوية منخفضة':'Low',    bg:'#eab308', text:'#1c1300' },
                             };
                             const seen = new Set();
                             const services = [];
