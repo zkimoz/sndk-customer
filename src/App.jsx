@@ -1771,6 +1771,39 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                       {/* ── عرض السعر + موافقة ── */}
                       {relOrd?.sent_to_customer ? (
                         <div className="p-4 space-y-3">
+                          {/* Requested services + priority */}
+                          {(() => {
+                            const PRIORITY_STYLE = {
+                              high:   { label: isRtl?'أولوية قصوى':'Critical', bg:'#dc2626', text:'#ffffff' },
+                              medium: { label: isRtl?'أولوية متوسطة':'Medium', bg:'#eab308', text:'#1c1300' },
+                              low:    { label: isRtl?'أولوية منخفضة':'Low',    bg:cc.fg,      text:'#ffffff' },
+                            };
+                            const seen = new Set();
+                            const services = [];
+                            (relOrd.order_items || []).forEach(i => {
+                              const key = i.service_name?.ar || i.service_name?.en;
+                              if (key && !seen.has(key)) {
+                                seen.add(key);
+                                services.push({ key, name_ar: i.service_name.ar, name_en: i.service_name.en, priority: i.service_name.priority || 'low' });
+                              }
+                            });
+                            if (services.length === 0) return null;
+                            const order = { high:0, medium:1, low:2 };
+                            services.sort((a,b)=>order[a.priority]-order[b.priority]);
+                            return (
+                              <div className="space-y-1.5">
+                                <p className="text-xs font-bold" style={{ color:cc.sub }}>{isRtl?'الخدمات المطلوبة:':'Requested Services:'}</p>
+                                {services.map(s => (
+                                  <div key={s.key} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg" style={{ background:'rgba(0,0,0,0.08)' }}>
+                                    <span className="text-xs font-semibold" style={{ color:cc.txt }}>{isRtl?(s.name_ar||s.name_en):(s.name_en||s.name_ar)}</span>
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background:PRIORITY_STYLE[s.priority].bg, color:PRIORITY_STYLE[s.priority].text }}>
+                                      {PRIORITY_STYLE[s.priority].label}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
                           {/* PDF */}
                           <button onClick={() => openQuotationPDF(relOrd, a, profile, jc)}
                             className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
