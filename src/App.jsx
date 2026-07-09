@@ -470,7 +470,7 @@ const catLabel = (c, lang) => lang === 'en'
   : (c.name_en && c.name_ar ? `${c.name_en} · ${c.name_ar}` : (c.name_ar || c.name_en || ''));
 
 const DARK_THEME = {
-  bg:'#111111', panel:'#1A1A1A', card:'#2F2F2F', input:'#3A3A3A',
+  bg:'#111111', panel:'#1A1A1A', card:'#FFCB74', cardText:'#1C1300', cardMuted:'rgba(28,19,0,0.62)', input:'#3A3A3A',
   border:'rgba(255,203,116,0.18)', borderFocus:'rgba(255,203,116,0.70)',
   gold:'#FFCB74', goldL:'#FFD990', text:'#F6F6F6',
   muted:'rgba(246,246,246,0.45)', dim:'rgba(246,246,246,0.22)',
@@ -486,7 +486,7 @@ const DARK_THEME = {
   heroOverlay:(r)=>r?'linear-gradient(to left, transparent 30%, #722F37 75%)':'linear-gradient(to right, transparent 30%, #722F37 75%)',
 };
 const LIGHT_THEME = {
-  bg:'#FFFFFF', panel:'#FFFFFF', card:'#2A2A2A', input:'#ECECEC',
+  bg:'#FFFFFF', panel:'#FFFFFF', card:'#722F37', cardText:'#FFFFFF', cardMuted:'rgba(255,255,255,0.68)', input:'#ECECEC',
   border:'rgba(255,203,116,0.45)', borderFocus:'rgba(255,203,116,0.90)',
   gold:'#FFCB74', goldL:'#FFD990', text:'#111111',
   muted:'rgba(17,17,17,0.48)', dim:'rgba(17,17,17,0.22)',
@@ -3056,10 +3056,10 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
         {formData.carId && !addingNew && (
           <div className="rounded-2xl p-4 flex items-center justify-between" style={{ background: C.card, border: `1px solid ${C.gold}40` }}>
             <div>
-              <p className={`font-black ${C.selectCls}`}>{formData.carBrandKey}{formData.carCategoryKey ? ` · ${formData.carCategoryKey}` : ''}</p>
-              {formData.carModel && <p className="text-xs mt-0.5" style={{ color: C.muted }}>{formData.carModel}</p>}
+              <p className="font-black" style={{ color: C.cardText }}>{formData.carBrandKey}{formData.carCategoryKey ? ` · ${formData.carCategoryKey}` : ''}</p>
+              {formData.carModel && <p className="text-xs mt-0.5" style={{ color: C.cardMuted }}>{formData.carModel}</p>}
             </div>
-            <button onClick={clearSelection} className="text-xs px-3 py-1.5 rounded-xl font-bold" style={{ color: C.gold, border: `1px solid ${C.gold}40` }}>
+            <button onClick={clearSelection} className="text-xs px-3 py-1.5 rounded-xl font-bold" style={{ color: C.cardText, border: `1px solid ${C.cardText}40` }}>
               {tr.changeCar}
             </button>
           </div>
@@ -3076,18 +3076,18 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
                     style={{ background: C.card, border: `1px solid ${C.border}` }}
                     onMouseEnter={e => e.currentTarget.style.borderColor = C.gold + '60'}
                     onMouseLeave={e => e.currentTarget.style.borderColor = C.border}>
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${C.gold}15` }}>
-                      <Car size={16} style={{ color: C.gold }}/>
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${C.cardText}18` }}>
+                      <Car size={16} style={{ color: C.cardText }}/>
                     </div>
                     <div>
-                      <p className={`font-black ${C.selectCls} text-sm`}>{car.car_type}{car.car_category ? ` · ${car.car_category}` : ''}</p>
+                      <p className="font-black text-sm" style={{ color: C.cardText }}>{car.car_type}{car.car_category ? ` · ${car.car_category}` : ''}</p>
                       {(car.production_year || car.plate_number) && (
-                        <p className="text-xs mt-0.5" style={{ color: C.muted }}>
+                        <p className="text-xs mt-0.5" style={{ color: C.cardMuted }}>
                           {[car.production_year, car.plate_number].filter(Boolean).join(' · ')}
                         </p>
                       )}
                     </div>
-                    <ChevronLeft size={16} style={{ color: C.muted, marginRight: 'auto' }}/>
+                    <ChevronLeft size={16} style={{ color: C.cardMuted, marginRight: 'auto' }}/>
                   </button>
                 ))
             }
@@ -3252,17 +3252,17 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
       {/* Selected services */}
       {cartItems.length > 0 && (
         <div className="rounded-2xl overflow-hidden" style={{ background:C.card, border:`1px solid ${C.border}` }}>
-          <div className="px-4 py-2.5 flex items-center gap-2" style={{ borderBottom:`1px solid ${C.border}` }}>
-            <span className="text-xs font-bold uppercase tracking-widest" style={{ color:C.muted }}>{tr.service}</span>
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background:`${C.gold}22`, color:C.gold }}>{cartItems.length}</span>
+          <div className="px-4 py-2.5 flex items-center gap-2" style={{ borderBottom:`1px solid ${C.cardText}22` }}>
+            <span className="text-xs font-bold uppercase tracking-widest" style={{ color:C.cardMuted }}>{tr.service}</span>
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background:`${C.cardText}22`, color:C.cardText }}>{cartItems.length}</span>
           </div>
           {cartItems.map((s, i) => (
             <div key={s.id} className="flex items-center gap-3 px-4 py-2.5"
-              style={{ borderBottom: i < cartItems.length-1 ? `1px solid ${C.gold}12` : 'none' }}>
-              <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background:C.gold }}/>
+              style={{ borderBottom: i < cartItems.length-1 ? `1px solid ${C.cardText}14` : 'none' }}>
+              <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background:C.cardText }}/>
               <div className="flex-1 min-w-0">
-                <p className={`text-sm font-semibold ${C.selectCls}`}>{s.name}</p>
-                <p className="text-[10px]" style={{ color:C.muted }}>{s.catName}</p>
+                <p className="text-sm font-semibold" style={{ color:C.cardText }}>{s.name}</p>
+                <p className="text-[10px]" style={{ color:C.cardMuted }}>{s.catName}</p>
               </div>
             </div>
           ))}
@@ -3273,9 +3273,9 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
       <div className="rounded-2xl overflow-hidden" style={{ background:C.card, border:`1px solid ${C.border}` }}>
         {metaRows.map((row,i)=>(
           <div key={i} className="flex items-start justify-between gap-4 px-5 py-4"
-            style={{ borderBottom:i<metaRows.length-1?`1px solid ${C.gold}14`:'none' }}>
-            <span className="text-sm flex-shrink-0" style={{ color:C.muted }}>{row.label}</span>
-            <span className={`text-sm font-semibold text-end ${C.selectCls}`}>{row.value}</span>
+            style={{ borderBottom:i<metaRows.length-1?`1px solid ${C.cardText}14`:'none' }}>
+            <span className="text-sm flex-shrink-0" style={{ color:C.cardMuted }}>{row.label}</span>
+            <span className="text-sm font-semibold text-end" style={{ color:C.cardText }}>{row.value}</span>
           </div>
         ))}
       </div>
