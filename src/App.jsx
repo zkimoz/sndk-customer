@@ -3406,11 +3406,14 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
     e.preventDefault(); setError(''); setLoading(true);
     try {
       if (isSignUp) {
-        const { data, error:signUpErr } = await supabase.auth.signUp({ email, password });
+        const { data, error:signUpErr } = await supabase.auth.signUp({
+          email, password,
+          options: { data: { full_name:fullName, phone_number:phone, language_preference:isRtl?'ar':'en' } },
+        });
         if (signUpErr) throw signUpErr;
         if (data.user) {
           const { error:profileErr } = await supabase.from('profiles')
-            .insert([{ id:data.user.id, full_name:fullName, phone_number:phone, user_role:'customer', language_preference:isRtl?'ar':'en' }]);
+            .upsert([{ id:data.user.id, full_name:fullName, phone_number:phone, user_role:'customer', language_preference:isRtl?'ar':'en' }], { onConflict:'id' });
           if (profileErr) {
             if (profileErr.code === '23505') throw new Error(tr.phoneAlreadyUsed);
             throw new Error(tr.authError);
