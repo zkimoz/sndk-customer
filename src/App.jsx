@@ -1788,7 +1788,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           {gt > 0 && (() => {
                             const paid = (relOrd.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
                             if (paid <= 0) return null;
-                            const remaining = Math.max(gt - paid, 0);
+                            const remaining = gt - paid;
                             return (
                               <div className="rounded-xl px-3 py-2 space-y-1" style={{ background:'rgba(0,0,0,0.08)' }}>
                                 <div className="flex items-center justify-between">
@@ -1797,7 +1797,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                 </div>
                                 <div className="flex items-center justify-between">
                                   <span className="text-xs" style={{ color:cc.sub }}>{isRtl ? 'المتبقي:' : 'Remaining:'}</span>
-                                  <span className="text-sm font-bold" style={{ color: remaining > 0.001 ? cc.fg : '#22c55e' }}>{remaining.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
+                                  <span className="text-sm font-bold" style={{ color: remaining < -0.001 ? '#ef4444' : remaining > 0.001 ? cc.fg : '#22c55e' }}>{remaining.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
                                 </div>
                               </div>
                             );
