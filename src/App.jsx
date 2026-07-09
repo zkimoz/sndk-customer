@@ -3406,6 +3406,9 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
     e.preventDefault(); setError(''); setLoading(true);
     try {
       if (isSignUp) {
+        const { data: phoneTaken, error:phoneCheckErr } = await supabase.rpc('phone_number_exists', { check_phone: phone });
+        if (!phoneCheckErr && phoneTaken) throw new Error(tr.phoneAlreadyUsed);
+
         const { data, error:signUpErr } = await supabase.auth.signUp({
           email, password,
           options: { data: { full_name:fullName, phone_number:phone, language_preference:isRtl?'ar':'en' } },
