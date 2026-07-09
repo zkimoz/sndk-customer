@@ -3,8 +3,8 @@ self.addEventListener('push', event => {
   const title = data.title || 'سندك';
   const options = {
     body: data.body || '',
-    icon: '/favicon.svg',
-    badge: '/favicon.svg',
+    icon: '/favicon-512.png',
+    badge: '/apple-touch-icon.png',
     dir: 'rtl',
     lang: 'ar',
     tag: data.tag || 'sandak',
