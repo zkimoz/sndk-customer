@@ -24,7 +24,7 @@ const T = {
     carCategory:'الفئة', selectCategory:'اختر الفئة',
     carYear:'سنة الموديل', yearHint:'4 أرقام',
     pickTime:'اختر موعدك', date:'التاريخ', selectTime:'اختر وقتاً',
-    notes:'ملاحظات إضافية', notesPh:'أي تفاصيل إضافية...',
+    notes:'شكاوى وملاحظات إضافية عن السيارة', notesPh:'اكتب أي عطل أو شكوى أو ملاحظة عن سيارتك...',
     reviewTitle:'مراجعة وتأكيد',
     customer:'العميل', car:'السيارة', service:'الخدمة', apptLabel:'الموعد',
     confirm:'تأكيد الحجز', confirming:'جاري الحجز...',
@@ -172,7 +172,7 @@ const T = {
     carCategory:'Category', selectCategory:'Select Category',
     carYear:'Model Year', yearHint:'4 digits',
     pickTime:'Choose Appointment', date:'Date', selectTime:'Select a Time',
-    notes:'Additional Notes', notesPh:'Any extra details...',
+    notes:'Complaints & Additional Notes About the Car', notesPh:'Describe any issue, complaint, or note about your car...',
     reviewTitle:'Review & Confirm',
     customer:'Customer', car:'Car', service:'Service', apptLabel:'Appointment',
     confirm:'Confirm Booking', confirming:'Booking...',
@@ -1486,55 +1486,58 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, [field]: 'pending' } : o));
   };
 
-  const approveQuotation = async (orderId) => {
-    if (!window.confirm(tr.quotApproveConfirm)) return;
-    const now = new Date().toISOString();
-    const { error } = await supabase.from('orders').update({
-      customer_approved: true, customer_rejected: false, approved_at: now,
-    }).eq('id', orderId);
-    if (error) { alert(isRtl ? 'خطأ: ' + error.message : 'Error: ' + error.message); return; }
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, customer_approved: true, customer_rejected: false, approved_at: now } : o));
+  const serviceKeysOf = (order) => {
+    const seen = new Set();
+    const keys = [];
+    (order?.order_items || []).forEach(i => {
+      const key = i.service_name?.ar || i.service_name?.en;
+      if (key && !seen.has(key)) { seen.add(key); keys.push(key); }
+    });
+    return keys;
   };
 
-  const rejectQuotation = async (orderId) => {
-    if (!window.confirm(isRtl ? 'هل تريد رفض أمر الشغل؟ سيتم إعلام الفريق لمراجعته وإرسال عرض جديد.' : 'Reject this job card? The team will be notified to review and resend.')) return;
-    const now = new Date().toISOString();
-    const { error } = await supabase.from('orders').update({
-      customer_rejected: true, customer_approved: false, rejected_at: now,
-    }).eq('id', orderId);
-    if (error) { alert(isRtl ? 'خطأ: ' + error.message : 'Error: ' + error.message); return; }
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, customer_rejected: true, customer_approved: false, rejected_at: now } : o));
+  const toggleServiceSelection = (orderId, key) => {
+    const order = orders.find(o => o.id === orderId);
+    const allKeys = serviceKeysOf(order);
+    setServiceSelections(prev => {
+      const current = prev[orderId] || Object.fromEntries(allKeys.map(k=>[k,true]));
+      return { ...prev, [orderId]: { ...current, [key]: !current[key] } };
+    });
+  };
+  const setAllServiceSelection = (orderId, value) => {
+    const order = orders.find(o => o.id === orderId);
+    const allKeys = serviceKeysOf(order);
+    setServiceSelections(prev => ({ ...prev, [orderId]: Object.fromEntries(allKeys.map(k=>[k,value])) }));
+  };
+  const isServiceSelected = (orderId, key) => {
+    const current = serviceSelections[orderId];
+    if (!current || current[key] === undefined) return true; // default: selected
+    return current[key];
   };
 
   const approveWithSignature = async (sigData, sigName) => {
     const orderId = sigModal.orderId;
     if (!orderId) return;
     const now = new Date().toISOString();
+    const order = orders.find(o => o.id === orderId);
+    const serviceKeys = serviceKeysOf(order);
+    const selection = serviceSelections[orderId] || {};
+    const decisions = {};
+    serviceKeys.forEach(key => { decisions[key] = (selection[key] !== false) ? 'approved' : 'rejected'; });
+    const approvedCount = Object.values(decisions).filter(d => d === 'approved').length;
+    // A quotation with no service groups (legacy / general-only) is a simple whole-order approval
+    const isApproved = serviceKeys.length === 0 ? true : approvedCount > 0;
+    const isRejected = serviceKeys.length === 0 ? false : approvedCount === 0;
 
-    // Check if already approved (signature-only update)
-    const existingOrder = orders.find(o => o.id === orderId);
-    const alreadyApproved = existingOrder?.customer_approved;
-
-    if (!alreadyApproved) {
-      // Step 1 — save approval first
-      const { error: approvalErr } = await supabase.from('orders').update({
-        customer_approved: true, customer_rejected: false, approved_at: now,
-      }).eq('id', orderId);
-      if (approvalErr) {
-        alert(isRtl ? 'خطأ في حفظ الموافقة: ' + approvalErr.message : 'Error saving approval: ' + approvalErr.message);
-        return;
-      }
-      // Verify RLS didn't silently block it
-      const { data: check } = await supabase.from('orders').select('customer_approved').eq('id', orderId).maybeSingle();
-      if (!check?.customer_approved) {
-        alert(isRtl
-          ? 'لم تُحفظ الموافقة — مشكلة في صلاحيات قاعدة البيانات. تواصل مع الدعم.'
-          : 'Approval not saved — database permission issue. Contact support.');
-        return;
-      }
+    const { error: decErr } = await supabase.from('orders').update({
+      customer_approved: isApproved, customer_rejected: isRejected, approved_at: now,
+      service_decisions: decisions,
+    }).eq('id', orderId);
+    if (decErr) {
+      alert(isRtl ? 'خطأ في حفظ القرار: ' + decErr.message : 'Error saving decision: ' + decErr.message);
+      return;
     }
 
-    // Step 2 — save signature (works whether first approval or adding signature later)
     const localSig = {};
     if (sigData || sigName) {
       const sigUpdate = {};
@@ -1542,7 +1545,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
       if (sigName) sigUpdate.signed_by      = sigName;
       const { error: sigErr } = await supabase.from('orders').update(sigUpdate).eq('id', orderId);
       if (sigErr) {
-        alert(isRtl ? 'تمت الموافقة لكن لم يُحفظ التوقيع — ربما الأعمدة غير موجودة بعد في قاعدة البيانات.' : 'Approved but signature not saved — columns may be missing.');
+        alert(isRtl ? 'تم حفظ القرار لكن لم يُحفظ التوقيع — ربما الأعمدة غير موجودة بعد في قاعدة البيانات.' : 'Decision saved but signature failed — columns may be missing.');
       } else {
         if (sigData) localSig.signature_data = sigData;
         if (sigName) localSig.signed_by = sigName;
@@ -1550,7 +1553,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     }
 
     setOrders(prev => prev.map(o => o.id === orderId
-      ? { ...o, customer_approved:true, customer_rejected:false, approved_at:now, ...localSig }
+      ? { ...o, customer_approved:isApproved, customer_rejected:isRejected, approved_at:now, service_decisions:decisions, ...localSig }
       : o
     ));
     setSigModal({ open:false, orderId:null });
@@ -1581,6 +1584,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   const apptMap       = Object.fromEntries(appts.map(a => [a.id, a]));
   const orderByApptId = Object.fromEntries(orders.map(o => [o.appointment_id, o]));
   const [sigModal, setSigModal] = useState({ open:false, orderId:null });
+  const [serviceSelections, setServiceSelections] = useState({}); // { [orderId]: { [serviceKey]: boolean } }
 
   return (
     <div className="p-4 md:p-8 space-y-5 max-w-3xl md:mx-auto">
@@ -1771,7 +1775,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                       {/* ── عرض السعر + موافقة ── */}
                       {relOrd?.sent_to_customer ? (
                         <div className="p-4 space-y-3">
-                          {/* Requested services + priority */}
+                          {/* Requested services + priority + approve/reject selection */}
                           {(() => {
                             const PRIORITY_STYLE = {
                               high:   { label: isRtl?'أولوية قصوى':'Critical', bg:'#dc2626', text:'#ffffff' },
@@ -1786,29 +1790,57 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                 seen.add(key);
                                 services.push({
                                   key, name_ar: i.service_name.ar, name_en: i.service_name.en, priority: i.service_name.priority || 'low',
-                                  category_ar: i.service_name.category_ar || '', category_en: i.service_name.category_en || '',
+                                  category_ar: i.service_name.category_ar || '', category_en: i.service_name.category_en || '', notes: i.service_name.notes || '',
                                 });
                               }
                             });
                             if (services.length === 0) return null;
                             const order = { high:0, medium:1, low:2 };
                             services.sort((a,b)=>order[a.priority]-order[b.priority]);
+                            const decided = relOrd.customer_approved || relOrd.customer_rejected;
                             return (
                               <div className="space-y-1.5">
-                                <p className="text-xs font-bold" style={{ color:cc.sub }}>{isRtl?'الخدمات المطلوبة:':'Requested Services:'}</p>
-                                {services.map(s => (
-                                  <div key={s.key} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg" style={{ background:'rgba(0,0,0,0.08)' }}>
-                                    <div className="min-w-0">
-                                      {(s.category_ar || s.category_en) && (
-                                        <p className="text-[9px] font-bold uppercase tracking-wider truncate" style={{ color:cc.sub }}>{isRtl?(s.category_ar||s.category_en):(s.category_en||s.category_ar)}</p>
-                                      )}
-                                      <span className="text-xs font-semibold" style={{ color:cc.txt }}>{isRtl?(s.name_ar||s.name_en):(s.name_en||s.name_ar)}</span>
+                                <div className="flex items-center justify-between">
+                                  <p className="text-xs font-bold" style={{ color:cc.sub }}>{isRtl?'الخدمات المطلوبة:':'Requested Services:'}</p>
+                                  {!decided && services.length > 1 && (
+                                    <div className="flex items-center gap-2">
+                                      <button onClick={()=>setAllServiceSelection(relOrd.id, true)} className="text-[10px] font-bold underline" style={{ color:cc.fg }}>{isRtl?'تحديد الكل':'Select all'}</button>
+                                      <button onClick={()=>setAllServiceSelection(relOrd.id, false)} className="text-[10px] font-bold underline" style={{ color:cc.sub }}>{isRtl?'إلغاء الكل':'Deselect all'}</button>
                                     </div>
-                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background:PRIORITY_STYLE[s.priority].bg, color:PRIORITY_STYLE[s.priority].text }}>
-                                      {PRIORITY_STYLE[s.priority].label}
-                                    </span>
-                                  </div>
-                                ))}
+                                  )}
+                                </div>
+                                {services.map(s => {
+                                  const selected = isServiceSelected(relOrd.id, s.key);
+                                  const decision = relOrd.service_decisions?.[s.key];
+                                  return (
+                                    <div key={s.key} className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background:'rgba(0,0,0,0.08)' }}>
+                                      {!decided && (
+                                        <button onClick={()=>toggleServiceSelection(relOrd.id, s.key)}
+                                          className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 transition-all"
+                                          style={{ background: selected ? '#16a34a' : 'transparent', border:`2px solid ${selected ? '#16a34a' : cc.sub}` }}>
+                                          {selected && <Check size={12} color="#fff"/>}
+                                        </button>
+                                      )}
+                                      <div className="min-w-0 flex-1">
+                                        {(s.category_ar || s.category_en) && (
+                                          <p className="text-[9px] font-bold uppercase tracking-wider truncate" style={{ color:cc.sub }}>{isRtl?(s.category_ar||s.category_en):(s.category_en||s.category_ar)}</p>
+                                        )}
+                                        <span className="text-xs font-semibold" style={{ color:cc.txt }}>{isRtl?(s.name_ar||s.name_en):(s.name_en||s.name_ar)}</span>
+                                        {s.notes && <p className="text-[10px] mt-0.5 italic" style={{ color:cc.sub }}>{s.notes}</p>}
+                                      </div>
+                                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background:PRIORITY_STYLE[s.priority].bg, color:PRIORITY_STYLE[s.priority].text }}>
+                                          {PRIORITY_STYLE[s.priority].label}
+                                        </span>
+                                        {decision && (
+                                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={decision==='approved' ? { background:'rgba(34,197,94,0.15)', color:'#22c55e' } : { background:'rgba(239,68,68,0.15)', color:'#ef4444' }}>
+                                            {decision==='approved' ? (isRtl?'تمت الموافقة':'Approved') : (isRtl?'تم الرفض':'Rejected')}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             );
                           })()}
@@ -1843,51 +1875,53 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                               </div>
                             );
                           })()}
-                          {/* Approve / Reject */}
+                          {/* Confirm decision */}
                           {!relOrd.customer_approved && !relOrd.customer_rejected && (
-                            <div className="flex gap-2">
-                              <button onClick={() => setSigModal({ open:true, orderId:relOrd.id })}
-                                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-black transition-all active:scale-95"
-                                style={{ background:'#16a34a', color:'#fff' }}>
-                                <Check size={15}/>{isRtl ? 'موافقة' : 'Approve'}
-                              </button>
-                              <button onClick={() => rejectQuotation(relOrd.id)}
-                                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all active:scale-95 border"
-                                style={{ borderColor:'rgba(239,68,68,0.4)', color:'#ef4444', background:'rgba(239,68,68,0.06)' }}>
-                                <X size={15}/>{isRtl ? 'رفض' : 'Reject'}
-                              </button>
-                            </div>
+                            <button onClick={() => setSigModal({ open:true, orderId:relOrd.id })}
+                              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-black transition-all active:scale-95"
+                              style={{ background:'#16a34a', color:'#fff' }}>
+                              <Check size={15}/>{isRtl ? 'تأكيد القرار والتوقيع' : 'Confirm Decision & Sign'}
+                            </button>
                           )}
-                          {/* Approved badge + signature */}
-                          {relOrd.customer_approved && (
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
-                                style={{ background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.2)' }}>
-                                <CheckCircle2 size={14} style={{ color:'#22c55e' }}/>
-                                <span className="text-sm font-bold" style={{ color:'#22c55e' }}>{isRtl ? 'تمت الموافقة ✅' : 'Approved ✅'}</span>
+                          {/* Approved summary + signature */}
+                          {relOrd.customer_approved && (() => {
+                            const decisions = relOrd.service_decisions || {};
+                            const total = Object.keys(decisions).length;
+                            const approvedN = Object.values(decisions).filter(d=>d==='approved').length;
+                            const allApproved = total === 0 || approvedN === total;
+                            return (
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
+                                  style={{ background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.2)' }}>
+                                  <CheckCircle2 size={14} style={{ color:'#22c55e' }}/>
+                                  <span className="text-sm font-bold" style={{ color:'#22c55e' }}>
+                                    {allApproved
+                                      ? (isRtl ? 'تمت الموافقة على كل الخدمات ✅' : 'All services approved ✅')
+                                      : (isRtl ? `تمت الموافقة على ${approvedN} من ${total} خدمات، وتم رفض الباقي` : `Approved ${approvedN} of ${total} services, rest rejected`)}
+                                  </span>
+                                </div>
+                                {relOrd.signature_data && (
+                                  <div className="px-2 py-2 rounded-xl" style={{ background:`${C.gold}08`, border:`1px solid ${C.gold}20` }}>
+                                    <p className="text-[10px] font-bold mb-1.5" style={{ color:C.dim }}>{isRtl ? 'توقيعك:' : 'Your signature:'}</p>
+                                    <img src={relOrd.signature_data} alt="sig"
+                                      style={{ maxWidth:180, height:'auto', background:'#fff', padding:3, borderRadius:8, border:`1px solid ${C.border}`, display:'block' }}/>
+                                  </div>
+                                )}
+                                {relOrd.signed_by && !relOrd.signature_data && (
+                                  <div className="px-3 py-2 rounded-xl" style={{ background:`${C.gold}08`, border:`1px solid ${C.gold}20` }}>
+                                    <p className="text-[10px] font-bold mb-1" style={{ color:C.dim }}>{isRtl ? 'توقيعك:' : 'Your signature:'}</p>
+                                    <p style={{ fontFamily:'Georgia,serif', fontStyle:'italic', fontSize:20, color:C.text }}>{relOrd.signed_by}</p>
+                                  </div>
+                                )}
                               </div>
-                              {/* Signature display */}
-                              {relOrd.signature_data && (
-                                <div className="px-2 py-2 rounded-xl" style={{ background:`${C.gold}08`, border:`1px solid ${C.gold}20` }}>
-                                  <p className="text-[10px] font-bold mb-1.5" style={{ color:C.dim }}>{isRtl ? 'توقيعك:' : 'Your signature:'}</p>
-                                  <img src={relOrd.signature_data} alt="sig"
-                                    style={{ maxWidth:180, height:'auto', background:'#fff', padding:3, borderRadius:8, border:`1px solid ${C.border}`, display:'block' }}/>
-                                </div>
-                              )}
-                              {relOrd.signed_by && !relOrd.signature_data && (
-                                <div className="px-3 py-2 rounded-xl" style={{ background:`${C.gold}08`, border:`1px solid ${C.gold}20` }}>
-                                  <p className="text-[10px] font-bold mb-1" style={{ color:C.dim }}>{isRtl ? 'توقيعك:' : 'Your signature:'}</p>
-                                  <p style={{ fontFamily:'Georgia,serif', fontStyle:'italic', fontSize:20, color:C.text }}>{relOrd.signed_by}</p>
-                                </div>
-                              )}
-                            </div>
-                          )}
+                            );
+                          })()}
                           {/* Rejected badge */}
                           {relOrd.customer_rejected && !relOrd.customer_approved && (
                             <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
                               style={{ background:'rgba(239,68,68,0.07)', border:'1px solid rgba(239,68,68,0.2)' }}>
                               <X size={14} style={{ color:'#ef4444' }}/>
-                              <span className="text-xs font-bold" style={{ color:'#ef4444' }}>{isRtl ? 'تم الرفض — بانتظار مراجعة الفريق' : 'Rejected — awaiting review'}</span>
+                              <span className="text-xs font-bold" style={{ color:'#ef4444' }}>{isRtl ? 'تم رفض كل الخدمات — بانتظار مراجعة الفريق' : 'All services rejected — awaiting review'}</span>
                             </div>
                           )}
                         </div>
