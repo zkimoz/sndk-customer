@@ -41,7 +41,7 @@ const T = {
     email:'البريد الإلكتروني', emailPh:'example@email.com',
     password:'كلمة المرور', passwordPh:'كلمة مرور قوية',
     noAccount:'ليس لديك حساب؟', hasAccount:'لديك حساب بالفعل؟',
-    confirmEmailMsg:'تم إرسال رابط التأكيد على بريدك الإلكتروني',
+    confirmEmailMsg:'تم إرسال رسالة تفعيل إلى بريدك الإلكتروني. يُرجى تفقّد صندوق الوارد، وفي حال عدم وصولها يُرجى التحقق من مجلد البريد غير المرغوب فيه (Junk / Spam).',
     myAccount:'حسابي', authError:'خطأ في البريد أو كلمة المرور', phoneAlreadyUsed:'رقم الجوال ده مسجل بحساب تاني بالفعل',
     forgotPw:'نسيت كلمة المرور؟',
     forgotTitle:'استرجاع كلمة المرور',
@@ -189,7 +189,7 @@ const T = {
     email:'Email', emailPh:'example@email.com',
     password:'Password', passwordPh:'Strong password',
     noAccount:"Don't have an account?", hasAccount:'Already have an account?',
-    confirmEmailMsg:'Check your email to activate your account',
+    confirmEmailMsg:'A confirmation email has been sent to your inbox. Please check your inbox, and if you don’t see it, check your Junk/Spam folder.',
     myAccount:'My Account', authError:'Invalid email or password', phoneAlreadyUsed:'This phone number is already registered to another account',
     forgotPw:'Forgot password?',
     forgotTitle:'Reset Password',
@@ -3406,15 +3406,23 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
     e.preventDefault(); setError(''); setLoading(true);
     try {
       if (isSignUp) {
-        const { data: phoneTaken, error:phoneCheckErr } = await supabase.rpc('phone_number_exists', { check_phone: phone });
+        const { data: phoneTaken, error:phoneCheckErr } = await supabase.rpc('phone_number_exists', { check_phone: phone, check_email: email });
         if (!phoneCheckErr && phoneTaken) throw new Error(tr.phoneAlreadyUsed);
 
         const { data, error:signUpErr } = await supabase.auth.signUp({
           email, password,
           options: { data: { full_name:fullName, phone_number:phone, language_preference:isRtl?'ar':'en' } },
         });
-        if (signUpErr) throw signUpErr;
-        if (data.user) {
+        if (signUpErr) {
+          // Resending too soon for an existing, unconfirmed signup — the earlier
+          // email is still on its way, so treat this like a normal success.
+          if (signUpErr.status === 429) { setDone(true); return; }
+          throw signUpErr;
+        }
+        // Empty identities = email already has an account (confirmed, or an
+        // unconfirmed one Supabase just re-sent the link for). Either way,
+        // don't touch the existing profile row — just show the same message.
+        if (data.user && data.user.identities?.length > 0) {
           const { error:profileErr } = await supabase.from('profiles')
             .upsert([{ id:data.user.id, full_name:fullName, phone_number:phone, user_role:'customer', language_preference:isRtl?'ar':'en' }], { onConflict:'id' });
           if (profileErr) {
