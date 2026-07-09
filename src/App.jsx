@@ -1419,7 +1419,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     if (apptData?.length) {
       const ids = apptData.map(a => a.id);
       const { data: ordData } = await supabase
-        .from('orders').select('*, order_items(*)')
+        .from('orders').select('*, order_items(*), payments(*)')
         .in('appointment_id', ids).order('created_at', { ascending: false });
       const loaded = ordData || [];
       setOrders(loaded);
@@ -1784,6 +1784,24 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                               <span className="text-base font-black" style={{ color:cc.fg }}>{gt.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
                             </div>
                           )}
+                          {/* Paid / Remaining */}
+                          {gt > 0 && (() => {
+                            const paid = (relOrd.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
+                            if (paid <= 0) return null;
+                            const remaining = Math.max(gt - paid, 0);
+                            return (
+                              <div className="rounded-xl px-3 py-2 space-y-1" style={{ background:'rgba(0,0,0,0.08)' }}>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs" style={{ color:cc.sub }}>{isRtl ? 'المدفوع:' : 'Paid:'}</span>
+                                  <span className="text-sm font-bold" style={{ color:'#22c55e' }}>{paid.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs" style={{ color:cc.sub }}>{isRtl ? 'المتبقي:' : 'Remaining:'}</span>
+                                  <span className="text-sm font-bold" style={{ color: remaining > 0.001 ? cc.fg : '#22c55e' }}>{remaining.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
+                                </div>
+                              </div>
+                            );
+                          })()}
                           {/* Approve / Reject */}
                           {!relOrd.customer_approved && !relOrd.customer_rejected && (
                             <div className="flex gap-2">
