@@ -1566,7 +1566,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     const order = orders.find(o => o.id === orderId);
     const allKeys = serviceKeysOf(order);
     setServiceSelections(prev => {
-      const current = prev[orderId] || Object.fromEntries(allKeys.map(k=>[k,true]));
+      const current = prev[orderId] || Object.fromEntries(allKeys.map(k=>[k,false]));
       return { ...prev, [orderId]: { ...current, [key]: !current[key] } };
     });
   };
@@ -1577,7 +1577,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   };
   const isServiceSelected = (orderId, key) => {
     const current = serviceSelections[orderId];
-    if (!current || current[key] === undefined) return true; // default: selected
+    if (!current || current[key] === undefined) return false; // default: not selected — the customer picks explicitly
     return current[key];
   };
 
@@ -1589,7 +1589,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     const serviceKeys = serviceKeysOf(order);
     const selection = serviceSelections[orderId] || {};
     const decisions = {};
-    serviceKeys.forEach(key => { decisions[key] = (selection[key] !== false) ? 'approved' : 'rejected'; });
+    serviceKeys.forEach(key => { decisions[key] = (selection[key] === true) ? 'approved' : 'rejected'; });
     const approvedCount = Object.values(decisions).filter(d => d === 'approved').length;
     // A quotation with no service groups (legacy / general-only) is a simple whole-order approval
     const isApproved = serviceKeys.length === 0 ? true : approvedCount > 0;
@@ -1906,32 +1906,59 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                 {services.map(s => {
                                   const selected = isServiceSelected(relOrd.id, s.key);
                                   const decision = relOrd.service_decisions?.[s.key];
+                                  const lineItems = (relOrd.order_items || []).filter(i =>
+                                    (i.service_name?.ar || i.service_name?.en) === s.key);
+                                  const lineTotal = it => Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
+                                  const laborItems = lineItems.filter(i => i.item_type === 'labor');
+                                  const partItems   = lineItems.filter(i => i.item_type === 'part');
                                   return (
-                                    <div key={s.key} className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background:'rgba(0,0,0,0.08)' }}>
-                                      {!decided && (
-                                        <button onClick={()=>toggleServiceSelection(relOrd.id, s.key)}
-                                          className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 transition-all"
-                                          style={{ background: selected ? '#16a34a' : 'transparent', border:`2px solid ${selected ? '#16a34a' : cc.sub}` }}>
-                                          {selected && <Check size={12} color="#fff"/>}
-                                        </button>
-                                      )}
-                                      <div className="min-w-0 flex-1">
-                                        {(s.category_ar || s.category_en) && (
-                                          <p className="text-[9px] font-bold uppercase tracking-wider truncate" style={{ color:cc.sub }}>{isRtl?(s.category_ar||s.category_en):(s.category_en||s.category_ar)}</p>
+                                    <div key={s.key} className="rounded-lg overflow-hidden" style={{ background:'rgba(0,0,0,0.08)' }}>
+                                      <div className="flex items-center gap-2 px-3 py-2">
+                                        {!decided && (
+                                          <button onClick={()=>toggleServiceSelection(relOrd.id, s.key)}
+                                            className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 transition-all"
+                                            style={{ background: selected ? '#16a34a' : 'transparent', border:`2px solid ${selected ? '#16a34a' : cc.sub}` }}>
+                                            {selected && <Check size={12} color="#fff"/>}
+                                          </button>
                                         )}
-                                        <span className="text-xs font-semibold" style={{ color:cc.txt }}>{isRtl?(s.name_ar||s.name_en):(s.name_en||s.name_ar)}</span>
-                                        {s.notes && <p className="text-[10px] mt-0.5 italic" style={{ color:cc.sub }}>{s.notes}</p>}
-                                      </div>
-                                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background:PRIORITY_STYLE[s.priority].bg, color:PRIORITY_STYLE[s.priority].text }}>
-                                          {PRIORITY_STYLE[s.priority].label}
-                                        </span>
-                                        {decision && (
-                                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={decision==='approved' ? { background:'rgba(34,197,94,0.15)', color:'#22c55e' } : { background:'rgba(239,68,68,0.15)', color:'#ef4444' }}>
-                                            {decision==='approved' ? (isRtl?'تمت الموافقة':'Approved') : (isRtl?'تم الرفض':'Rejected')}
+                                        <div className="min-w-0 flex-1">
+                                          {(s.category_ar || s.category_en) && (
+                                            <p className="text-[9px] font-bold uppercase tracking-wider truncate" style={{ color:cc.sub }}>{isRtl?(s.category_ar||s.category_en):(s.category_en||s.category_ar)}</p>
+                                          )}
+                                          <span className="text-xs font-semibold" style={{ color:cc.txt }}>{isRtl?(s.name_ar||s.name_en):(s.name_en||s.name_ar)}</span>
+                                          {s.notes && <p className="text-[10px] mt-0.5 italic" style={{ color:cc.sub }}>{s.notes}</p>}
+                                        </div>
+                                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background:PRIORITY_STYLE[s.priority].bg, color:PRIORITY_STYLE[s.priority].text }}>
+                                            {PRIORITY_STYLE[s.priority].label}
                                           </span>
-                                        )}
+                                          {decision && (
+                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={decision==='approved' ? { background:'rgba(34,197,94,0.15)', color:'#22c55e' } : { background:'rgba(239,68,68,0.15)', color:'#ef4444' }}>
+                                              {decision==='approved' ? (isRtl?'تمت الموافقة':'Approved') : (isRtl?'تم الرفض':'Rejected')}
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
+                                      {(partItems.length > 0 || laborItems.length > 0) && (
+                                        <div className="px-3 pb-2 pt-1 space-y-1" style={{ borderTop:'1px solid rgba(255,255,255,0.08)' }}>
+                                          {partItems.map((it,i) => (
+                                            <div key={`p-${i}`} className="flex items-center justify-between gap-2 text-[11px]">
+                                              <span style={{ color:cc.sub }}>
+                                                <span className="opacity-70">{isRtl?'قطعة —':'Part —'}</span> {isRtl?(it.item_name?.ar||it.item_name?.en):(it.item_name?.en||it.item_name?.ar)}
+                                              </span>
+                                              <span className="font-bold flex-shrink-0" style={{ color:cc.txt }}>{lineTotal(it).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                                            </div>
+                                          ))}
+                                          {laborItems.map((it,i) => (
+                                            <div key={`l-${i}`} className="flex items-center justify-between gap-2 text-[11px]">
+                                              <span style={{ color:cc.sub }}>
+                                                <span className="opacity-70">{isRtl?'عمالة —':'Labor —'}</span> {isRtl?(it.item_name?.ar||it.item_name?.en):(it.item_name?.en||it.item_name?.ar)}
+                                              </span>
+                                              <span className="font-bold flex-shrink-0" style={{ color:cc.txt }}>{lineTotal(it).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
                                     </div>
                                   );
                                 })}
