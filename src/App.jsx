@@ -6,7 +6,7 @@ import {
   Menu, X, ChevronLeft, ChevronRight, User, Calendar,
   Wrench, ArrowRight, Lock, LogOut, MapPin, Mail,
   ClipboardList, Package, ShoppingCart, Trash2, Upload, FileImage, Pencil, Check,
-  Sun, Moon,
+  Sun, Moon, Eye, EyeOff,
 } from 'lucide-react';
 
 // ── Translations ───────────────────────────────────────────────────────
@@ -3440,6 +3440,7 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
   const [forgotPhone, setForgotPhone] = useState('');
   const [phoneVerified, setPhoneVerified] = useState(false);
   const [foundEmail, setFoundEmail] = useState('');
+  const [showPw, setShowPw] = useState(false);
   const isSignUp = mode === 'signup';
 
   const inp = { background:C.input, border:`1px solid ${C.border}`, color:C.text };
@@ -3647,8 +3648,13 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
                   </button>
                 )}
               </div>
-              <input type="password" required value={password} onChange={e=>setPassword(e.target.value)} placeholder={tr.passwordPh} className={C.inputCls} style={inp}
-                onFocus={e=>e.target.style.borderColor='#722F37'} onBlur={e=>e.target.style.borderColor=C.border}/>
+              <div className="relative">
+                <input type={showPw?'text':'password'} required value={password} onChange={e=>setPassword(e.target.value)} placeholder={tr.passwordPh} className={C.inputCls} style={inp}
+                  onFocus={e=>e.target.style.borderColor='#722F37'} onBlur={e=>e.target.style.borderColor=C.border}/>
+                <button type="button" onClick={()=>setShowPw(p=>!p)} className={`absolute top-1/2 -translate-y-1/2 ${isRtl?'left-3':'right-3'}`} style={{ color:C.muted }}>
+                  {showPw?<EyeOff size={16}/>:<Eye size={16}/>}
+                </button>
+              </div>
             </div>
             {!isSignUp && (
               <label className="flex items-center gap-2.5 cursor-pointer select-none">
@@ -3687,6 +3693,7 @@ function NewPasswordModal({ tr, isRtl, onClose }) {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [err, setErr]  = useState('');
+  const [showPw, setShowPw] = useState(false);
   const inp = { background:C.input, border:`1px solid ${C.border}`, color:C.text };
 
   const handleSave = async e => {
@@ -3716,15 +3723,25 @@ function NewPasswordModal({ tr, isRtl, onClose }) {
           <form onSubmit={handleSave} className="space-y-3">
             <div>
               <label className={labelCls} style={{ color:'rgba(114,47,55,0.75)' }}>{tr.newPwLabel}</label>
-              <input type="password" required minLength={6} value={pw} onChange={e=>setPw(e.target.value)}
-                placeholder="••••••••" className={C.inputCls} style={inp}
-                onFocus={e=>e.target.style.borderColor='#722F37'} onBlur={e=>e.target.style.borderColor=C.border}/>
+              <div className="relative">
+                <input type={showPw?'text':'password'} required minLength={6} value={pw} onChange={e=>setPw(e.target.value)}
+                  placeholder="••••••••" className={C.inputCls} style={inp}
+                  onFocus={e=>e.target.style.borderColor='#722F37'} onBlur={e=>e.target.style.borderColor=C.border}/>
+                <button type="button" onClick={()=>setShowPw(p=>!p)} className={`absolute top-1/2 -translate-y-1/2 ${isRtl?'left-3':'right-3'}`} style={{ color:C.muted }}>
+                  {showPw?<EyeOff size={16}/>:<Eye size={16}/>}
+                </button>
+              </div>
             </div>
             <div>
               <label className={labelCls} style={{ color:'rgba(114,47,55,0.75)' }}>{tr.newPwConfirm}</label>
-              <input type="password" required minLength={6} value={pw2} onChange={e=>setPw2(e.target.value)}
-                placeholder="••••••••" className={C.inputCls} style={inp}
-                onFocus={e=>e.target.style.borderColor='#722F37'} onBlur={e=>e.target.style.borderColor=C.border}/>
+              <div className="relative">
+                <input type={showPw?'text':'password'} required minLength={6} value={pw2} onChange={e=>setPw2(e.target.value)}
+                  placeholder="••••••••" className={C.inputCls} style={inp}
+                  onFocus={e=>e.target.style.borderColor='#722F37'} onBlur={e=>e.target.style.borderColor=C.border}/>
+                <button type="button" onClick={()=>setShowPw(p=>!p)} className={`absolute top-1/2 -translate-y-1/2 ${isRtl?'left-3':'right-3'}`} style={{ color:C.muted }}>
+                  {showPw?<EyeOff size={16}/>:<Eye size={16}/>}
+                </button>
+              </div>
             </div>
             {err && <p className="text-sm text-center py-1 rounded-lg" style={{ color:'#f87171', background:'rgba(248,113,113,0.1)' }}>{err}</p>}
             <button type="submit" disabled={loading}
