@@ -1478,7 +1478,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   const loadData = async () => {
     if (!user) { setLoading(false); return; }
     const { data: apptData } = await supabase.from('appointments')
-      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number), job_cards(id, job_number, job_status, status_history, customer_complaints, work_done, mileage_in, mileage_out, reception_video_url, reception_videos)')
+      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number), job_cards(id, job_number, job_status, status_history, invoice_ready, customer_complaints, work_done, mileage_in, mileage_out, reception_video_url, reception_videos)')
       .eq('profile_id', user.id)
       .order('appointment_date', { ascending: false });
     setAppts(apptData || []);
@@ -1944,6 +1944,19 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                   <span className="text-sm font-bold" style={{ color: remaining < -0.001 ? '#ef4444' : remaining > 0.001 ? cc.fg : '#22c55e' }}>{remaining.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
                                 </div>
                               </div>
+                            );
+                          })()}
+                          {/* Invoice — only once staff has issued it AND the balance is fully settled */}
+                          {jc.invoice_ready && (() => {
+                            const paid = (relOrd.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
+                            const remaining = gt - paid;
+                            if (remaining > 0.001) return null;
+                            return (
+                              <button onClick={() => openQuotationPDF(relOrd, a, profile, jc)}
+                                className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
+                                style={{ background:'rgba(34,197,94,0.15)', border:'1px solid rgba(34,197,94,0.35)', color:'#16a34a' }}>
+                                <FileImage size={14}/>{isRtl ? 'عرض الفاتورة' : 'View Invoice'}
+                              </button>
                             );
                           })()}
                           {/* Confirm decision */}
