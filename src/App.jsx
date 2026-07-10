@@ -2171,6 +2171,11 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                       {relOrd && (() => {
                         const partsTotal = selectedQuotationTotal(relOrd, 'part');
                         const laborTotal = selectedQuotationTotal(relOrd, 'labor');
+                        // Payments aren't split by type in the DB, but the flow always collects parts first —
+                        // so if what's already been paid covers the parts total, parts are settled even if
+                        // parts_payment_status wasn't flipped to 'paid' (e.g. a manually recorded payment).
+                        const paidSoFar = (relOrd.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
+                        const partsCoveredByPayments = paidSoFar >= partsTotal - 0.001;
                         return (
                         <div style={{ borderTop:`1px solid ${C.border}` }}>
                           {partsTotal > 0 && (
@@ -2178,7 +2183,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                               label={isRtl ? 'قطع الغيار' : 'Parts'}
                               amount={partsTotal}
                               status={relOrd.parts_payment_status || 'unpaid'}
-                              canPay={relOrd.customer_approved && relOrd.status !== 'draft'}
+                              canPay={relOrd.customer_approved && relOrd.status !== 'draft' && !partsCoveredByPayments}
                               onPay={() => requestPayment(relOrd.id, 'parts')}
                               tr={tr} isRtl={isRtl} cc={cc}
                             />
