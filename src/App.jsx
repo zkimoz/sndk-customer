@@ -1311,6 +1311,8 @@ function openQuotationPDF(order, linked, profile, jobCard) {
   const totalParts = partItems.reduce((s,i)=>s+lineTotal(i),0);
   const totalLabor = laborItems.reduce((s,i)=>s+lineTotal(i),0);
   const grandTotal = totalParts + totalLabor;
+  const totalPaid = (order.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
+  const remainingDue = grandTotal - totalPaid;
   const rejectedNames = [];
   const seenRejectedKeys = new Set();
   rejectedItems.forEach(it => {
@@ -1498,6 +1500,16 @@ ${rejectedItems.length > 0 ? `
   </table>
   <div style="margin-top:10px;padding:12px 14px;background:#fef2f2;border:1.5px solid #fecaca;border-radius:8px;font-size:11px;color:#991b1b;font-weight:700;line-height:1.7">
     ${rejectedNames.map(n=>`⚠️ تم رفض خدمة "${n.ar}" من قبل العميل، ويتحمل العميل كامل المسؤولية عن ذلك<br><span style="font-weight:600;color:#b91c1c">Service "${n.en}" was rejected by the customer — the customer bears full responsibility</span>`).join('<hr style="border:none;border-top:1px dashed #fecaca;margin:8px 0">')}
+  </div>
+</div>` : ''}
+
+${grandTotal > 0 ? `
+<div class="section">
+  <div class="section-title">الدفع / Payment</div>
+  <div class="totals">
+    <div class="totals-row"><span>إجمالي المطلوب / Total Due</span><span dir="ltr">${grandTotal.toFixed(3)} QAR</span></div>
+    <div class="totals-row"><span style="color:#16a34a">المدفوع / Paid</span><span dir="ltr" style="color:#16a34a;font-weight:700">${totalPaid.toFixed(3)} QAR</span></div>
+    <div class="totals-row totals-grand" style="color:${remainingDue>0.001?'#dc2626':'#16a34a'}"><span>المتبقي / Remaining</span><span dir="ltr">${remainingDue.toFixed(3)} QAR</span></div>
   </div>
 </div>` : ''}
 
@@ -2076,7 +2088,6 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           {/* Paid / Remaining */}
                           {gt > 0 && (() => {
                             const paid = (relOrd.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
-                            if (paid <= 0) return null;
                             const remaining = gt - paid;
                             return (
                               <div className="rounded-xl px-3 py-2 space-y-1" style={{ background:'rgba(0,0,0,0.08)' }}>
