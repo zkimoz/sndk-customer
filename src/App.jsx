@@ -839,7 +839,7 @@ export default function App() {
             <button onClick={()=>setMenuOpen(true)} className="p-2 rounded-lg transition-colors" style={{ color:C.gold }}>
               <Menu size={22}/>
             </button>
-            <img src="/logo-animated.gif" alt="SNDK" style={{ height:80, width:'auto' }}/>
+            <img src="/logo-animated.gif" alt="SNDK" style={{ height:112, width:'auto' }}/>
             <div className="flex items-center gap-1">
               <button onClick={toggleTheme} className="p-2 rounded-lg transition-colors" style={{ color:C.gold }}>
                 {theme==='dark' ? <Sun size={17}/> : <Moon size={17}/>}
@@ -1004,7 +1004,7 @@ export default function App() {
           <div className="absolute inset-0" style={{ background:'rgba(0,0,0,0.65)', backdropFilter:'blur(4px)' }} onClick={()=>setMenuOpen(false)}/>
           <div className="relative w-72 h-full flex flex-col shadow-2xl" style={{ background:C.panel }}>
             <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom:`1px solid ${C.border}` }}>
-              <img src="/logo-animated.gif" alt="SNDK" style={{ height:76, width:'auto' }}/>
+              <img src="/logo-animated.gif" alt="SNDK" style={{ height:96, width:'auto' }}/>
               <button onClick={()=>setMenuOpen(false)} style={{ color:C.muted }}><X size={20}/></button>
             </div>
             <nav className="flex-1 p-3 space-y-1">
