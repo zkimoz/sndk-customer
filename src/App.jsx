@@ -3409,7 +3409,7 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
         const { data: phoneTaken, error:phoneCheckErr } = await supabase.rpc('phone_number_exists', { check_phone: phone, check_email: email });
         if (!phoneCheckErr && phoneTaken) throw new Error(tr.phoneAlreadyUsed);
 
-        const { data, error:signUpErr } = await supabase.auth.signUp({
+        const { error:signUpErr } = await supabase.auth.signUp({
           email, password,
           options: { data: { full_name:fullName, phone_number:phone, language_preference:isRtl?'ar':'en' } },
         });
@@ -3419,17 +3419,10 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
           if (signUpErr.status === 429) { setDone(true); return; }
           throw signUpErr;
         }
-        // Empty identities = email already has an account (confirmed, or an
-        // unconfirmed one Supabase just re-sent the link for). Either way,
-        // don't touch the existing profile row — just show the same message.
-        if (data.user && data.user.identities?.length > 0) {
-          const { error:profileErr } = await supabase.from('profiles')
-            .upsert([{ id:data.user.id, full_name:fullName, phone_number:phone, user_role:'customer', language_preference:isRtl?'ar':'en' }], { onConflict:'id' });
-          if (profileErr) {
-            if (profileErr.code === '23505') throw new Error(tr.phoneAlreadyUsed);
-            throw new Error(tr.authError);
-          }
-        }
+        // The profile row itself is created server-side by a DB trigger from
+        // the signup metadata above (it runs with elevated privileges, unlike
+        // this client, which has no session yet to write to `profiles` under
+        // RLS pre-confirmation) — so there's nothing left to do here.
         setDone(true);
       } else {
         const { error:signInErr } = await supabase.auth.signInWithPassword({ email, password });
