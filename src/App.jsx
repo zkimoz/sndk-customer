@@ -1565,16 +1565,19 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   // Live total of only the services the customer has checked (or, once a
   // decision is locked in, only the ones actually approved) — items with no
   // service group (general/unspecified) always count, since there's no
-  // checkbox for them to opt out with.
-  const selectedQuotationTotal = (order) => {
+  // checkbox for them to opt out with. Pass itemType ('part'|'labor') to
+  // narrow it to just that column's payment row.
+  const selectedQuotationTotal = (order, itemType = null) => {
     const decided = order?.customer_approved || order?.customer_rejected;
-    return (order?.order_items || []).reduce((sum, it) => {
-      const lt = Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
-      const key = it.service_name?.ar || it.service_name?.en;
-      if (!key) return sum + lt;
-      const included = decided ? order.service_decisions?.[key] === 'approved' : isServiceSelected(order.id, key);
-      return included ? sum + lt : sum;
-    }, 0);
+    return (order?.order_items || [])
+      .filter(it => !itemType || it.item_type === itemType)
+      .reduce((sum, it) => {
+        const lt = Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
+        const key = it.service_name?.ar || it.service_name?.en;
+        if (!key) return sum + lt;
+        const included = decided ? order.service_decisions?.[key] === 'approved' : isServiceSelected(order.id, key);
+        return included ? sum + lt : sum;
+      }, 0);
   };
 
   const toggleServiceSelection = (orderId, key) => {
@@ -1610,9 +1613,22 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     const isApproved = serviceKeys.length === 0 ? true : approvedCount > 0;
     const isRejected = serviceKeys.length === 0 ? false : approvedCount === 0;
 
+    // Re-price the order to only what was actually approved (plus any
+    // general/ungrouped items, which have no checkbox to reject) — otherwise
+    // the payment request RPC would still bill for rejected services since it
+    // reads these columns directly.
+    const lineTotal = it => Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
+    const approvedItems = (order.order_items || []).filter(it => {
+      const key = it.service_name?.ar || it.service_name?.en;
+      return !key || decisions[key] === 'approved';
+    });
+    const newPartsTotal = approvedItems.filter(it => it.item_type === 'part').reduce((s,it) => s + lineTotal(it), 0);
+    const newLaborTotal = approvedItems.filter(it => it.item_type === 'labor').reduce((s,it) => s + lineTotal(it), 0);
+
     const { error: decErr } = await supabase.from('orders').update({
       customer_approved: isApproved, customer_rejected: isRejected, approved_at: now,
       service_decisions: decisions,
+      total_parts_price: newPartsTotal, total_labor_price: newLaborTotal,
     }).eq('id', orderId);
     if (decErr) {
       alert(isRtl ? 'خطأ في حفظ القرار: ' + decErr.message : 'Error saving decision: ' + decErr.message);
@@ -1634,7 +1650,8 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     }
 
     setOrders(prev => prev.map(o => o.id === orderId
-      ? { ...o, customer_approved:isApproved, customer_rejected:isRejected, approved_at:now, service_decisions:decisions, ...localSig }
+      ? { ...o, customer_approved:isApproved, customer_rejected:isRejected, approved_at:now, service_decisions:decisions,
+          total_parts_price:newPartsTotal, total_labor_price:newLaborTotal, ...localSig }
       : o
     ));
     setSigModal({ open:false, orderId:null });
@@ -2080,23 +2097,26 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                         </div>
                       ) : null}
 
-                      {/* ── الدفع (قطع أولاً ثم شغل اليد) ── */}
-                      {relOrd && (
+                      {/* ── الدفع (قطع أولاً ثم شغل اليد) — يعكس الخدمات المختارة/الموافق عليها فقط ── */}
+                      {relOrd && (() => {
+                        const partsTotal = selectedQuotationTotal(relOrd, 'part');
+                        const laborTotal = selectedQuotationTotal(relOrd, 'labor');
+                        return (
                         <div style={{ borderTop:`1px solid ${C.border}` }}>
-                          {Number(relOrd.total_parts_price) > 0 && (
+                          {partsTotal > 0 && (
                             <PaymentRow
                               label={isRtl ? 'قطع الغيار' : 'Parts'}
-                              amount={Number(relOrd.total_parts_price)}
+                              amount={partsTotal}
                               status={relOrd.parts_payment_status || 'unpaid'}
                               canPay={relOrd.customer_approved && relOrd.status !== 'draft'}
                               onPay={() => requestPayment(relOrd.id, 'parts')}
                               tr={tr} isRtl={isRtl} cc={cc}
                             />
                           )}
-                          {Number(relOrd.total_labor_price) > 0 && (
+                          {laborTotal > 0 && (
                             <PaymentRow
                               label={isRtl ? 'شغل اليد' : 'Labor'}
-                              amount={Number(relOrd.total_labor_price)}
+                              amount={laborTotal}
                               status={relOrd.labor_payment_status || 'unpaid'}
                               canPay={['ready','delivered','completed'].includes(relOrd.status) && (relOrd.parts_payment_status||'paid')==='paid'}
                               disabledHint={isRtl ? 'متاح بعد انتهاء الإصلاح ودفع القطع' : 'Available after repair & parts paid'}
@@ -2105,7 +2125,8 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             />
                           )}
                         </div>
-                      )}
+                        );
+                      })()}
 
                       {/* placeholder for spacing if no quotation yet */}
                       {!relOrd?.sent_to_customer && (
