@@ -2176,12 +2176,13 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                         // parts_payment_status wasn't flipped to 'paid' (e.g. a manually recorded payment).
                         const paidSoFar = (relOrd.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
                         const partsCoveredByPayments = paidSoFar >= partsTotal - 0.001;
+                        const partsRemaining = Math.max(partsTotal - paidSoFar, 0);
                         return (
                         <div style={{ borderTop:`1px solid ${C.border}` }}>
                           {partsTotal > 0 && (
                             <PaymentRow
-                              label={isRtl ? 'قطع الغيار' : 'Parts'}
-                              amount={partsTotal}
+                              label={(isRtl ? 'قطع الغيار' : 'Parts') + (paidSoFar > 0.001 && !partsCoveredByPayments ? (isRtl ? ' (المتبقي)' : ' (Remaining)') : '')}
+                              amount={partsRemaining}
                               status={relOrd.parts_payment_status || 'unpaid'}
                               canPay={relOrd.customer_approved && relOrd.status !== 'draft' && !partsCoveredByPayments}
                               onPay={() => requestPayment(relOrd.id, 'parts')}
