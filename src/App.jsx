@@ -3111,12 +3111,18 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
     if (!user) return;
     setCarsLoading(true);
     supabase.from('cars').select('*').eq('profile_id', user.id).order('created_at', { ascending: false })
-      .then(({ data }) => { setUserCars(data || []); setCarsLoading(false); });
+      .then(({ data }) => {
+        const cars = data || [];
+        setUserCars(cars);
+        setCarsLoading(false);
+        // Only fall back to "add a new car" once the fetch has actually come
+        // back empty — checking this in a separate effect keyed on carsLoading
+        // fired on the initial render too (loading=false, cars=[] before the
+        // fetch even started), forcing this open even for customers who do
+        // have cars on file.
+        if (cars.length === 0) setAddingNew(true);
+      });
   }, [user?.id]);
-
-  useEffect(() => {
-    if (!carsLoading && user && userCars.length === 0) setAddingNew(true);
-  }, [carsLoading]);
 
   const selectExistingCar = car => {
     const brand = carBrands.find(b => b.name_ar === car.car_type || b.name_en === car.car_type);
