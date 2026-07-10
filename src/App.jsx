@@ -316,6 +316,48 @@ const JC_STATUS_COLOR = {
   maintenance_done:'#22c55e', washing:'#06b6d4', awaiting_invoice:'#a855f7',
   returning:'#f59e0b', delivered:'#16a34a',
 };
+const JOB_STATUS_ORDER = ['waiting','confirmed','en_route','car_received','at_workshop','in_maintenance','maintenance_done','washing','awaiting_invoice','returning','delivered'];
+
+const getStatusTimes = (history, statusKey) => {
+  if (!Array.isArray(history)) return null;
+  const idx = history.findIndex(h => h.status === statusKey);
+  if (idx === -1) return null;
+  return { start: history[idx].at, end: history[idx+1]?.at || null };
+};
+
+// Read-only status timeline shown to the customer — mirrors the staff view,
+// including when each stage started/ended so the customer can see exactly
+// when they placed the request, not just where things stand right now.
+const JobStatusTimeline = ({ jobCard, isRtl, tr, textColor, mutedColor }) => {
+  const currentIdx = JOB_STATUS_ORDER.indexOf(jobCard.job_status);
+  const fmtDT = iso => iso ? new Date(iso).toLocaleString(isRtl?'ar-QA':'en-QA', { dateStyle:'short', timeStyle:'short' }) : '';
+  return (
+    <div className="space-y-1">
+      {JOB_STATUS_ORDER.map((key, idx) => {
+        const isCurrent = key === jobCard.job_status;
+        const isDone = idx < currentIdx;
+        const color = JC_STATUS_COLOR[key];
+        const times = getStatusTimes(jobCard.status_history, key);
+        if (!times && !isCurrent) return null; // hide stages not reached yet
+        return (
+          <div key={key} className="flex items-start gap-2.5 px-2 py-1.5 rounded-lg" style={isCurrent?{background:`${color}18`}:{}}>
+            <span className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: isDone||isCurrent?color:'#94a3b850' }}>
+              {isDone && <Check size={9} color="#fff"/>}
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-xs font-bold" style={{ color: isCurrent?color:textColor }}>{tr[`jc_${key}`]||key}</span>
+              {times && (
+                <span className="block text-[10px] mt-0.5" style={{ color:mutedColor }}>
+                  {fmtDT(times.start)}{times.end ? ` → ${fmtDT(times.end)}` : ` — ${isRtl?'الحالة الحالية':'current'}`}
+                </span>
+              )}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 
 // ── Services Data ──────────────────────────────────────────────────────
 const SERVICES = [
@@ -1436,7 +1478,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   const loadData = async () => {
     if (!user) { setLoading(false); return; }
     const { data: apptData } = await supabase.from('appointments')
-      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number), job_cards(id, job_number, job_status, customer_complaints, work_done, mileage_in, mileage_out, reception_video_url, reception_videos)')
+      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number), job_cards(id, job_number, job_status, status_history, customer_complaints, work_done, mileage_in, mileage_out, reception_video_url, reception_videos)')
       .eq('profile_id', user.id)
       .order('appointment_date', { ascending: false });
     setAppts(apptData || []);
@@ -1770,6 +1812,11 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           </span>
                           <span className="text-[10px] font-mono" style={{ color:cc.sub }}>{jc.job_number}</span>
                         </div>
+                      </div>
+
+                      {/* ── الجدول الزمني لحالة أمر الشغل ── */}
+                      <div className="px-4 pt-3 pb-1">
+                        <JobStatusTimeline jobCard={jc} isRtl={isRtl} tr={tr} textColor={cc.txt} mutedColor={cc.sub}/>
                       </div>
 
                       {/* ── فيديوهات استلام السيارة ── */}
