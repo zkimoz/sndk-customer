@@ -1624,7 +1624,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
       if (!apptData?.length) return;
       const ids = apptData.map(a => a.id);
       const { data: ordData } = await supabase.from('orders')
-        .select('*, order_items(*)')
+        .select('*, order_items(*), payments(*)')
         .in('appointment_id', ids)
         .eq('sent_to_customer', true);
       if (!ordData) return;
@@ -2177,12 +2177,16 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                         const paidSoFar = (relOrd.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
                         const partsCoveredByPayments = paidSoFar >= partsTotal - 0.001;
                         const partsRemaining = Math.max(partsTotal - paidSoFar, 0);
+                        const partsIsPartial = paidSoFar > 0.001 && !partsCoveredByPayments;
+                        // Once covered, show what parts actually cost (i.e. what was paid) — never 0.
+                        // Only show the remaining balance while a partial payment is outstanding.
+                        const partsDisplayAmount = partsIsPartial ? partsRemaining : partsTotal;
                         return (
                         <div style={{ borderTop:`1px solid ${C.border}` }}>
                           {partsTotal > 0 && (
                             <PaymentRow
-                              label={(isRtl ? 'قطع الغيار' : 'Parts') + (paidSoFar > 0.001 && !partsCoveredByPayments ? (isRtl ? ' (المتبقي)' : ' (Remaining)') : '')}
-                              amount={partsRemaining}
+                              label={(isRtl ? 'قطع الغيار' : 'Parts') + (partsIsPartial ? (isRtl ? ' (المتبقي)' : ' (Remaining)') : '')}
+                              amount={partsDisplayAmount}
                               status={relOrd.parts_payment_status || 'unpaid'}
                               canPay={relOrd.customer_approved && relOrd.status !== 'draft' && !partsCoveredByPayments}
                               onPay={() => requestPayment(relOrd.id, 'parts')}
