@@ -6,7 +6,7 @@ import {
   Menu, X, ChevronLeft, ChevronRight, User, Calendar,
   Wrench, ArrowRight, Lock, LogOut, MapPin, Mail,
   ClipboardList, Package, ShoppingCart, Trash2, Upload, FileImage, Pencil, Check,
-  Sun, Moon, Eye, EyeOff,
+  Sun, Moon, Eye, EyeOff, PlayCircle,
 } from 'lucide-react';
 
 // ── Translations ───────────────────────────────────────────────────────
@@ -328,7 +328,37 @@ const getStatusTimes = (history, statusKey) => {
 // Read-only status timeline shown to the customer — mirrors the staff view,
 // including when each stage started/ended so the customer can see exactly
 // when they placed the request, not just where things stand right now.
-const JobStatusTimeline = ({ jobCard, isRtl, tr, textColor, mutedColor }) => {
+const JobStatusVideoBlock = ({ videos, isRtl, jcId, videoKeyPrefix, openVideoId, setOpenVideoId, fg, txt }) => {
+  if (!videos.length) return null;
+  return (
+    <div className="mr-6 mt-1 mb-2 space-y-2">
+      {videos.map((url, idx) => {
+        const videoId = `${jcId}-${videoKeyPrefix}-${idx}`;
+        const isOpen = openVideoId === videoId;
+        const label = videoKeyPrefix === 'reception'
+          ? (isRtl ? `فيديو الاستلام ${idx + 1}` : `Reception Video ${idx + 1}`)
+          : (isRtl ? `فيديو ملاحظات في السيارة ${idx + 1}` : `Car Notes Video ${idx + 1}`);
+        return (
+          <div key={idx}>
+            <div className="flex items-center gap-2 w-full px-3 py-2 rounded-xl" style={{ background:'rgba(0,0,0,0.10)', border:`1px solid ${fg}50` }}>
+              <span className="flex-1 min-w-0 text-xs font-bold truncate" style={{ color:txt }}>🎥 {label}</span>
+              <button onClick={() => setOpenVideoId(id => id === videoId ? null : videoId)}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-black flex-shrink-0 transition-all active:scale-95"
+                style={{ background:fg, color:'#111111' }}>
+                <PlayCircle size={13}/> {isRtl ? 'اضغط لمشاهدة الفيديو' : 'Click to watch video'}
+              </button>
+            </div>
+            {isOpen && (
+              <video src={url} controls autoPlay className="w-full rounded-xl mt-1" style={{ maxHeight:220 }}/>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const JobStatusTimeline = ({ jobCard, isRtl, tr, textColor, mutedColor, fg, receptionVideos = [], workshopVideos = [], openVideoId, setOpenVideoId }) => {
   const currentIdx = JOB_STATUS_ORDER.indexOf(jobCard.job_status);
   const fmtDT = iso => iso ? new Date(iso).toLocaleString(isRtl?'ar-QA':'en-QA', { dateStyle:'short', timeStyle:'short' }) : '';
   return (
@@ -340,19 +370,29 @@ const JobStatusTimeline = ({ jobCard, isRtl, tr, textColor, mutedColor }) => {
         const times = getStatusTimes(jobCard.status_history, key);
         if (!times && !isCurrent) return null; // hide stages not reached yet
         return (
-          <div key={key} className="flex items-start gap-2.5 px-2 py-1.5 rounded-lg" style={isCurrent?{background:`${color}18`}:{}}>
-            <span className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: isDone||isCurrent?color:'#94a3b850' }}>
-              {isDone && <Check size={9} color="#fff"/>}
-            </span>
-            <span className="flex-1 min-w-0">
-              <span className="block text-xs font-bold" style={{ color: isCurrent?color:textColor }}>{tr[`jc_${key}`]||key}</span>
-              {times && (
-                <span className="block text-[10px] mt-0.5" style={{ color:mutedColor }}>
-                  {fmtDT(times.start)}{times.end ? ` → ${fmtDT(times.end)}` : ` — ${isRtl?'الحالة الحالية':'current'}`}
-                </span>
-              )}
-            </span>
-          </div>
+          <React.Fragment key={key}>
+            <div className="flex items-start gap-2.5 px-2 py-1.5 rounded-lg" style={isCurrent?{background:`${color}18`}:{}}>
+              <span className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: isDone||isCurrent?color:'#94a3b850' }}>
+                {isDone && <Check size={9} color="#fff"/>}
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-xs font-bold" style={{ color: isCurrent?color:textColor }}>{tr[`jc_${key}`]||key}</span>
+                {times && (
+                  <span className="block text-[10px] mt-0.5" style={{ color:mutedColor }}>
+                    {fmtDT(times.start)}{times.end ? ` → ${fmtDT(times.end)}` : ` — ${isRtl?'الحالة الحالية':'current'}`}
+                  </span>
+                )}
+              </span>
+            </div>
+            {key === 'car_received' && (
+              <JobStatusVideoBlock videos={receptionVideos} isRtl={isRtl} jcId={jobCard.id} videoKeyPrefix="reception"
+                openVideoId={openVideoId} setOpenVideoId={setOpenVideoId} fg={fg} txt={textColor}/>
+            )}
+            {key === 'at_workshop' && (
+              <JobStatusVideoBlock videos={workshopVideos} isRtl={isRtl} jcId={jobCard.id} videoKeyPrefix="workshop"
+                openVideoId={openVideoId} setOpenVideoId={setOpenVideoId} fg={fg} txt={textColor}/>
+            )}
+          </React.Fragment>
         );
       })}
     </div>
@@ -1846,57 +1886,21 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                         </div>
                       </div>
 
-                      {/* ── الجدول الزمني لحالة أمر الشغل ── */}
+                      {/* ── الجدول الزمني لحالة أمر الشغل (وفيديوهات الاستلام والورشة تحت خطواتها) ── */}
                       <div className="px-4 pt-3 pb-1">
-                        <JobStatusTimeline jobCard={jc} isRtl={isRtl} tr={tr} textColor={cc.txt} mutedColor={cc.sub}/>
+                        {(() => {
+                          let receptionVideos = [];
+                          try { receptionVideos = JSON.parse(jc.reception_videos || '[]'); } catch {}
+                          if (!receptionVideos.length && jc.reception_video_url) receptionVideos = [jc.reception_video_url];
+                          let workshopVideos = [];
+                          try { workshopVideos = JSON.parse(jc.workshop_notes_videos || '[]'); } catch {}
+                          return (
+                            <JobStatusTimeline jobCard={jc} isRtl={isRtl} tr={tr} textColor={cc.txt} mutedColor={cc.sub} fg={cc.fg}
+                              receptionVideos={receptionVideos} workshopVideos={workshopVideos}
+                              openVideoId={openVideoId} setOpenVideoId={setOpenVideoId}/>
+                          );
+                        })()}
                       </div>
-
-                      {/* ── فيديوهات استلام السيارة ── */}
-                      {(() => {
-                        let videos = [];
-                        try { videos = JSON.parse(jc.reception_videos || '[]'); } catch {}
-                        if (!videos.length && jc.reception_video_url) videos = [jc.reception_video_url];
-                        if (!videos.length) return null;
-                        return (
-                          <div className="px-4 pt-3 space-y-2">
-                            {videos.map((url, idx) => (
-                              <div key={idx}>
-                                <button onClick={() => setOpenVideoId(id => id === `${jc.id}-${idx}` ? null : `${jc.id}-${idx}`)}
-                                  className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
-                                  style={{ background:'rgba(0,0,0,0.10)', border:`1px solid ${cc.fg}50`, color:cc.txt }}>
-                                  🎥 {isRtl ? `فيديو الاستلام ${idx + 1}` : `Reception Video ${idx + 1}`}
-                                </button>
-                                {openVideoId === `${jc.id}-${idx}` && (
-                                  <video src={url} controls autoPlay className="w-full rounded-xl mt-1" style={{ maxHeight:220 }}/>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })()}
-
-                      {/* ── فيديوهات ملاحظات في السيارة (لو الموظف رفع أي منها) ── */}
-                      {(() => {
-                        let wVideos = [];
-                        try { wVideos = JSON.parse(jc.workshop_notes_videos || '[]'); } catch {}
-                        if (!wVideos.length) return null;
-                        return (
-                          <div className="px-4 pt-3 space-y-2">
-                            {wVideos.map((url, idx) => (
-                              <div key={idx}>
-                                <button onClick={() => setOpenVideoId(id => id === `${jc.id}-workshop-${idx}` ? null : `${jc.id}-workshop-${idx}`)}
-                                  className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
-                                  style={{ background:'rgba(0,0,0,0.10)', border:`1px solid ${cc.fg}50`, color:cc.txt }}>
-                                  🎥 {isRtl ? `فيديو ملاحظات في السيارة ${idx + 1}` : `Car Notes Video ${idx + 1}`}
-                                </button>
-                                {openVideoId === `${jc.id}-workshop-${idx}` && (
-                                  <video src={url} controls autoPlay className="w-full rounded-xl mt-1" style={{ maxHeight:220 }}/>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })()}
 
                       {/* ── عرض السعر + موافقة ── */}
                       {relOrd?.sent_to_customer ? (
