@@ -2238,6 +2238,16 @@ function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, service
 function ServicesView({ lang, tr, isRtl, expanded, setExpanded, serviceCategories, allSubServices, cart, addToCart, removeFromCart, theme }) {
   const btnAccent = theme === 'light' ? '#8A1538' : C.gold;
   const loading = serviceCategories.length === 0;
+  const [unsureOpenFor, setUnsureOpenFor] = useState(null); // category id whose "describe your fault" box is open
+  const [unsureText, setUnsureText] = useState('');
+
+  const confirmUnsure = (cat, catName) => {
+    const desc = unsureText.trim();
+    if (!desc) return;
+    const label = isRtl ? `لست متأكد من عطلي: ${desc}` : `Not sure what's wrong: ${desc}`;
+    addToCart(cat.id, `unsure-${cat.id}-${Date.now()}`, label, catName);
+    setUnsureOpenFor(null); setUnsureText('');
+  };
 
   return (
     <div className="relative">
@@ -2319,6 +2329,38 @@ function ServicesView({ lang, tr, isRtl, expanded, setExpanded, serviceCategorie
                       })}
                     </div>
                   )}
+
+                  {/* "Not sure what's wrong" — always available, lets the customer describe the fault instead of picking a service */}
+                  <div className="px-4 py-3.5" style={{ borderTop: subs.length>0 ? `1px solid ${C.border}` : 'none' }}>
+                    {unsureOpenFor === cat.id ? (
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold" style={{ color:C.txt }}>{isRtl?'لست متأكد من عطلي':"I'm not sure what's wrong"}</p>
+                        <textarea autoFocus value={unsureText} onChange={e=>setUnsureText(e.target.value)}
+                          placeholder={isRtl?'اكتب وصف العطل أو المشكلة اللي حاسس بيها في السيارة...':'Describe the fault or issue you\'re noticing with your car...'}
+                          rows={3} className="w-full px-3 py-2.5 rounded-xl text-sm outline-none resize-none"
+                          style={{ background:C.input, border:`1px solid ${C.border}`, color:C.text }}/>
+                        <div className="flex items-center gap-2">
+                          <button onClick={()=>confirmUnsure(cat, catName)} disabled={!unsureText.trim()}
+                            className="flex-1 py-2 rounded-xl text-xs font-black disabled:opacity-40 transition-all active:scale-95"
+                            style={{ background:btnAccent, color:'#fff' }}>
+                            {tr.cartAdd}
+                          </button>
+                          <button onClick={()=>{setUnsureOpenFor(null);setUnsureText('');}}
+                            className="px-4 py-2 rounded-xl text-xs font-bold" style={{ color:C.muted, border:`1px solid ${C.border}` }}>
+                            {isRtl?'إلغاء':'Cancel'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button onClick={()=>{setUnsureOpenFor(cat.id);setUnsureText('');}}
+                        className="w-full flex items-center gap-2 text-sm font-semibold"
+                        style={{ color:C.muted }}>
+                        <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background:C.muted }}/>
+                        {isRtl?'لست متأكد من عطلي':"I'm not sure what's wrong"}
+                        <span className="text-xs ms-auto" style={{ color:btnAccent }}>{isRtl?'اكتب وصفك':'Describe it'}</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
