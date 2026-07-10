@@ -42,6 +42,7 @@ const T = {
     password:'كلمة المرور', passwordPh:'كلمة مرور قوية',
     noAccount:'ليس لديك حساب؟', hasAccount:'لديك حساب بالفعل؟',
     confirmEmailMsg:'تم إرسال رسالة تفعيل إلى بريدك الإلكتروني. يُرجى تفقّد صندوق الوارد، وفي حال عدم وصولها يُرجى التحقق من مجلد البريد غير المرغوب فيه (Junk / Spam).',
+    emailConfirmedMsg:'تم تفعيل بريدك الإلكتروني بنجاح، مرحباً بك في سندك!',
     myAccount:'حسابي', authError:'خطأ في البريد أو كلمة المرور', phoneAlreadyUsed:'رقم الجوال هذا مسجل بحساب آخر بالفعل',
     forgotPw:'نسيت كلمة المرور؟',
     forgotTitle:'استرجاع كلمة المرور',
@@ -190,6 +191,7 @@ const T = {
     password:'Password', passwordPh:'Strong password',
     noAccount:"Don't have an account?", hasAccount:'Already have an account?',
     confirmEmailMsg:'A confirmation email has been sent to your inbox. Please check your inbox, and if you don’t see it, check your Junk/Spam folder.',
+    emailConfirmedMsg:'Your email has been confirmed successfully — welcome to SNDK!',
     myAccount:'My Account', authError:'Invalid email or password', phoneAlreadyUsed:'This phone number is already registered to another account',
     forgotPw:'Forgot password?',
     forgotTitle:'Reset Password',
@@ -565,6 +567,20 @@ export default function App() {
   };
 
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [emailConfirmedBanner, setEmailConfirmedBanner] = useState(false);
+
+  useEffect(() => {
+    if (window.location.hash.includes('type=signup')) {
+      setEmailConfirmedBanner(true);
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!emailConfirmedBanner) return;
+    const t = setTimeout(() => setEmailConfirmedBanner(false), 8000);
+    return () => clearTimeout(t);
+  }, [emailConfirmedBanner]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -653,6 +669,14 @@ export default function App() {
 
   return (
     <div dir={isRtl?'rtl':'ltr'} className="font-cairo" style={{ minHeight:'100vh', background:C.bg, color:C.text }}>
+      {emailConfirmedBanner && (
+        <div className="fixed top-0 inset-x-0 z-[100] flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-white"
+          style={{ background:'#16a34a' }}>
+          <CheckCircle2 size={18}/>
+          <span>{tr.emailConfirmedMsg}</span>
+          <button onClick={()=>setEmailConfirmedBanner(false)} className="ms-2 opacity-80 hover:opacity-100"><X size={16}/></button>
+        </div>
+      )}
       <div className="md:flex md:h-screen md:overflow-hidden">
 
         {/* ══ DESKTOP SIDEBAR ══ */}
