@@ -1478,7 +1478,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   const loadData = async () => {
     if (!user) { setLoading(false); return; }
     const { data: apptData } = await supabase.from('appointments')
-      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number), job_cards(id, job_number, job_status, status_history, invoice_ready, customer_complaints, work_done, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_video_url)')
+      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number), job_cards(id, job_number, job_status, status_history, invoice_ready, customer_complaints, work_done, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos)')
       .eq('profile_id', user.id)
       .order('appointment_date', { ascending: false });
     setAppts(apptData || []);
@@ -1843,19 +1843,28 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                         );
                       })()}
 
-                      {/* ── فيديو ملاحظات في السيارة (لو الموظف رفعه) ── */}
-                      {jc.workshop_notes_video_url && (
-                        <div className="px-4 pt-3 space-y-2">
-                          <button onClick={() => setOpenVideoId(id => id === `${jc.id}-workshop` ? null : `${jc.id}-workshop`)}
-                            className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
-                            style={{ background:'rgba(0,0,0,0.10)', border:`1px solid ${cc.fg}50`, color:cc.txt }}>
-                            🎥 {isRtl ? 'فيديو ملاحظات في السيارة' : 'Car Notes Video'}
-                          </button>
-                          {openVideoId === `${jc.id}-workshop` && (
-                            <video src={jc.workshop_notes_video_url} controls autoPlay className="w-full rounded-xl mt-1" style={{ maxHeight:220 }}/>
-                          )}
-                        </div>
-                      )}
+                      {/* ── فيديوهات ملاحظات في السيارة (لو الموظف رفع أي منها) ── */}
+                      {(() => {
+                        let wVideos = [];
+                        try { wVideos = JSON.parse(jc.workshop_notes_videos || '[]'); } catch {}
+                        if (!wVideos.length) return null;
+                        return (
+                          <div className="px-4 pt-3 space-y-2">
+                            {wVideos.map((url, idx) => (
+                              <div key={idx}>
+                                <button onClick={() => setOpenVideoId(id => id === `${jc.id}-workshop-${idx}` ? null : `${jc.id}-workshop-${idx}`)}
+                                  className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
+                                  style={{ background:'rgba(0,0,0,0.10)', border:`1px solid ${cc.fg}50`, color:cc.txt }}>
+                                  🎥 {isRtl ? `فيديو ملاحظات في السيارة ${idx + 1}` : `Car Notes Video ${idx + 1}`}
+                                </button>
+                                {openVideoId === `${jc.id}-workshop-${idx}` && (
+                                  <video src={url} controls autoPlay className="w-full rounded-xl mt-1" style={{ maxHeight:220 }}/>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
 
                       {/* ── عرض السعر + موافقة ── */}
                       {relOrd?.sent_to_customer ? (
