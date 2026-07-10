@@ -1298,11 +1298,28 @@ function openQuotationPDF(order, linked, profile, jobCard) {
     ? new Date(order.approved_at).toLocaleString('ar-QA', { dateStyle:'long', timeStyle:'short' }) : '';
   const approvalDateEn = order.approved_at
     ? new Date(order.approved_at).toLocaleString('en-QA', { dateStyle:'long', timeStyle:'short' }) : '';
-  const grandTotal = (Number(order.total_parts_price)||0) + (Number(order.total_labor_price)||0);
+  const decided = isApproved || !!order.customer_rejected;
+  const decisions = order.service_decisions || {};
+  const groupKeyOf = it => it.service_name?.ar || it.service_name?.en || null;
+  const lineTotal = it => Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
   const car = linked?.cars || {};
   const items = order.order_items || [];
-  const partItems = items.filter(i => i.item_type === 'part');
-  const laborItems = items.filter(i => i.item_type === 'labor');
+  const approvedItems = decided ? items.filter(it => { const k = groupKeyOf(it); return !k || decisions[k] !== 'rejected'; }) : items;
+  const rejectedItems = decided ? items.filter(it => { const k = groupKeyOf(it); return k && decisions[k] === 'rejected'; }) : [];
+  const partItems = approvedItems.filter(i => i.item_type === 'part');
+  const laborItems = approvedItems.filter(i => i.item_type === 'labor');
+  const totalParts = partItems.reduce((s,i)=>s+lineTotal(i),0);
+  const totalLabor = laborItems.reduce((s,i)=>s+lineTotal(i),0);
+  const grandTotal = totalParts + totalLabor;
+  const rejectedNames = [];
+  const seenRejectedKeys = new Set();
+  rejectedItems.forEach(it => {
+    const key = groupKeyOf(it);
+    if (key && !seenRejectedKeys.has(key)) {
+      seenRejectedKeys.add(key);
+      rejectedNames.push({ ar: it.service_name?.ar || key, en: it.service_name?.en || it.service_name?.ar || key });
+    }
+  });
   const serviceLabel = (() => {
     if (!linked?.service_type) return '';
     try { return JSON.parse(linked.service_type).map(s => s.name || s).join(' · '); } catch { return linked.service_type; }
@@ -1358,9 +1375,12 @@ function openQuotationPDF(order, linked, profile, jobCard) {
 <button class="print-btn" onclick="window.print()">🖨️ طباعة / Save as PDF</button>
 
 <div class="header">
-  <div>
-    <img src="${window.location.origin}/logo-static.png" alt="SNDK" style="height:48px;display:block"/>
-    <div class="brand-sub" style="margin-top:4px">Premium Car Services — Qatar</div>
+  <div style="text-align:center">
+    <img src="${window.location.origin}/logo-static.png" alt="SNDK" style="height:64px;display:block;margin:0 auto"/>
+    <div class="brand-sub" style="margin-top:4px;line-height:1.5">
+      <div>سندك — قطر</div>
+      <div style="direction:ltr">SNDK — Qatar</div>
+    </div>
   </div>
   <div class="doc-info">
     <div class="doc-title-ar">أمر الشغل / Job Card</div>
@@ -1411,7 +1431,7 @@ ${jobCard?.work_done ? `
 
 ${(partItems.length > 0 || laborItems.length > 0) ? `
 <div class="section">
-  <div class="section-title">عرض السعر / Quotation</div>
+  <div class="section-title">${decided ? 'عرض السعر المعتمد / Approved Quotation' : 'عرض السعر / Quotation'}</div>
   <table>
     <thead><tr>
       <th style="width:30px">#</th>
@@ -1425,7 +1445,6 @@ ${(partItems.length > 0 || laborItems.length > 0) ? `
         const nameAr = item.item_name?.ar || item.item_name?.en || '—';
         const nameEn = item.item_name?.en || '';
         const discountPct = Number(item.discount_pct||0);
-        const lineTotal = (Number(item.sell_price) * Number(item.quantity) * (1 - Math.min(discountPct,100)/100)).toFixed(3);
         return `<tr>
           <td style="color:#999;font-size:11px">${i+1}</td>
           <td>
@@ -1436,15 +1455,49 @@ ${(partItems.length > 0 || laborItems.length > 0) ? `
           </td>
           <td style="text-align:center;font-weight:600">${item.quantity}</td>
           <td dir="ltr" style="font-size:12px;font-weight:600">${Number(item.sell_price).toFixed(3)}${discountPct>0?`<br><span style="color:#dc2626;font-size:10px">-${discountPct.toFixed(0)}%</span>`:''}</td>
-          <td dir="ltr" style="font-weight:700;color:#8A1538">${lineTotal}</td>
+          <td dir="ltr" style="font-weight:700;color:#8A1538">${lineTotal(item).toFixed(3)}</td>
         </tr>`;
       }).join('')}
     </tbody>
   </table>
   <div class="totals">
-    ${Number(order.total_parts_price) > 0 ? `<div class="totals-row"><span>قطع الغيار / Parts</span><span dir="ltr">${Number(order.total_parts_price).toFixed(3)} ر.ق</span></div>` : ''}
-    ${Number(order.total_labor_price) > 0 ? `<div class="totals-row"><span>مصنعيات / Labor</span><span dir="ltr">${Number(order.total_labor_price).toFixed(3)} ر.ق</span></div>` : ''}
+    ${totalParts > 0 ? `<div class="totals-row"><span>قطع الغيار / Parts</span><span dir="ltr">${totalParts.toFixed(3)} ر.ق</span></div>` : ''}
+    ${totalLabor > 0 ? `<div class="totals-row"><span>مصنعيات / Labor</span><span dir="ltr">${totalLabor.toFixed(3)} ر.ق</span></div>` : ''}
     <div class="totals-row totals-grand"><span>الإجمالي / Total</span><span dir="ltr">${grandTotal.toFixed(3)} QAR</span></div>
+  </div>
+</div>` : ''}
+
+${rejectedItems.length > 0 ? `
+<div class="section">
+  <div class="section-title" style="color:#dc2626;border-bottom-color:#fecaca">الخدمات المرفوضة / Rejected Services</div>
+  <table>
+    <thead><tr style="background:#dc2626">
+      <th style="width:30px">#</th>
+      <th>البند / Item</th>
+      <th style="width:55px;text-align:center">الكمية / Qty</th>
+      <th style="width:105px">السعر / Price</th>
+      <th style="width:110px">الإجمالي / Total</th>
+    </tr></thead>
+    <tbody>
+      ${rejectedItems.map((item, i) => {
+        const nameAr = item.item_name?.ar || item.item_name?.en || '—';
+        const nameEn = item.item_name?.en || '';
+        return `<tr>
+          <td style="color:#999;font-size:11px">${i+1}</td>
+          <td>
+            <span class="badge ${item.item_type==='labor'?'badge-labor':'badge-part'}">${item.item_type==='labor'?'عمالة / Labor':'قطعة / Part'}</span><br>
+            <span style="font-weight:600;text-decoration:line-through;color:#94a3b8">${nameAr}</span>
+            ${nameEn && nameEn !== nameAr ? `<span style="font-size:11px;color:#94a3b8;margin-right:5px;text-decoration:line-through">(${nameEn})</span>` : ''}
+          </td>
+          <td style="text-align:center;font-weight:600;color:#94a3b8">${item.quantity}</td>
+          <td dir="ltr" style="font-size:12px;font-weight:600;color:#94a3b8">${Number(item.sell_price).toFixed(3)}</td>
+          <td dir="ltr" style="font-weight:700;color:#94a3b8">${lineTotal(item).toFixed(3)}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>
+  <div style="margin-top:10px;padding:12px 14px;background:#fef2f2;border:1.5px solid #fecaca;border-radius:8px;font-size:11px;color:#991b1b;font-weight:700;line-height:1.7">
+    ${rejectedNames.map(n=>`⚠️ تم رفض خدمة "${n.ar}" من قبل العميل، ويتحمل العميل كامل المسؤولية عن ذلك<br><span style="font-weight:600;color:#b91c1c">Service "${n.en}" was rejected by the customer — the customer bears full responsibility</span>`).join('<hr style="border:none;border-top:1px dashed #fecaca;margin:8px 0">')}
   </div>
 </div>` : ''}
 
@@ -2009,9 +2062,9 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           })()}
                           {/* PDF */}
                           <button onClick={() => openQuotationPDF(relOrd, a, profile, jc)}
-                            className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
-                            style={{ background:'rgba(0,0,0,0.10)', border:`1px solid ${cc.fg}50`, color:cc.txt }}>
-                            <FileImage size={14}/>{isRtl ? 'فتح أمر الشغل PDF' : 'Open Job Card PDF'}
+                            className="flex items-center justify-center gap-2 w-full px-3 py-3 rounded-xl font-black text-sm shadow-md hover:shadow-lg active:scale-95 transition-all"
+                            style={{ background:cc.fg, color:'#111111' }}>
+                            <FileImage size={16}/>{isRtl ? 'فتح أمر الشغل PDF' : 'Open Job Card PDF'}
                           </button>
                           {/* Total — reflects only the services currently checked (0 until the customer picks any) */}
                           {gt > 0 && (
