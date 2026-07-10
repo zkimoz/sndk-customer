@@ -1562,6 +1562,21 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     return keys;
   };
 
+  // Live total of only the services the customer has checked (or, once a
+  // decision is locked in, only the ones actually approved) — items with no
+  // service group (general/unspecified) always count, since there's no
+  // checkbox for them to opt out with.
+  const selectedQuotationTotal = (order) => {
+    const decided = order?.customer_approved || order?.customer_rejected;
+    return (order?.order_items || []).reduce((sum, it) => {
+      const lt = Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
+      const key = it.service_name?.ar || it.service_name?.en;
+      if (!key) return sum + lt;
+      const included = decided ? order.service_decisions?.[key] === 'approved' : isServiceSelected(order.id, key);
+      return included ? sum + lt : sum;
+    }, 0);
+  };
+
   const toggleServiceSelection = (orderId, key) => {
     const order = orders.find(o => o.id === orderId);
     const allKeys = serviceKeysOf(order);
@@ -1957,6 +1972,10 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                               <span className="font-bold flex-shrink-0" style={{ color:cc.txt }}>{lineTotal(it).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
                                             </div>
                                           ))}
+                                          <div className="flex items-center justify-between gap-2 text-[11px] pt-1 mt-1" style={{ borderTop:'1px dashed rgba(255,255,255,0.15)' }}>
+                                            <span className="font-bold" style={{ color:cc.sub }}>{isRtl?'إجمالي الخدمة':'Service total'}</span>
+                                            <span className="font-black flex-shrink-0" style={{ color:cc.fg }}>{lineItems.reduce((s,it)=>s+lineTotal(it),0).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                                          </div>
                                         </div>
                                       )}
                                     </div>
@@ -1971,11 +1990,11 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             style={{ background:'rgba(0,0,0,0.10)', border:`1px solid ${cc.fg}50`, color:cc.txt }}>
                             <FileImage size={14}/>{isRtl ? 'فتح أمر الشغل PDF' : 'Open Job Card PDF'}
                           </button>
-                          {/* Total */}
+                          {/* Total — reflects only the services currently checked (0 until the customer picks any) */}
                           {gt > 0 && (
                             <div className="flex items-center justify-between px-1">
                               <span className="text-xs" style={{ color:cc.sub }}>{isRtl ? 'إجمالي عرض السعر:' : 'Quotation Total:'}</span>
-                              <span className="text-base font-black" style={{ color:cc.fg }}>{gt.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
+                              <span className="text-base font-black" style={{ color:cc.fg }}>{selectedQuotationTotal(relOrd).toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
                             </div>
                           )}
                           {/* Paid / Remaining */}
