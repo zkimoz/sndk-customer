@@ -2244,7 +2244,7 @@ function ServicesView({ lang, tr, isRtl, expanded, setExpanded, serviceCategorie
   const confirmUnsure = (cat, catName) => {
     const desc = unsureText.trim();
     if (!desc) return;
-    const label = isRtl ? `لست متأكد من عطلي: ${desc}` : `Not sure what's wrong: ${desc}`;
+    const label = isRtl ? `لست متأكداً: ${desc}` : `Not sure: ${desc}`;
     addToCart(cat.id, `unsure-${cat.id}-${Date.now()}`, label, catName);
     setUnsureOpenFor(null); setUnsureText('');
   };
@@ -2334,9 +2334,9 @@ function ServicesView({ lang, tr, isRtl, expanded, setExpanded, serviceCategorie
                   <div className="px-4 py-3.5" style={{ borderTop: subs.length>0 ? `1px solid ${C.border}` : 'none' }}>
                     {unsureOpenFor === cat.id ? (
                       <div className="space-y-2">
-                        <p className="text-sm font-semibold" style={{ color:C.txt }}>{isRtl?'لست متأكد من عطلي':"I'm not sure what's wrong"}</p>
+                        <p className="text-sm font-semibold" style={{ color:C.txt }}>{isRtl?'لست متأكداً':"Not sure"}</p>
                         <textarea autoFocus value={unsureText} onChange={e=>setUnsureText(e.target.value)}
-                          placeholder={isRtl?'اكتب وصف العطل أو المشكلة اللي حاسس بيها في السيارة...':'Describe the fault or issue you\'re noticing with your car...'}
+                          placeholder={isRtl?'اكتب وصفاً لما تريده':'Describe what you would like...'}
                           rows={3} className="w-full px-3 py-2.5 rounded-xl text-sm outline-none resize-none"
                           style={{ background:C.input, border:`1px solid ${C.border}`, color:C.text }}/>
                         <div className="flex items-center gap-2">
@@ -2356,8 +2356,8 @@ function ServicesView({ lang, tr, isRtl, expanded, setExpanded, serviceCategorie
                         className="w-full flex items-center gap-2 text-sm font-semibold"
                         style={{ color:C.muted }}>
                         <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background:C.muted }}/>
-                        {isRtl?'لست متأكد من عطلي':"I'm not sure what's wrong"}
-                        <span className="text-xs ms-auto" style={{ color:btnAccent }}>{isRtl?'اكتب وصفك':'Describe it'}</span>
+                        {isRtl?'لست متأكداً':"Not sure"}
+                        <span className="text-xs ms-auto" style={{ color:btnAccent }}>{isRtl?'اكتب وصفاً':'Describe it'}</span>
                       </button>
                     )}
                   </div>
