@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import {
   Settings, Search, ShieldCheck, PackageSearch, Sparkles, Car, Cog, Droplets,
   CheckCircle2, Loader2, Globe, Bell, Home, Plus, Phone,
-  Menu, X, ChevronLeft, ChevronRight, User, Calendar,
+  Menu, X, ChevronLeft, ChevronRight, ChevronDown, User, Calendar,
   Wrench, ArrowRight, Lock, LogOut, MapPin, Mail,
   ClipboardList, Package, ShoppingCart, Trash2, Upload, FileImage, Pencil, Check,
   Sun, Moon, Eye, EyeOff, PlayCircle,
@@ -1829,7 +1829,13 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   const [openVideoId, setOpenVideoId] = useState(null);
   const [carBrandsRef, setCarBrandsRef] = useState([]);
   const [carCatsRef, setCarCatsRef]     = useState([]);
+  const [expandedIds, setExpandedIds]   = useState(new Set());
   const seenIdsRef = useRef(new Set());
+  const toggleExpanded = (id) => setExpandedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
 
   useEffect(() => {
     supabase.from('car_brands').select('id,name_ar,name_en').then(({ data }) => setCarBrandsRef(data || []));
@@ -2181,13 +2187,20 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                   const jcColor = JC_STATUS_COLOR[jc.job_status] || '#94a3b8';
                   const jcLabel = tr[`jc_${jc.job_status}`] || jc.job_status;
                   const gt      = relOrd ? (Number(relOrd.total_parts_price)||0)+(Number(relOrd.total_labor_price)||0) : 0;
+                  // Once staff closes the job card it becomes a maintenance-history entry —
+                  // collapse it to just this summary rectangle, tap to expand full details.
+                  const isClosed   = !!jc.closed_at;
+                  const isExpanded = !isClosed || expandedIds.has(a.id);
+                  const HeaderTag  = isClosed ? 'button' : 'div';
                   return (
                     <div key={a.id} className="rounded-2xl overflow-hidden"
                       style={{ background:cc.bg, border:`1px solid ${cc.fg}30` }}>
 
                       {/* ── Header ── */}
-                      <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3"
-                        style={{ borderBottom:`1px solid ${cc.div}` }}>
+                      <HeaderTag
+                        {...(isClosed ? { onClick: () => toggleExpanded(a.id), type:'button' } : {})}
+                        className="w-full px-4 pt-4 pb-3 flex items-start justify-between gap-3 text-start"
+                        style={{ borderBottom: isExpanded ? `1px solid ${cc.div}` : 'none' }}>
                         <div className="flex-1 min-w-0">
                           {(() => {
                             const svcs = parseServices(a.service_type);
@@ -2216,12 +2229,20 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                         </div>
                         {/* Job status + number */}
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                          <span className="px-2.5 py-1 rounded-full text-xs font-bold text-white" style={{ background:jcColor }}>
-                            {jcLabel}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {isClosed && (
+                              <ChevronDown size={14} style={{ color:cc.sub, transform: isExpanded ? 'rotate(180deg)' : 'none', transition:'transform .2s' }}/>
+                            )}
+                            <span className="px-2.5 py-1 rounded-full text-xs font-bold text-white" style={{ background:jcColor }}>
+                              {jcLabel}
+                            </span>
+                          </div>
                           <span className="text-[10px] font-mono" style={{ color:cc.sub }}>{jc.job_number}</span>
                         </div>
-                      </div>
+                      </HeaderTag>
+
+                      {isExpanded && (
+                      <>
 
                       {/* ── الجدول الزمني لحالة أمر الشغل (وفيديوهات الاستلام والورشة تحت خطواتها) ── */}
                       <div className="px-4 pt-3 pb-1">
@@ -2496,6 +2517,8 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           <Loader2 size={12} className="animate-spin"/>
                           <span className="text-xs font-bold">{isRtl ? 'جاري إعداد عرض السعر...' : 'Preparing quotation...'}</span>
                         </div>
+                      )}
+                      </>
                       )}
                     </div>
                   );
