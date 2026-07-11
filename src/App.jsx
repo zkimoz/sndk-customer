@@ -6,7 +6,7 @@ import {
   Menu, X, ChevronLeft, ChevronRight, ChevronDown, User, Calendar,
   Wrench, ArrowRight, Lock, LogOut, MapPin, Mail,
   ClipboardList, Package, ShoppingCart, Trash2, Upload, FileImage, Pencil, Check,
-  Sun, Moon, Eye, EyeOff, PlayCircle,
+  Sun, Moon, Eye, EyeOff, PlayCircle, Wallet,
 } from 'lucide-react';
 
 // ── Translations ───────────────────────────────────────────────────────
@@ -2944,12 +2944,44 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
   const [expandedHistoryId, setExpandedHistoryId] = useState(null);
   const [historyOpenVideoId, setHistoryOpenVideoId] = useState(null);
 
+  // Wallet
+  const [walletTxns, setWalletTxns]       = useState([]);
+  const [walletLoading, setWalletLoading] = useState(true);
+  const [showTopup, setShowTopup]         = useState(false);
+  const [topupAmt, setTopupAmt]           = useState('');
+  const [requestingTopup, setRequestingTopup] = useState(false);
+
   const loadCars = () => {
     supabase.from('cars').select('*').eq('profile_id', user.id).order('created_at', { ascending:false })
       .then(({ data }) => { setCars(data||[]); setLoadingCars(false); });
   };
 
   useEffect(() => { if (user) loadCars(); }, [user]);
+
+  const loadWallet = () => {
+    if (!user) return;
+    setWalletLoading(true);
+    supabase.from('wallet_transactions').select('*').eq('profile_id', user.id).order('created_at', { ascending:false })
+      .then(({ data }) => { setWalletTxns(data || []); setWalletLoading(false); });
+  };
+  useEffect(() => { loadWallet(); }, [user]);
+
+  const walletBalance = walletTxns.filter(w => w.status === 'confirmed').reduce((s, w) => s + Number(w.amount || 0), 0);
+  const pendingTopups  = walletTxns.filter(w => w.status === 'pending');
+
+  const requestTopup = async () => {
+    const amt = Number(topupAmt);
+    if (!amt || amt <= 0) return;
+    setRequestingTopup(true);
+    const { error } = await supabase.from('wallet_transactions').insert({
+      profile_id: user.id, amount: amt, type: 'topup', status: 'pending',
+    });
+    setRequestingTopup(false);
+    if (error) { alert(isRtl ? 'خطأ في إرسال طلب الشحن: ' + error.message : 'Error sending top-up request: ' + error.message); return; }
+    setTopupAmt('');
+    setShowTopup(false);
+    loadWallet();
+  };
 
   const loadCarHistory = async (carId) => {
     if (history[carId]) return;
@@ -3150,6 +3182,72 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
           <h1 className={`text-xl font-black ${C.selectCls}`}>{profile?.full_name || tr.myProfile}</h1>
           <p className="text-xs mt-0.5" style={{ color:C.muted }}>{user.email}</p>
         </div>
+      </div>
+
+      {/* Wallet */}
+      <div className="rounded-2xl overflow-hidden" style={{ background:CARD_BG_CYCLE[1].bg, border:`1px solid ${CARD_BG_CYCLE[1].fg}30` }}>
+        <div className="p-5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background:`${C.gold}20` }}>
+              <Wallet size={20} style={{ color:C.gold }}/>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color:CARD_BG_CYCLE[1].sub }}>{isRtl?'رصيد المحفظة':'Wallet Balance'}</p>
+              <p className="text-xl font-black" style={{ color:C.gold }}>{walletBalance.toFixed(3)} {isRtl?'ر.ق':'QAR'}</p>
+            </div>
+          </div>
+          <button onClick={()=>setShowTopup(p=>!p)}
+            className="px-4 py-2 rounded-xl text-xs font-black flex-shrink-0" style={{ background:C.gold, color:C.btnTxt }}>
+            {isRtl?'اشحن المحفظة':'Top Up'}
+          </button>
+        </div>
+
+        {showTopup && (
+          <div className="px-5 pb-4 flex gap-2">
+            <input type="number" min="0" step="0.001" value={topupAmt} onChange={e=>setTopupAmt(e.target.value)}
+              placeholder={isRtl?'المبلغ':'Amount'} dir="ltr"
+              className={`flex-1 px-3 py-2.5 rounded-xl text-sm ${C.selectCls} outline-none`}
+              style={{ background:C.input, border:`1px solid ${C.border}` }}/>
+            <button onClick={requestTopup} disabled={requestingTopup || !Number(topupAmt)}
+              className="px-4 py-2.5 rounded-xl text-sm font-black disabled:opacity-40 flex items-center gap-1.5 flex-shrink-0"
+              style={{ background:'#16a34a', color:'#fff' }}>
+              {requestingTopup ? <Loader2 size={14} className="animate-spin"/> : <Check size={14}/>}
+              {isRtl?'إرسال الطلب':'Send Request'}
+            </button>
+          </div>
+        )}
+
+        {pendingTopups.length > 0 && (
+          <div className="px-5 pb-4 space-y-1.5">
+            {pendingTopups.map(tx => (
+              <div key={tx.id} className="flex items-center justify-between text-xs px-3 py-2 rounded-lg" style={{ background:'rgba(234,179,8,0.12)' }}>
+                <span className="font-bold" style={{ color:CARD_BG_CYCLE[1].txt }}>{isRtl?'طلب شحن':'Top-up request'}: {Number(tx.amount).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                <span className="font-bold" style={{ color:'#eab308' }}>{isRtl?'بانتظار التأكيد':'Pending'}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!walletLoading && walletTxns.filter(w=>w.status==='confirmed').length > 0 && (
+          <div className="px-5 pb-5 space-y-1.5" style={{ borderTop:`1px solid ${CARD_BG_CYCLE[1].div}`, paddingTop:12 }}>
+            {walletTxns.filter(w=>w.status==='confirmed').slice(0,5).map(tx => {
+              const isCredit = Number(tx.amount) >= 0;
+              const TYPE_LABEL = {
+                topup:              isRtl ? 'شحن' : 'Top-up',
+                overpayment_credit: isRtl ? 'استرجاع دفع زيادة' : 'Overpayment Credit',
+                service_payment:    isRtl ? 'دفع خدمة من المحفظة' : 'Paid via Wallet',
+              };
+              return (
+                <div key={tx.id} className="flex items-center justify-between text-xs">
+                  <span style={{ color:CARD_BG_CYCLE[1].sub }}>{TYPE_LABEL[tx.type] || tx.type}</span>
+                  <span className="font-bold" style={{ color: isCredit ? '#22c55e' : '#ef4444' }} dir="ltr">
+                    {isCredit ? '+' : ''}{Number(tx.amount).toFixed(3)} {isRtl?'ر.ق':'QAR'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Personal Info */}
@@ -3473,6 +3571,24 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                           + {tr.bookNow}
                         </button>
                       </div>
+                      {carHistory && carHistory.length > 0 && (() => {
+                        const currentYear = new Date().getFullYear();
+                        const yearTotal = carHistory.reduce((sum, a) => {
+                          const carPayments = (a.orders || []).flatMap(o => o.payments || []);
+                          return sum + carPayments
+                            .filter(p => new Date(p.created_at).getFullYear() === currentYear)
+                            .reduce((s, p) => s + Number(p.amount || 0), 0);
+                        }, 0);
+                        if (yearTotal <= 0) return null;
+                        return (
+                          <div className="mx-4 mb-3 px-3 py-2.5 rounded-xl flex items-center justify-between" style={{ background:'rgba(0,0,0,0.08)' }}>
+                            <span className="text-xs font-semibold" style={{ color:C.muted }}>
+                              {isRtl ? `مصروفاتك على هذه السيارة خلال عام ${currentYear}` : `Your expenses on this car during ${currentYear}`}
+                            </span>
+                            <span className="text-sm font-black" style={{ color:C.gold }}>{yearTotal.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                          </div>
+                        );
+                      })()}
                       {!carHistory ? (
                         <div className="flex justify-center py-4" style={{ color:C.muted }}><Loader2 size={16} className="animate-spin"/></div>
                       ) : carHistory.length === 0 ? (
