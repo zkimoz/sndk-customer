@@ -1829,13 +1829,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   const [openVideoId, setOpenVideoId] = useState(null);
   const [carBrandsRef, setCarBrandsRef] = useState([]);
   const [carCatsRef, setCarCatsRef]     = useState([]);
-  const [expandedIds, setExpandedIds]   = useState(new Set());
   const seenIdsRef = useRef(new Set());
-  const toggleExpanded = (id) => setExpandedIds(prev => {
-    const next = new Set(prev);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    return next;
-  });
 
   useEffect(() => {
     supabase.from('car_brands').select('id,name_ar,name_en').then(({ data }) => setCarBrandsRef(data || []));
@@ -2171,7 +2165,8 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
 
           {/* ── قسم 2: الطلبات (مواعيد عندها أمر شغل) ── */}
           {tab==='orders' && (() => {
-            const jcAppts = appts.filter(a => a.job_cards?.length > 0);
+            // Closed job cards move to the car's maintenance history under حسابي — not shown here
+            const jcAppts = appts.filter(a => a.job_cards?.length > 0 && !a.job_cards[0].closed_at);
             return (
               <div className="space-y-3">
                 {jcAppts.length === 0 ? (
@@ -2187,20 +2182,13 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                   const jcColor = JC_STATUS_COLOR[jc.job_status] || '#94a3b8';
                   const jcLabel = tr[`jc_${jc.job_status}`] || jc.job_status;
                   const gt      = relOrd ? (Number(relOrd.total_parts_price)||0)+(Number(relOrd.total_labor_price)||0) : 0;
-                  // Once staff closes the job card it becomes a maintenance-history entry —
-                  // collapse it to just this summary rectangle, tap to expand full details.
-                  const isClosed   = !!jc.closed_at;
-                  const isExpanded = !isClosed || expandedIds.has(a.id);
-                  const HeaderTag  = isClosed ? 'button' : 'div';
                   return (
                     <div key={a.id} className="rounded-2xl overflow-hidden"
                       style={{ background:cc.bg, border:`1px solid ${cc.fg}30` }}>
 
                       {/* ── Header ── */}
-                      <HeaderTag
-                        {...(isClosed ? { onClick: () => toggleExpanded(a.id), type:'button' } : {})}
-                        className="w-full px-4 pt-4 pb-3 flex items-start justify-between gap-3 text-start"
-                        style={{ borderBottom: isExpanded ? `1px solid ${cc.div}` : 'none' }}>
+                      <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3"
+                        style={{ borderBottom:`1px solid ${cc.div}` }}>
                         <div className="flex-1 min-w-0">
                           {(() => {
                             const svcs = parseServices(a.service_type);
@@ -2229,20 +2217,12 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                         </div>
                         {/* Job status + number */}
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                          <div className="flex items-center gap-1.5">
-                            {isClosed && (
-                              <ChevronDown size={14} style={{ color:cc.sub, transform: isExpanded ? 'rotate(180deg)' : 'none', transition:'transform .2s' }}/>
-                            )}
-                            <span className="px-2.5 py-1 rounded-full text-xs font-bold text-white" style={{ background:jcColor }}>
-                              {jcLabel}
-                            </span>
-                          </div>
+                          <span className="px-2.5 py-1 rounded-full text-xs font-bold text-white" style={{ background:jcColor }}>
+                            {jcLabel}
+                          </span>
                           <span className="text-[10px] font-mono" style={{ color:cc.sub }}>{jc.job_number}</span>
                         </div>
-                      </HeaderTag>
-
-                      {isExpanded && (
-                      <>
+                      </div>
 
                       {/* ── الجدول الزمني لحالة أمر الشغل (وفيديوهات الاستلام والورشة تحت خطواتها) ── */}
                       <div className="px-4 pt-3 pb-1">
@@ -2517,8 +2497,6 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           <Loader2 size={12} className="animate-spin"/>
                           <span className="text-xs font-bold">{isRtl ? 'جاري إعداد عرض السعر...' : 'Preparing quotation...'}</span>
                         </div>
-                      )}
-                      </>
                       )}
                     </div>
                   );
@@ -2847,8 +2825,94 @@ function ServicesView({ lang, tr, isRtl, expanded, setExpanded, serviceCategorie
   );
 }
 
+// Read-only expanded detail for a closed job card in the car's maintenance history —
+// same timeline/videos/quotation/payment info as طلباتي, minus the now-irrelevant
+// interactive approve/pay controls, plus the same PDF buttons.
+function HistoryOrderDetail({ jobCard, order, car, appt, profile, isRtl, tr, openVideoId, setOpenVideoId, carBrands, carCategories }) {
+  let receptionVideos = [];
+  try { receptionVideos = JSON.parse(jobCard.reception_videos || '[]'); } catch {}
+  if (!receptionVideos.length && jobCard.reception_video_url) receptionVideos = [jobCard.reception_video_url];
+  let workshopVideos = [];
+  try { workshopVideos = JSON.parse(jobCard.workshop_notes_videos || '[]'); } catch {}
+
+  const groupKeyOf = it => it.service_name?.ar || it.service_name?.en || null;
+  const lineTotal = it => Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
+  const items = order?.order_items || [];
+  const decided = !!order?.customer_approved || !!order?.customer_rejected;
+  const decisions = order?.service_decisions || {};
+  const approvedItems = decided ? items.filter(it => { const k = groupKeyOf(it); return !k || decisions[k] !== 'rejected'; }) : items;
+  const rejectedItems = decided ? items.filter(it => { const k = groupKeyOf(it); return k && decisions[k] === 'rejected'; }) : [];
+  const totalParts = approvedItems.filter(i=>i.item_type==='part').reduce((s,i)=>s+lineTotal(i),0);
+  const totalLabor = approvedItems.filter(i=>i.item_type==='labor').reduce((s,i)=>s+lineTotal(i),0);
+  const grandTotal = totalParts + totalLabor;
+  const totalPaid = (order?.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
+  const remaining = grandTotal - totalPaid;
+  const rejectedNames = [...new Set(rejectedItems.map(groupKeyOf).filter(Boolean))];
+  const linked = { ...appt, cars: car };
+
+  return (
+    <div className="px-4 pb-4 space-y-3" style={{ borderTop:`1px solid ${C.border}` }}>
+      <div className="pt-3">
+        <JobStatusTimeline jobCard={jobCard} isRtl={isRtl} tr={tr} textColor={C.text} mutedColor={C.muted} fg={C.gold}
+          receptionVideos={receptionVideos} workshopVideos={workshopVideos}
+          openVideoId={openVideoId} setOpenVideoId={setOpenVideoId}/>
+      </div>
+
+      {grandTotal > 0 && (
+        <div className="rounded-xl p-3 space-y-1.5" style={{ background:`${C.gold}08`, border:`1px solid ${C.gold}20` }}>
+          {totalParts > 0 && (
+            <div className="flex items-center justify-between text-xs">
+              <span style={{ color:C.muted }}>{isRtl?'قطع الغيار':'Parts'}</span>
+              <span className="font-bold" style={{ color:C.text }}>{totalParts.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+            </div>
+          )}
+          {totalLabor > 0 && (
+            <div className="flex items-center justify-between text-xs">
+              <span style={{ color:C.muted }}>{isRtl?'شغل اليد':'Labor'}</span>
+              <span className="font-bold" style={{ color:C.text }}>{totalLabor.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between text-sm pt-1.5 mt-1" style={{ borderTop:`1px dashed ${C.border}` }}>
+            <span className="font-bold" style={{ color:C.muted }}>{isRtl?'الإجمالي':'Total'}</span>
+            <span className="font-black" style={{ color:C.gold }}>{grandTotal.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span style={{ color:C.muted }}>{isRtl?'المدفوع':'Paid'}</span>
+            <span className="font-bold" style={{ color:'#22c55e' }}>{totalPaid.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span style={{ color:C.muted }}>{isRtl?'المتبقي':'Remaining'}</span>
+            <span className="font-bold" style={{ color: remaining>0.001?'#ef4444':'#22c55e' }}>{remaining.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+          </div>
+        </div>
+      )}
+
+      {rejectedNames.length > 0 && (
+        <div className="rounded-xl p-3 text-xs font-bold" style={{ background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)', color:'#ef4444' }}>
+          {isRtl ? `تم رفض: ${rejectedNames.join('، ')}` : `Declined: ${rejectedNames.join(', ')}`}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <button onClick={() => openQuotationPDF(order || {}, linked, profile, jobCard)}
+          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl font-bold text-xs"
+          style={{ background:'rgba(0,0,0,0.08)', border:`1px solid ${C.border}`, color:C.text }}>
+          <FileImage size={13}/>{isRtl?'PDF أمر الشغل':'Job Card PDF'}
+        </button>
+        {jobCard.invoice_ready && remaining <= 0.001 && order && (
+          <button onClick={() => printCustomerInvoice(jobCard, linked, order, profile, carBrands, carCategories)}
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl font-bold text-xs"
+            style={{ background:'rgba(34,197,94,0.15)', border:'1px solid rgba(34,197,94,0.35)', color:'#16a34a' }}>
+            <FileImage size={13}/>{isRtl?'الفاتورة':'Invoice'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── PROFILE VIEW ───────────────────────────────────────────────────────
-function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, goOrders, onProfileUpdated, carBrands, carCategories, brandCategories }) {
+function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onProfileUpdated, carBrands, carCategories, brandCategories }) {
   const [cars, setCars]               = useState([]);
   const [history, setHistory]         = useState({});
   const [expandedCar, setExpandedCar] = useState(null);
@@ -2876,6 +2940,10 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, goOrd
   const [deletingCarId, setDeletingCarId] = useState(null);
   const [carDeleteError, setCarDeleteError] = useState('');
 
+  // Expanded history entry (full order/job-card details)
+  const [expandedHistoryId, setExpandedHistoryId] = useState(null);
+  const [historyOpenVideoId, setHistoryOpenVideoId] = useState(null);
+
   const loadCars = () => {
     supabase.from('cars').select('*').eq('profile_id', user.id).order('created_at', { ascending:false })
       .then(({ data }) => { setCars(data||[]); setLoadingCars(false); });
@@ -2887,7 +2955,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, goOrd
     if (history[carId]) return;
     const { data } = await supabase
       .from('appointments')
-      .select('*, orders(id, status, total_parts_price, total_labor_price), job_cards(id, job_number, job_status)')
+      .select('*, orders(*, order_items(*), payments(*)), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos)')
       .eq('car_id', carId)
       .order('appointment_date', { ascending: false });
     setHistory(p => ({ ...p, [carId]: data || [] }));
@@ -3428,8 +3496,13 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, goOrd
                             const ORD_COLOR = { draft:'#94a3b8', pending:'#60a5fa', sourcing:'#eab308', ready:'#22c55e', delivered:'#a855f7', completed:'#22c55e', cancelled:'#ef4444' };
                             const jcColor = jobCard ? (JC_STATUS_COLOR[jobCard.job_status] || '#94a3b8') : null;
                             const jcLabel = jobCard ? (tr[`jc_${jobCard.job_status}`] || jobCard.job_status) : null;
+                            const isHistOpen = expandedHistoryId === appt.id;
+                            const RowTag = jobCard ? 'button' : 'div';
                             return (
-                            <div key={appt.id} className="px-4 py-3 flex items-start justify-between gap-3">
+                            <div key={appt.id}>
+                              <RowTag
+                                {...(jobCard ? { onClick: () => setExpandedHistoryId(id => id === appt.id ? null : appt.id), type:'button' } : {})}
+                                className="w-full px-4 py-3 flex items-start justify-between gap-3 text-start">
                               <div className="flex items-start gap-3 flex-1 min-w-0">
                                 <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background:`${C.gold}20` }}>
                                   <Wrench size={14} style={{ color:C.gold }}/>
@@ -3467,17 +3540,19 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, goOrd
                                           {(Number(order.total_parts_price||0)+Number(order.total_labor_price||0)).toLocaleString()} {isRtl?'ر.ق':'QAR'}
                                         </span>
                                       )}
-                                      {['delivered','completed'].includes(order.status) && (
-                                        <button onClick={goOrders}
-                                          className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                                          style={{ color:C.gold, background:`${C.gold}15`, border:`1px solid ${C.gold}30` }}>
-                                          {isRtl ? '📄 عرض الفاتورة' : '📄 View Invoice'}
-                                        </button>
-                                      )}
                                     </div>
                                   )}
                                 </div>
                               </div>
+                              {jobCard && (
+                                <ChevronDown size={16} style={{ color:C.muted, flexShrink:0, marginTop:2, transform: isHistOpen ? 'rotate(180deg)' : 'none', transition:'transform .2s' }}/>
+                              )}
+                              </RowTag>
+                              {isHistOpen && jobCard && (
+                                <HistoryOrderDetail jobCard={jobCard} order={order} car={car} appt={appt} profile={profile}
+                                  isRtl={isRtl} tr={tr} openVideoId={historyOpenVideoId} setOpenVideoId={setHistoryOpenVideoId}
+                                  carBrands={carBrands} carCategories={carCategories}/>
+                              )}
                             </div>
                             );
                           })}
