@@ -1292,8 +1292,7 @@ function SignatureModal({ isRtl, theme, onConfirm, onClose }) {
   );
 }
 
-function openQuotationPDF(order, linked, profile, jobCard, mode = 'jobcard') {
-  const isInvoice = mode === 'invoice';
+function openQuotationPDF(order, linked, profile, jobCard) {
   const isApproved = !!order.customer_approved;
   const approvalDate = order.approved_at
     ? new Date(order.approved_at).toLocaleString('ar-QA', { dateStyle:'long', timeStyle:'short' }) : '';
@@ -1332,7 +1331,7 @@ function openQuotationPDF(order, linked, profile, jobCard, mode = 'jobcard') {
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<title>${isInvoice ? 'فاتورة – SNDK Invoice' : 'أمر الشغل – SNDK Job Card'}</title>
+<title>أمر الشغل – SNDK Job Card</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}
   body{font-family:Arial,sans-serif;background:#fff;color:#1a1a1a;padding:24px;max-width:820px;margin:0 auto}
@@ -1386,9 +1385,9 @@ function openQuotationPDF(order, linked, profile, jobCard, mode = 'jobcard') {
     </div>
   </div>
   <div class="doc-info">
-    <div class="doc-title-ar">${isInvoice ? 'فاتورة ضريبية' : 'أمر الشغل'} / ${isInvoice ? 'Tax Invoice' : 'Job Card'}</div>
-    <div class="doc-title-en">${isInvoice ? '' : 'Work Order'}</div>
-    ${jobCard?.job_number ? `<div class="doc-num">${isInvoice ? 'INV-' : ''}${jobCard.job_number}</div>` : ''}
+    <div class="doc-title-ar">أمر الشغل / Job Card</div>
+    <div class="doc-title-en">Work Order</div>
+    ${jobCard?.job_number ? `<div class="doc-num">${jobCard.job_number}</div>` : ''}
     <div style="font-size:11px;color:#999;margin-top:3px">${linked?.appointment_date || '—'}</div>
   </div>
 </div>
@@ -1411,7 +1410,7 @@ function openQuotationPDF(order, linked, profile, jobCard, mode = 'jobcard') {
   ${serviceLabel ? `<div class="field" style="margin-top:8px"><div class="field-label">الخدمة / Service</div><div class="field-value">${serviceLabel}</div></div>` : ''}
 </div>
 
-${(!isInvoice && (jobCard?.mileage_in || jobCard?.mileage_out)) ? `
+${(jobCard?.mileage_in || jobCard?.mileage_out) ? `
 <div class="section">
   <div class="section-title">العداد / Mileage</div>
   <div class="grid2">
@@ -1420,13 +1419,13 @@ ${(!isInvoice && (jobCard?.mileage_in || jobCard?.mileage_out)) ? `
   </div>
 </div>` : ''}
 
-${(!isInvoice && jobCard?.customer_complaints) ? `
+${jobCard?.customer_complaints ? `
 <div class="section">
   <div class="section-title">ملاحظات العميل / Customer Complaints</div>
   <div class="textarea-field">${jobCard.customer_complaints}</div>
 </div>` : ''}
 
-${(!isInvoice && jobCard?.work_done) ? `
+${jobCard?.work_done ? `
 <div class="section">
   <div class="section-title">الأعمال المنجزة / Work Done</div>
   <div class="textarea-field">${jobCard.work_done}</div>
@@ -1434,7 +1433,7 @@ ${(!isInvoice && jobCard?.work_done) ? `
 
 ${(partItems.length > 0 || laborItems.length > 0) ? `
 <div class="section">
-  <div class="section-title">${isInvoice ? 'تفاصيل الخدمات والقطع / Services & Parts Detail' : decided ? 'عرض السعر المعتمد / Approved Quotation' : 'عرض السعر / Quotation'}</div>
+  <div class="section-title">${decided ? 'عرض السعر المعتمد / Approved Quotation' : 'عرض السعر / Quotation'}</div>
   <table>
     <thead><tr>
       <th style="width:30px">#</th>
@@ -1536,11 +1535,6 @@ ${isApproved ? `
 </div>` : `
 <div class="pending-box">⏳ بانتظار موافقة العميل / Pending Customer Approval</div>`}
 
-${isInvoice ? `
-<div style="margin-top:16px;text-align:left">
-  <img src="${window.location.origin}/company-stamp.jpg" alt="SNDK Stamp" style="width:150px;height:150px;object-fit:contain;display:inline-block"/>
-</div>` : ''}
-
 <div class="footer">
   <span>سندك — قطر / SNDK — Qatar</span>
   <span>${new Date().toLocaleDateString('ar-QA')}</span>
@@ -1548,6 +1542,269 @@ ${isInvoice ? `
 </body></html>`;
 
   const w = window.open('', '_blank');
+  if (w) { w.document.write(html); w.document.close(); }
+}
+
+// Mirrors sndk-admin's printTaxInvoice exactly, so the invoice the customer sees
+// is the same document staff see — same layout, colors, grouping and stamp.
+function printCustomerInvoice(jobCard, appt, order, profile, brandsData = [], catsData = []) {
+  const car     = appt?.cars || {};
+  const allItems = order?.order_items || [];
+  const decided  = !!order?.customer_approved || !!order?.customer_rejected;
+  const decisions = order?.service_decisions || {};
+  const groupKeyOf = it => it.service_name?.ar || it.service_name?.en || null;
+  const items    = decided ? allItems.filter(it => { const k = groupKeyOf(it); return !k || decisions[k] !== 'rejected'; }) : allItems;
+  const rejectedItems = decided ? allItems.filter(it => { const k = groupKeyOf(it); return k && decisions[k] === 'rejected'; }) : [];
+  const rejectedNames = [];
+  const seenRejectedKeys = new Set();
+  rejectedItems.forEach(it => {
+    const key = groupKeyOf(it);
+    if (key && !seenRejectedKeys.has(key)) {
+      seenRejectedKeys.add(key);
+      rejectedNames.push({ ar: it.service_name?.ar || key, en: it.service_name?.en || it.service_name?.ar || key });
+    }
+  });
+
+  // Bilingual car type & category
+  const brandRec  = brandsData.find(b => b.name_ar === car.car_type || b.name_en === car.car_type);
+  const catRec    = catsData.find(c => c.name_ar === car.car_category || c.name_en === car.car_category);
+  const carTypeAr = brandRec?.name_ar || car.car_type || '';
+  const carTypeEn = brandRec?.name_en || '';
+  const carCatAr  = catRec?.name_ar  || car.car_category || '';
+  const carCatEn  = catRec?.name_en  || '';
+  const invoiceNum  = `INV-${jobCard.job_number || jobCard.id?.slice(0,8).toUpperCase()}`;
+  const closedDate  = jobCard.closed_at ? new Date(jobCard.closed_at) : new Date();
+  const dateAr = closedDate.toLocaleDateString('ar-QA', { year:'numeric', month:'long', day:'numeric' });
+  const dateEn = closedDate.toLocaleDateString('en-QA', { year:'numeric', month:'long', day:'numeric' });
+  const totalParts  = Number(order?.total_parts_price||0);
+  const totalLabor  = Number(order?.total_labor_price||0);
+  const grandTotal  = totalParts + totalLabor;
+
+  const invLineTotal = item => {
+    const unitPrice = Number(item.sell_price||0);
+    const qty = Number(item.quantity||1);
+    const discountPct = Number(item.discount_pct||0);
+    return unitPrice * qty * (1 - Math.min(discountPct,100)/100);
+  };
+  let invRowIdx = 0;
+  const buildItemRow = (item) => {
+    invRowIdx++;
+    const nameAr   = item.item_name?.ar || '—';
+    const nameEn   = item.item_name?.en || '';
+    const isPart   = item.item_type === 'part';
+    const unitPrice   = Number(item.sell_price||0);
+    const qty         = Number(item.quantity||1);
+    const discountPct = Number(item.discount_pct||0);
+    return `<tr>
+      <td style="padding:10px 14px;color:#94a3b8;font-size:11px">${invRowIdx}</td>
+      <td style="padding:10px 14px">
+        <span style="font-weight:700;color:#1e293b">${nameAr}</span>
+        ${nameEn ? `<br><span style="font-size:11px;color:#64748b" dir="ltr">${nameEn}</span>` : ''}
+      </td>
+      <td style="padding:10px 14px;text-align:center">
+        <span style="display:inline-flex;flex-direction:column;align-items:center;gap:1px">
+          <span style="padding:1px 7px;border-radius:999px;font-size:9px;font-weight:700;background:${isPart?'#dbeafe':'#dcfce7'};color:${isPart?'#1d4ed8':'#166534'}">${isPart?'قطعة':'عمالة'}</span>
+          <span style="font-size:9px;color:#94a3b8">${isPart?'Part':'Labor'}</span>
+        </span>
+      </td>
+      <td style="padding:10px 14px;text-align:center;font-weight:600">${qty}</td>
+      <td style="padding:10px 14px;text-align:left;font-size:12px" dir="ltr">${unitPrice.toFixed(3)} QAR${discountPct>0?`<br><span style="color:#dc2626;font-size:10px">-${discountPct.toFixed(0)}%</span>`:''}</td>
+      <td style="padding:10px 14px;text-align:left;font-weight:700;color:#8A1538" dir="ltr">${invLineTotal(item).toFixed(3)} QAR</td>
+    </tr>`;
+  };
+
+  // Group parts/labor under the service they belong to, with a subtotal per service —
+  // items with no service_name (general/manual items) are listed under their own bucket.
+  const invServiceGroups = [];
+  const invSeenGroupKeys = new Set();
+  items.forEach(it => {
+    const key = groupKeyOf(it);
+    if (key && !invSeenGroupKeys.has(key)) {
+      invSeenGroupKeys.add(key);
+      invServiceGroups.push({ key, ar: it.service_name?.ar || key, en: it.service_name?.en || '' });
+    }
+  });
+  const invGeneralItems = items.filter(it => !groupKeyOf(it));
+
+  const groupRowsHtml = invServiceGroups.map(g => {
+    const groupItems = items.filter(it => groupKeyOf(it) === g.key);
+    const subtotal = groupItems.reduce((s,it)=>s+invLineTotal(it),0);
+    return `
+      <tr><td colspan="6" style="background:#fdf3e7;padding:9px 14px;font-weight:800;color:#8A1538;font-size:12px">${g.ar}${g.en&&g.en!==g.ar?` / ${g.en}`:''}</td></tr>
+      ${groupItems.map(buildItemRow).join('')}
+      <tr><td colspan="5" style="text-align:left;padding:6px 14px;font-weight:700;color:#475569;font-size:11px">إجمالي الخدمة / Service Total</td><td style="padding:6px 14px;font-weight:800;color:#8A1538;font-size:12px" dir="ltr">${subtotal.toFixed(3)} QAR</td></tr>
+    `;
+  }).join('');
+  const generalRowsHtml = invGeneralItems.length > 0 ? `
+    ${invServiceGroups.length>0 ? `<tr><td colspan="6" style="background:#f1f5f9;padding:9px 14px;font-weight:800;color:#475569;font-size:12px">بنود عامة / General Items</td></tr>` : ''}
+    ${invGeneralItems.map(buildItemRow).join('')}
+  ` : '';
+  const rows = groupRowsHtml + generalRowsHtml;
+
+  const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">
+  <title>${invoiceNum}</title>
+  <style>
+    @page{size:A4;margin:8mm}
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}
+    body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#f0f2f5;padding:28px;color:#1e293b;font-size:13px}
+    .page{background:#fff;max-width:800px;margin:0 auto;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.1)}
+    /* Header */
+    .header{background:linear-gradient(135deg,#8A1538 0%,#3D0818 100%);padding:18px 30px;display:flex;justify-content:space-between;align-items:flex-start}
+    .brand h1{font-size:28px;font-weight:900;color:#fff}
+    .brand .tagline{font-size:11px;color:rgba(255,255,255,.6);margin-top:3px}
+    .inv-meta{text-align:left}
+    .inv-type-ar{font-size:13px;font-weight:700;color:rgba(255,255,255,.7);margin-bottom:2px}
+    .inv-type-en{font-size:13px;font-weight:700;color:rgba(255,255,255,.45);letter-spacing:.3px;margin-bottom:8px}
+    .inv-badge{display:inline-block;background:rgba(212,175,55,.2);border:1.5px solid rgba(212,175,55,.5);color:#D4AF37;font-size:14px;font-weight:900;padding:6px 18px;border-radius:999px;letter-spacing:.5px;font-family:monospace}
+    .inv-date{font-size:11px;color:rgba(255,255,255,.5);margin-top:6px;direction:rtl}
+    /* Info grid */
+    .info-section{padding:14px 30px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;background:#fafbfc;border-bottom:1px solid #e2e8f0}
+    .info-box{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px}
+    .info-box .lbl-ar{font-size:10px;font-weight:700;color:#8A1538;margin-bottom:1px}
+    .info-box .lbl-en{font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:.3px;margin-bottom:7px}
+    .info-box .val{font-size:13px;font-weight:700;color:#1e293b;line-height:1.5}
+    .info-box .sub{font-size:11px;color:#64748b;margin-top:3px}
+    .info-box .sub .label-ar{color:#475569}
+    .info-box .sub .label-en{color:#94a3b8;font-size:11px}
+    .name-label{font-size:10px;font-weight:600;color:#94a3b8;margin-bottom:3px}
+    /* Table */
+    .tbl-wrap{padding:14px 30px}
+    .tbl-header{display:flex;align-items:baseline;gap:6px;margin-bottom:10px}
+    .tbl-title-ar{font-size:12px;font-weight:700;color:#8A1538}
+    .tbl-title-en{font-size:12px;font-weight:600;color:#94a3b8}
+    table{width:100%;border-collapse:collapse;direction:rtl}
+    thead tr{background:#8A1538}
+    th{padding:10px 14px;font-size:10px;font-weight:700;color:rgba(255,255,255,.85);text-align:inherit;letter-spacing:.3px}
+    th .th-ar{display:block}
+    th .th-en{display:block;font-size:10px;color:rgba(255,255,255,.6);font-weight:600;margin-top:1px}
+    tbody tr:nth-child(even){background:#fafbfc}
+    tbody tr{border-bottom:1px solid #f1f5f9}
+    /* Totals */
+    .totals{margin:0 30px 14px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}
+    .tot-row{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #f1f5f9}
+    .tot-row:last-child{border-bottom:none}
+    .tot-lbl .ar{font-size:12px;color:#475569;font-weight:600}
+    .tot-lbl .en{font-size:12px;color:#94a3b8;font-weight:500}
+    .tot-amt{font-size:13px;font-weight:700;color:#1e293b;font-family:monospace;direction:ltr}
+    .grand-row{background:linear-gradient(135deg,#8A1538,#3D0818);padding:16px 20px;display:flex;justify-content:space-between;align-items:center}
+    .grand-lbl .ar{font-size:14px;font-weight:700;color:#fff}
+    .grand-lbl .en{font-size:14px;font-weight:600;color:rgba(255,255,255,.65);margin-top:2px}
+    .grand-amt{font-size:24px;font-weight:900;color:#D4AF37;font-family:monospace;direction:ltr}
+    /* Footer */
+    .footer{padding:10px 30px;text-align:center;background:#fafbfc;border-top:1px solid #e2e8f0}
+    .footer .f-ar{font-size:12px;color:#475569;font-weight:600;margin-bottom:3px}
+    .footer .f-en{font-size:12px;color:#94a3b8;font-weight:500}
+    @media print{body{background:#fff;padding:0}.page{box-shadow:none;border-radius:0;max-width:100%}}
+  </style></head><body>
+  <div class="page">
+
+    <!-- HEADER -->
+    <div class="header">
+      <div class="brand" style="text-align:center">
+        <div style="background:#fff;border-radius:8px;padding:6px 14px;display:inline-block"><img src="${window.location.origin}/logo-static.png" alt="SNDK" style="height:68px;display:block;margin:0 auto"/></div>
+        <div class="tagline" style="margin-top:6px;line-height:1.5">
+          <div>منصتك لخدمات السيارات</div>
+          <div style="direction:ltr">Your Platform for Car Services</div>
+        </div>
+      </div>
+      <div class="inv-meta">
+        <div class="inv-type-ar">فاتورة ضريبية</div>
+        <div class="inv-type-en">Tax Invoice</div>
+        <div class="inv-badge">${invoiceNum}</div>
+        <div class="inv-date">${dateAr} · ${dateEn}</div>
+      </div>
+    </div>
+
+    <!-- INFO BOXES -->
+    <div class="info-section">
+      <div class="info-box">
+        <div class="lbl-ar">بيانات العميل</div>
+        <div class="lbl-en">Customer Info</div>
+        <div class="name-label">الاسم / Name</div>
+        <div class="val">${profile?.full_name||'—'}</div>
+        ${profile?.phone_number?`<div class="sub"><span class="label-ar">الهاتف</span> <span class="label-en">Phone</span>: <span dir="ltr">+974 ${profile.phone_number}</span></div>`:''}
+      </div>
+      <div class="info-box">
+        <div class="lbl-ar">بيانات السيارة</div>
+        <div class="lbl-en">Vehicle Info</div>
+        <div class="sub" style="margin-bottom:4px"><span class="label-ar">النوع</span> <span class="label-en">Type</span>:</div>
+        <div class="val">${carTypeAr}${carTypeEn&&carTypeEn!==carTypeAr?` <span style="color:#64748b;font-weight:500">/ ${carTypeEn}</span>`:''}</div>
+        ${carCatAr?`<div class="sub"><span class="label-ar">الفئة</span> <span class="label-en">Category</span>: <strong>${carCatAr}${carCatEn&&carCatEn!==carCatAr?` / ${carCatEn}`:''}</strong></div>`:''}
+        ${car.production_year?`<div class="sub"><span class="label-ar">موديل</span> <span class="label-en">Model Year</span>: <strong>${car.production_year}</strong></div>`:''}
+        ${car.plate_number?`<div class="sub"><span class="label-ar">رقم اللوحة</span> <span class="label-en">Plate Number</span>: <strong>${car.plate_number}</strong></div>`:''}
+        ${car.chassis_number?`<div class="sub" style="font-family:monospace;font-size:10px"><span class="label-ar">رقم الشاصية</span> <span class="label-en">VIN</span>: ${car.chassis_number}</div>`:''}
+      </div>
+      <div class="info-box">
+        <div class="lbl-ar">أمر الشغل</div>
+        <div class="lbl-en">Job Card</div>
+        <div class="val" style="font-family:monospace">${jobCard.job_number||'—'}</div>
+        <div class="sub">
+          <span class="label-ar">تاريخ الإغلاق</span> <span class="label-en">Closed</span>:<br>
+          <span style="font-size:10px">${dateAr}</span><br>
+          <span style="font-size:10px;direction:ltr;display:block">${dateEn}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ITEMS TABLE -->
+    <div class="tbl-wrap">
+      <div class="tbl-header">
+        <span class="tbl-title-ar">تفاصيل الخدمات والقطع</span>
+        <span class="tbl-title-en">/ Services & Parts Detail</span>
+      </div>
+      <table>
+        <thead><tr>
+          <th style="width:32px">#</th>
+          <th><span class="th-ar">البند</span><span class="th-en">Item</span></th>
+          <th style="text-align:center;width:80px"><span class="th-ar">النوع</span><span class="th-en">Type</span></th>
+          <th style="text-align:center;width:50px"><span class="th-ar">الكمية</span><span class="th-en">Qty</span></th>
+          <th style="text-align:left;width:110px"><span class="th-ar">سعر الوحدة</span><span class="th-en">Unit Price</span></th>
+          <th style="text-align:left;width:110px"><span class="th-ar">الإجمالي</span><span class="th-en">Total</span></th>
+        </tr></thead>
+        <tbody>${rows||`<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px">لا توجد بنود / No items</td></tr>`}</tbody>
+      </table>
+    </div>
+
+    <!-- TOTALS -->
+    <div class="totals">
+      ${totalParts>0?`<div class="tot-row">
+        <div class="tot-lbl"><div class="ar">إجمالي قطع الغيار</div><div class="en">Parts Subtotal</div></div>
+        <div class="tot-amt">${totalParts.toFixed(3)} QAR</div>
+      </div>`:''}
+      ${totalLabor>0?`<div class="tot-row">
+        <div class="tot-lbl"><div class="ar">إجمالي أجور العمالة</div><div class="en">Labor Subtotal</div></div>
+        <div class="tot-amt">${totalLabor.toFixed(3)} QAR</div>
+      </div>`:''}
+      <div class="grand-row">
+        <div class="grand-lbl">
+          <div class="ar">الإجمالي الكلي</div>
+          <div class="en">Grand Total</div>
+        </div>
+        <div class="grand-amt">${grandTotal.toFixed(3)} QAR</div>
+      </div>
+    </div>
+
+    ${rejectedNames.length > 0 ? `
+    <!-- REJECTED SERVICES NOTE -->
+    <div style="margin:0 30px 24px;padding:14px 16px;background:#fef2f2;border:1.5px solid #fecaca;border-radius:8px;font-size:11px;color:#991b1b;font-weight:700;line-height:1.8">
+      ${rejectedNames.map(n=>`⚠️ رفض العميل إصلاح "${n.ar}"<br><span style="font-weight:600;color:#b91c1c">Customer declined repair of "${n.en}"</span>`).join('<hr style="border:none;border-top:1px dashed #fecaca;margin:8px 0">')}
+    </div>` : ''}
+
+    <!-- COMPANY STAMP -->
+    <div style="margin:0 30px 10px;text-align:left">
+      <img src="${window.location.origin}/company-stamp.jpg" alt="SNDK Stamp" style="width:180px;height:180px;object-fit:contain;display:inline-block"/>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="footer">
+      <div class="f-ar">هذه فاتورة ضريبية رسمية صادرة عن سندك — قطر</div>
+      <div class="f-en">This is an official tax invoice issued by SNDK — Qatar</div>
+      <div style="margin-top:6px;font-size:10px;color:#cbd5e1">شكراً لثقتكم بنا · Thank you for your trust</div>
+    </div>
+  </div>
+  <script>window.onload=()=>window.print();</script>
+  </body></html>`;
+  const w = window.open('','_blank');
   if (w) { w.document.write(html); w.document.close(); }
 }
 
@@ -1570,7 +1827,14 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   const [loading, setLoading]   = useState(true);
   const [cancellingId, setCancellingId] = useState(null);
   const [openVideoId, setOpenVideoId] = useState(null);
+  const [carBrandsRef, setCarBrandsRef] = useState([]);
+  const [carCatsRef, setCarCatsRef]     = useState([]);
   const seenIdsRef = useRef(new Set());
+
+  useEffect(() => {
+    supabase.from('car_brands').select('id,name_ar,name_en').then(({ data }) => setCarBrandsRef(data || []));
+    supabase.from('car_categories').select('id,name_ar,name_en').then(({ data }) => setCarCatsRef(data || []));
+  }, []);
 
   const APPT_ST = {
     pending:     { label:tr.apptPending,     bg:'rgba(138,21,56,0.18)',   text:'#8A1538' },
@@ -1591,7 +1855,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   const loadData = async () => {
     if (!user) { setLoading(false); return; }
     const { data: apptData } = await supabase.from('appointments')
-      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number), job_cards(id, job_number, job_status, status_history, invoice_ready, customer_complaints, work_done, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos)')
+      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos)')
       .eq('profile_id', user.id)
       .order('appointment_date', { ascending: false });
     setAppts(apptData || []);
@@ -2114,7 +2378,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             const remaining = gt - paid;
                             if (remaining > 0.001) return null;
                             return (
-                              <button onClick={() => openQuotationPDF(relOrd, a, profile, jc, 'invoice')}
+                              <button onClick={() => printCustomerInvoice(jc, a, relOrd, profile, carBrandsRef, carCatsRef)}
                                 className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
                                 style={{ background:'rgba(34,197,94,0.15)', border:'1px solid rgba(34,197,94,0.35)', color:'#16a34a' }}>
                                 <FileImage size={14}/>{isRtl ? 'عرض الفاتورة' : 'View Invoice'}
