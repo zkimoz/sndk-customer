@@ -1292,7 +1292,8 @@ function SignatureModal({ isRtl, theme, onConfirm, onClose }) {
   );
 }
 
-function openQuotationPDF(order, linked, profile, jobCard) {
+function openQuotationPDF(order, linked, profile, jobCard, mode = 'jobcard') {
+  const isInvoice = mode === 'invoice';
   const isApproved = !!order.customer_approved;
   const approvalDate = order.approved_at
     ? new Date(order.approved_at).toLocaleString('ar-QA', { dateStyle:'long', timeStyle:'short' }) : '';
@@ -1331,9 +1332,9 @@ function openQuotationPDF(order, linked, profile, jobCard) {
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<title>أمر الشغل – SNDK Job Card</title>
+<title>${isInvoice ? 'فاتورة – SNDK Invoice' : 'أمر الشغل – SNDK Job Card'}</title>
 <style>
-  *{margin:0;padding:0;box-sizing:border-box}
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}
   body{font-family:Arial,sans-serif;background:#fff;color:#1a1a1a;padding:24px;max-width:820px;margin:0 auto}
   .print-btn{position:fixed;top:14px;right:14px;background:#8A1538;color:#fff;border:none;padding:10px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;z-index:999;box-shadow:0 2px 8px rgba(0,0,0,0.2)}
   @media print{.print-btn{display:none}body{padding:0}}
@@ -1385,9 +1386,9 @@ function openQuotationPDF(order, linked, profile, jobCard) {
     </div>
   </div>
   <div class="doc-info">
-    <div class="doc-title-ar">أمر الشغل / Job Card</div>
-    <div class="doc-title-en">Work Order</div>
-    ${jobCard?.job_number ? `<div class="doc-num">${jobCard.job_number}</div>` : ''}
+    <div class="doc-title-ar">${isInvoice ? 'فاتورة ضريبية' : 'أمر الشغل'} / ${isInvoice ? 'Tax Invoice' : 'Job Card'}</div>
+    <div class="doc-title-en">${isInvoice ? '' : 'Work Order'}</div>
+    ${jobCard?.job_number ? `<div class="doc-num">${isInvoice ? 'INV-' : ''}${jobCard.job_number}</div>` : ''}
     <div style="font-size:11px;color:#999;margin-top:3px">${linked?.appointment_date || '—'}</div>
   </div>
 </div>
@@ -1410,7 +1411,7 @@ function openQuotationPDF(order, linked, profile, jobCard) {
   ${serviceLabel ? `<div class="field" style="margin-top:8px"><div class="field-label">الخدمة / Service</div><div class="field-value">${serviceLabel}</div></div>` : ''}
 </div>
 
-${(jobCard?.mileage_in || jobCard?.mileage_out) ? `
+${(!isInvoice && (jobCard?.mileage_in || jobCard?.mileage_out)) ? `
 <div class="section">
   <div class="section-title">العداد / Mileage</div>
   <div class="grid2">
@@ -1419,13 +1420,13 @@ ${(jobCard?.mileage_in || jobCard?.mileage_out) ? `
   </div>
 </div>` : ''}
 
-${jobCard?.customer_complaints ? `
+${(!isInvoice && jobCard?.customer_complaints) ? `
 <div class="section">
   <div class="section-title">ملاحظات العميل / Customer Complaints</div>
   <div class="textarea-field">${jobCard.customer_complaints}</div>
 </div>` : ''}
 
-${jobCard?.work_done ? `
+${(!isInvoice && jobCard?.work_done) ? `
 <div class="section">
   <div class="section-title">الأعمال المنجزة / Work Done</div>
   <div class="textarea-field">${jobCard.work_done}</div>
@@ -1433,7 +1434,7 @@ ${jobCard?.work_done ? `
 
 ${(partItems.length > 0 || laborItems.length > 0) ? `
 <div class="section">
-  <div class="section-title">${decided ? 'عرض السعر المعتمد / Approved Quotation' : 'عرض السعر / Quotation'}</div>
+  <div class="section-title">${isInvoice ? 'تفاصيل الخدمات والقطع / Services & Parts Detail' : decided ? 'عرض السعر المعتمد / Approved Quotation' : 'عرض السعر / Quotation'}</div>
   <table>
     <thead><tr>
       <th style="width:30px">#</th>
@@ -1534,6 +1535,11 @@ ${isApproved ? `
   </div>` : ''}
 </div>` : `
 <div class="pending-box">⏳ بانتظار موافقة العميل / Pending Customer Approval</div>`}
+
+${isInvoice ? `
+<div style="margin-top:16px;text-align:left">
+  <img src="${window.location.origin}/company-stamp.jpg" alt="SNDK Stamp" style="width:150px;height:150px;object-fit:contain;display:inline-block"/>
+</div>` : ''}
 
 <div class="footer">
   <span>سندك — قطر / SNDK — Qatar</span>
@@ -2108,7 +2114,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             const remaining = gt - paid;
                             if (remaining > 0.001) return null;
                             return (
-                              <button onClick={() => openQuotationPDF(relOrd, a, profile, jc)}
+                              <button onClick={() => openQuotationPDF(relOrd, a, profile, jc, 'invoice')}
                                 className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
                                 style={{ background:'rgba(34,197,94,0.15)', border:'1px solid rgba(34,197,94,0.35)', color:'#16a34a' }}>
                                 <FileImage size={14}/>{isRtl ? 'عرض الفاتورة' : 'View Invoice'}
@@ -2181,13 +2187,25 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                         // Once covered, show what parts actually cost (i.e. what was paid) — never 0.
                         // Only show the remaining balance while a partial payment is outstanding.
                         const partsDisplayAmount = partsIsPartial ? partsRemaining : partsTotal;
+                        // The status flags (parts_payment_status/labor_payment_status) can lag behind
+                        // reality (e.g. a payment recorded manually without flipping the flag) — trust
+                        // the actual money recorded first, falling back to the flag otherwise. Anything
+                        // paid beyond the parts total is credited toward labor (parts is always settled first).
+                        const partsEffectiveStatus = partsCoveredByPayments ? 'paid' : (relOrd.parts_payment_status || 'unpaid');
+                        const paidTowardLabor = Math.max(paidSoFar - partsTotal, 0);
+                        const laborCoveredByPayments = paidTowardLabor >= laborTotal - 0.001;
+                        const laborRemaining = Math.max(laborTotal - paidTowardLabor, 0);
+                        const laborIsPartial = paidTowardLabor > 0.001 && !laborCoveredByPayments;
+                        const laborDisplayAmount = laborIsPartial ? laborRemaining : laborTotal;
+                        const laborEffectiveStatus = laborCoveredByPayments ? 'paid' : (relOrd.labor_payment_status || 'unpaid');
+                        const partsSettled = partsCoveredByPayments || relOrd.parts_payment_status === 'paid';
                         return (
                         <div style={{ borderTop:`1px solid ${C.border}` }}>
                           {partsTotal > 0 && (
                             <PaymentRow
                               label={(isRtl ? 'قطع الغيار' : 'Parts') + (partsIsPartial ? (isRtl ? ' (المتبقي)' : ' (Remaining)') : '')}
                               amount={partsDisplayAmount}
-                              status={relOrd.parts_payment_status || 'unpaid'}
+                              status={partsEffectiveStatus}
                               canPay={relOrd.customer_approved && relOrd.status !== 'draft' && !partsCoveredByPayments}
                               onPay={() => requestPayment(relOrd.id, 'parts')}
                               tr={tr} isRtl={isRtl} cc={cc}
@@ -2195,10 +2213,10 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           )}
                           {laborTotal > 0 && (
                             <PaymentRow
-                              label={isRtl ? 'شغل اليد' : 'Labor'}
-                              amount={laborTotal}
-                              status={relOrd.labor_payment_status || 'unpaid'}
-                              canPay={['ready','delivered','completed'].includes(relOrd.status) && (relOrd.parts_payment_status||'paid')==='paid'}
+                              label={(isRtl ? 'شغل اليد' : 'Labor') + (laborIsPartial ? (isRtl ? ' (المتبقي)' : ' (Remaining)') : '')}
+                              amount={laborDisplayAmount}
+                              status={laborEffectiveStatus}
+                              canPay={['ready','delivered','completed'].includes(relOrd.status) && partsSettled && !laborCoveredByPayments}
                               disabledHint={isRtl ? 'متاح بعد انتهاء الإصلاح ودفع القطع' : 'Available after repair & parts paid'}
                               onPay={() => requestPayment(relOrd.id, 'labor')}
                               tr={tr} isRtl={isRtl} cc={cc}
