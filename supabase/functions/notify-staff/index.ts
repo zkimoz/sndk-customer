@@ -69,20 +69,20 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "unknown event" }), { status: 400 });
     }
 
-    // Report Resend's actual per-email response, not just whether the network call
-    // completed — a fulfilled fetch() can still carry a 4xx rejection from Resend
-    // (e.g. sandbox mode only allowing delivery to the account owner's own address).
-    const results = await Promise.all(
-      recipients.map(async (email: string) => {
-        const resp = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ from: FROM_EMAIL, to: email, subject, html }),
-        });
-        const body = await resp.text();
-        return { email, ok: resp.ok, status: resp.status, body };
-      })
-    );
+    // Sent one at a time (not Promise.all) — Resend's free tier caps at 2 requests/sec,
+    // and firing every recipient concurrently was tripping that limit. Also reports each
+    // email's actual response rather than just whether the network call completed.
+    const results: { email: string; ok: boolean; status: number; body: string }[] = [];
+    for (const email of recipients) {
+      const resp = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ from: FROM_EMAIL, to: email, subject, html }),
+      });
+      const body = await resp.text();
+      results.push({ email, ok: resp.ok, status: resp.status, body });
+      await new Promise((r) => setTimeout(r, 550));
+    }
     const sent = results.filter((r) => r.ok).length;
     return new Response(JSON.stringify({ sent, results }), {
       headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
