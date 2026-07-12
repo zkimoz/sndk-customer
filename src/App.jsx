@@ -545,6 +545,11 @@ const BOOKING_YEAR_OPTIONS = (() => {
   return Array.from({ length: yr - 1930 + 1 }, (_, i) => yr - i);
 })();
 
+// Registration-image storage keys are named after the car's plate number so
+// staff and the customer both land on the exact same file — strip anything
+// that isn't safe in a storage path (spaces, slashes, etc).
+const sanitizeForPath = s => (s || '').trim().replace(/[/\\?#]+/g, '-').replace(/\s+/g, '_');
+
 const sortByEn = arr => [...arr].sort((a, b) =>
   (a.name_en || a.name_ar || '').localeCompare(b.name_en || b.name_ar || '', 'en', { sensitivity: 'base' })
 );
@@ -3106,10 +3111,11 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
     let registration_image_url = null;
     if (registrationFile) {
       const ext = registrationFile.name.split('.').pop();
-      const path = `${user.id}/${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('car-registrations').upload(path, registrationFile, { upsert: true });
+      const plateKey = sanitizeForPath(carForm.plate_number) || `${user.id}_${Date.now()}`;
+      const path = `${plateKey}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('car-registration').upload(path, registrationFile, { upsert: true });
       if (!upErr) {
-        const { data: { publicUrl } } = supabase.storage.from('car-registrations').getPublicUrl(path);
+        const { data: { publicUrl } } = supabase.storage.from('car-registration').getPublicUrl(path);
         registration_image_url = publicUrl;
       }
     }
@@ -3175,11 +3181,11 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
     let registration_image_url = editCarForm.registration_image_url;
     if (registrationEditFile) {
       const ext = registrationEditFile.name.split('.').pop();
-      const path = `${user.id}/${carId}.${ext}`;
+      const path = `${sanitizeForPath(editCarForm.plate_number)}.${ext}`;
       const { error: upErr } = await supabase.storage
-        .from('car-registrations').upload(path, registrationEditFile, { upsert: true });
+        .from('car-registration').upload(path, registrationEditFile, { upsert: true });
       if (!upErr) {
-        const { data: { publicUrl } } = supabase.storage.from('car-registrations').getPublicUrl(path);
+        const { data: { publicUrl } } = supabase.storage.from('car-registration').getPublicUrl(path);
         registration_image_url = publicUrl;
       }
     }
@@ -3630,11 +3636,20 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                         );
                       })() : (
                       <>
-                      <div className="px-4 py-2.5 flex items-center justify-between">
+                      <div className="px-4 py-2.5 flex items-center justify-between gap-2">
                         <p className="text-xs font-bold tracking-widest uppercase" style={{ color:`${C.gold}80` }}>{tr.myHistory}</p>
-                        <button onClick={()=>onBook(car)} className="text-xs font-bold px-3 py-1.5 rounded-lg transition-all" style={{ background:`${C.gold}20`, color:C.gold }}>
-                          + {tr.bookNow}
-                        </button>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {car.registration_image_url && (
+                            <a href={car.registration_image_url} target="_blank" rel="noreferrer"
+                              onClick={e=>e.stopPropagation()}
+                              className="text-xs font-bold px-3 py-1.5 rounded-lg transition-all" style={{ background:'rgba(255,255,255,0.08)', color:C.muted }}>
+                              {tr.prof_reg_view}
+                            </a>
+                          )}
+                          <button onClick={()=>onBook(car)} className="text-xs font-bold px-3 py-1.5 rounded-lg transition-all" style={{ background:`${C.gold}20`, color:C.gold }}>
+                            + {tr.bookNow}
+                          </button>
+                        </div>
                       </div>
                       {carHistory && carHistory.length > 0 && (() => {
                         const currentYear = new Date().getFullYear();
