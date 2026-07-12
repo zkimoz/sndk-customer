@@ -2032,6 +2032,14 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
       : o
     ));
     setSigModal({ open:false, orderId:null });
+
+    if (isApproved) {
+      const linkedAppt = appts.find(a => a.id === order.appointment_id);
+      const jobNumber = linkedAppt?.job_cards?.[0]?.job_number;
+      supabase.functions.invoke('notify-staff', {
+        body: { event: 'quotation_approved', jobNumber, customerName: profile?.full_name },
+      }).catch(() => {});
+    }
   };
 
   const cancelAppt = async (appt) => {
@@ -4036,6 +4044,14 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
         }]);
         if (error) throw error;
       }
+      const serviceLabel = cart.length > 0 ? cart.map(s => s.name).join(' · ') : (formData.serviceName || '');
+      supabase.functions.invoke('notify-staff', {
+        body: {
+          event: 'new_booking',
+          customerName: user ? (profile?.full_name || formData.name) : formData.name,
+          serviceLabel, appointmentDate: formData.date, appointmentTime: formData.timeKey,
+        },
+      }).catch(() => {});
       setStep(5);
     } catch(err) { alert(tr.errorMsg + ': ' + err.message); }
     finally { setLoading(false); }
