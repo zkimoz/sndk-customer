@@ -69,17 +69,22 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "unknown event" }), { status: 400 });
     }
 
-    const results = await Promise.allSettled(
-      recipients.map((email: string) =>
-        fetch("https://api.resend.com/emails", {
+    // Report Resend's actual per-email response, not just whether the network call
+    // completed — a fulfilled fetch() can still carry a 4xx rejection from Resend
+    // (e.g. sandbox mode only allowing delivery to the account owner's own address).
+    const results = await Promise.all(
+      recipients.map(async (email: string) => {
+        const resp = await fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({ from: FROM_EMAIL, to: email, subject, html }),
-        })
-      )
+        });
+        const body = await resp.text();
+        return { email, ok: resp.ok, status: resp.status, body };
+      })
     );
-    const sent = results.filter((r) => r.status === "fulfilled").length;
-    return new Response(JSON.stringify({ sent }), {
+    const sent = results.filter((r) => r.ok).length;
+    return new Response(JSON.stringify({ sent, results }), {
       headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
     });
   } catch (e) {
