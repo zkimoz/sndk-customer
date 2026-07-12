@@ -2967,7 +2967,11 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
   useEffect(() => { loadWallet(); }, [user]);
 
   const walletBalance = walletTxns.filter(w => w.status === 'confirmed').reduce((s, w) => s + Number(w.amount || 0), 0);
-  const pendingTopups  = walletTxns.filter(w => w.status === 'pending');
+  // Only top-up requests the customer made are shown as "pending" here — a pending
+  // overpayment credit isn't something the customer needs to act on, it just settles
+  // itself automatically once the job card closes.
+  const pendingTopups  = walletTxns.filter(w => w.status === 'pending' && w.type === 'topup');
+  const pendingOverpaymentTotal = walletTxns.filter(w => w.status === 'pending' && w.type === 'overpayment_credit').reduce((s,w)=>s+Number(w.amount||0),0);
 
   const requestTopup = async () => {
     const amt = Number(topupAmt);
@@ -3194,6 +3198,11 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
             <div>
               <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color:CARD_BG_CYCLE[1].sub }}>{isRtl?'رصيد المحفظة':'Wallet Balance'}</p>
               <p className="text-xl font-black" style={{ color:C.gold }}>{walletBalance.toFixed(3)} {isRtl?'ر.ق':'QAR'}</p>
+              {pendingOverpaymentTotal > 0.001 && (
+                <p className="text-[10px] font-bold mt-0.5" style={{ color:C.gold, opacity:0.75 }}>
+                  {isRtl ? `+ ${pendingOverpaymentTotal.toFixed(3)} ر.ق زيادة دفع هتضاف بعد إغلاق أمر الشغل` : `+ ${pendingOverpaymentTotal.toFixed(3)} QAR overpayment, added when the job card closes`}
+                </p>
+              )}
             </div>
           </div>
           <button onClick={()=>setShowTopup(p=>!p)}
