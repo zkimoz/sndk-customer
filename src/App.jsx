@@ -2038,13 +2038,12 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
       const jobNumber = linkedAppt?.job_cards?.[0]?.job_number;
       // 'clever-endpoint' is the notify-staff Edge Function's actual deployed slug
       // (auto-assigned by the Supabase dashboard's "Via Editor" flow, doesn't match its display name).
-      // Awaited + logged (not fire-and-forget) so a failure is visible in devtools.
-      try {
-        const { error: notifyErr } = await supabase.functions.invoke('clever-endpoint', {
-          body: { event: 'quotation_approved', jobNumber, customerName: profile?.full_name },
-        });
-        if (notifyErr) console.error('notify-staff failed:', notifyErr);
-      } catch (notifyErr) { console.error('notify-staff failed:', notifyErr); }
+      // Fire-and-forget — approving the quotation must never hang or fail because a
+      // staff notification is slow/broken. Still logged, not silently swallowed.
+      supabase.functions.invoke('clever-endpoint', {
+        body: { event: 'quotation_approved', jobNumber, customerName: profile?.full_name },
+      }).then(({ error: notifyErr }) => { if (notifyErr) console.error('notify-staff failed:', notifyErr); })
+        .catch((notifyErr) => console.error('notify-staff failed:', notifyErr));
     }
   };
 
@@ -4051,19 +4050,17 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
         if (error) throw error;
       }
       const serviceLabel = cart.length > 0 ? cart.map(s => s.name).join(' · ') : (formData.serviceName || '');
-      // Awaited (not fire-and-forget) so the booking is fully in-flight before we
-      // navigate away, and logged instead of silently swallowed so a failure is
-      // actually visible in devtools instead of vanishing without a trace.
-      try {
-        const { error: notifyErr } = await supabase.functions.invoke('clever-endpoint', {
-          body: {
-            event: 'new_booking',
-            customerName: user ? (profile?.full_name || formData.name) : formData.name,
-            serviceLabel, appointmentDate: formData.date, appointmentTime: formData.timeKey,
-          },
-        });
-        if (notifyErr) console.error('notify-staff failed:', notifyErr);
-      } catch (notifyErr) { console.error('notify-staff failed:', notifyErr); }
+      // Fire-and-forget — the booking itself must never hang or fail because a staff
+      // notification is slow/broken. Still logged (not silently swallowed) so a
+      // failure is visible in devtools instead of vanishing without a trace.
+      supabase.functions.invoke('clever-endpoint', {
+        body: {
+          event: 'new_booking',
+          customerName: user ? (profile?.full_name || formData.name) : formData.name,
+          serviceLabel, appointmentDate: formData.date, appointmentTime: formData.timeKey,
+        },
+      }).then(({ error: notifyErr }) => { if (notifyErr) console.error('notify-staff failed:', notifyErr); })
+        .catch((notifyErr) => console.error('notify-staff failed:', notifyErr));
       setStep(5);
     } catch(err) { alert(tr.errorMsg + ': ' + err.message); }
     finally { setLoading(false); }
