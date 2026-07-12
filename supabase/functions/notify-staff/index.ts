@@ -30,10 +30,19 @@ const wrap = (title: string, rows: [string, string][]) => `
   </div>
 </div>`;
 
+// supabase-js's functions.invoke() sends 'apikey' and 'x-client-info' headers by
+// default — omitting them here made the browser's CORS preflight reject the
+// request outright before it ever reached this function (curl/Node fetch calls
+// don't enforce CORS, which is why direct testing always looked fine).
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
-      headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, content-type" },
+      headers: CORS_HEADERS,
     });
   }
 
@@ -47,7 +56,11 @@ serve(async (req) => {
       .not("email", "is", null);
 
     const recipients = [...new Set([...DEPARTMENT_EMAILS, ...(staffList || []).map((s: { email: string }) => s.email)])];
-    if (!recipients.length) return new Response(JSON.stringify({ sent: 0 }), { status: 200 });
+    if (!recipients.length) {
+      return new Response(JSON.stringify({ sent: 0 }), {
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+      });
+    }
 
     let subject = "";
     let html = "";
@@ -66,7 +79,10 @@ serve(async (req) => {
         ["الوقت", appointmentTime],
       ]);
     } else {
-      return new Response(JSON.stringify({ error: "unknown event" }), { status: 400 });
+      return new Response(JSON.stringify({ error: "unknown event" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+      });
     }
 
     // Sent one at a time (not Promise.all) — Resend's free tier caps at 2 requests/sec,
@@ -85,9 +101,12 @@ serve(async (req) => {
     }
     const sent = results.filter((r) => r.ok).length;
     return new Response(JSON.stringify({ sent, results }), {
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      headers: { "Content-Type": "application/json", ...CORS_HEADERS },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e) }), { status: 500 });
+    return new Response(JSON.stringify({ error: String(e) }), {
+      status: 500,
+      headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+    });
   }
 });
