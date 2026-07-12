@@ -2581,7 +2581,7 @@ function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, service
       <div className="relative rounded-2xl overflow-hidden p-6 md:p-8 min-h-[150px] md:min-h-[190px] flex flex-col justify-between"
         style={{
           ...(!ann?.video_url && ann?.image_url
-            ? { backgroundImage:`url(${ann.image_url})`, backgroundSize:'cover', backgroundPosition:'center' }
+            ? { backgroundImage:`url(${ann.image_url})`, backgroundSize:'cover', backgroundPosition:`${ann.image_pos_x??50}% ${ann.image_pos_y??50}%` }
             : { background: ann?.video_url ? '#000' : (annStyle ? annStyle.bg : C.heroBg) }),
           border: `1px solid ${annStyle ? 'rgba(255,255,255,0.18)' : `${C.gold}30`}`,
           boxShadow: `0 0 48px ${annStyle ? annStyle.shadow : C.heroShadow}`,
