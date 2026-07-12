@@ -21,7 +21,7 @@ const supabase = createClient(
 // Every email is bilingual (Modern Standard Arabic + English) with both
 // languages rendered at the same font size — labels and titles are passed
 // pre-combined as "العربية / English" strings by the caller.
-const wrap = (title: string, rows: [string, string][]) => `
+const wrap = (title: string, rows: [string, string][], note?: string) => `
 <div dir="rtl" style="font-family:Arial,sans-serif;background:#f8fafc;padding:24px">
   <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0">
     <div style="background:#8A1538;padding:18px 22px">
@@ -33,6 +33,7 @@ const wrap = (title: string, rows: [string, string][]) => `
           <span style="font-size:12px;color:#94a3b8;font-weight:700">${label}</span>
           <div style="font-size:14px;color:#1e293b;font-weight:600;margin-top:2px">${value || "—"}</div>
         </div>`).join("")}
+      ${note ? `<div style="margin-top:14px;padding:14px 16px;background:#fdf3e7;border-radius:8px;font-size:14px;line-height:1.9;color:#1e293b">${note}</div>` : ""}
     </div>
     <div style="padding:12px 22px;background:#fafbfc;text-align:center;font-size:10px;color:#94a3b8">سندك — قطر · SNDK Qatar</div>
   </div>
@@ -59,7 +60,7 @@ serve(async (req) => {
   try {
     const {
       event, jobNumber, customerName, serviceLabel, appointmentDate, appointmentTime,
-      customerId, statusLabelAr, statusLabelEn,
+      customerId, statusLabelAr, statusLabelEn, invoicePdfBase64, invoiceFilename,
     } = await req.json();
 
     let recipients: string[] = [];
@@ -97,10 +98,16 @@ serve(async (req) => {
         ]);
       } else if (event === "job_closed") {
         subject = bi(`✅ سيارتك جاهزة للاستلام — ${jobNumber || ""}`, `Your car is ready for pickup — ${jobNumber || ""}`);
+        const thankYouNote = `
+          شكراً لاختيارك سندك! يسعدنا دائماً أن نكون في خدمتك، وسنظل بجانبك في أي وقت تحتاج فيه إلى رعاية سيارتك.
+          <br><br>
+          Thank you for choosing SNDK! We are always glad to serve you, and we will remain at your service anytime your car needs care.
+          ${invoicePdfBase64 ? `<br><br><strong>🧾 الفاتورة الضريبية مرفقة بهذا البريد.<br>The tax invoice is attached to this email.</strong>` : ""}
+        `;
         html = wrap(bi("تم إغلاق أمر الشغل — السيارة جاهزة", "Job Card Closed — Car Ready"), [
           [bi("العميل", "Customer"), name],
           [bi("رقم أمر الشغل", "Job Number"), jobNumber],
-        ]);
+        ], thankYouNote);
       } else if (event === "resignature_requested") {
         subject = bi(`✍️ مطلوب توقيعك مرة أخرى — ${jobNumber || ""}`, `We need your signature again — ${jobNumber || ""}`);
         html = wrap(bi("مطلوب توقيع جديد على عرض السعر", "New Signature Required"), [
@@ -154,12 +161,15 @@ serve(async (req) => {
     // and firing every recipient concurrently was tripping that limit. Also reports each
     // email's actual response rather than just whether the network call completed.
     const fromAddress = CUSTOMER_EVENTS.has(event) ? CUSTOMER_FROM_EMAIL : FROM_EMAIL;
+    const attachments = invoicePdfBase64
+      ? [{ filename: invoiceFilename || "invoice.pdf", content: invoicePdfBase64 }]
+      : undefined;
     const results: { email: string; ok: boolean; status: number; body: string }[] = [];
     for (const email of recipients) {
       const resp = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ from: fromAddress, to: email, subject, html }),
+        body: JSON.stringify({ from: fromAddress, to: email, subject, html, ...(attachments ? { attachments } : {}) }),
       });
       const body = await resp.text();
       results.push({ email, ok: resp.ok, status: resp.status, body });
