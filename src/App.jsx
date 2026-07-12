@@ -555,6 +555,61 @@ const catLabel = (c, lang) => lang === 'en'
   ? (c.name_en || c.name_ar || '')
   : (c.name_en && c.name_ar ? `${c.name_en} · ${c.name_ar}` : (c.name_ar || c.name_en || ''));
 
+// Searchable car-brand picker — the customer can type in Arabic or English
+// regardless of which language the site is currently displayed in, since
+// brand names are matched against both name_ar and name_en at once.
+function BrandSearchSelect({ value, onSelect, brands, lang, placeholder, disabled }) {
+  const [query, setQuery]   = useState('');
+  const [open, setOpen]     = useState(false);
+  const wrapRef             = useRef(null);
+  const isRtl = lang === 'ar';
+
+  useEffect(() => {
+    const onOutside = e => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onOutside);
+    return () => document.removeEventListener('mousedown', onOutside);
+  }, []);
+
+  const selectedBrand = brands.find(b => (b.name_ar||b.name_en) === value);
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? sortByEn(brands).filter(b => (b.name_ar||'').toLowerCase().includes(q) || (b.name_en||'').toLowerCase().includes(q))
+    : sortByEn(brands);
+
+  return (
+    <div className="relative" ref={wrapRef}>
+      <div className="relative">
+        <input
+          value={open ? query : (selectedBrand ? brandLabel(selectedBrand, lang) : '')}
+          onChange={e => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => { setQuery(''); setOpen(true); }}
+          placeholder={placeholder}
+          disabled={disabled}
+          dir="auto"
+          className={`${C.inputCls} ${C.phCls}`}
+          style={{ background:C.input, border:`1px solid ${C.border}`, opacity: disabled?0.4:1, paddingInlineEnd:'2.5rem' }}
+          onBlurCapture={e=>e.target.style.borderColor=C.border}
+        />
+        <Search size={15} className="absolute top-1/2 -translate-y-1/2 pointer-events-none" style={{ [isRtl?'left':'right']:'14px', color:C.muted }}/>
+      </div>
+      {open && !disabled && (
+        <div className="absolute z-20 mt-1.5 w-full rounded-xl overflow-hidden max-h-56 overflow-y-auto shadow-lg" style={{ background:C.input, border:`1px solid ${C.border}` }}>
+          {filtered.length === 0 ? (
+            <div className="px-4 py-3 text-sm" style={{ color:C.muted }}>{isRtl?'لا توجد نتائج':'No results'}</div>
+          ) : filtered.map(b => (
+            <button key={b.id} type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => { onSelect(b); setQuery(''); setOpen(false); }}
+              className="w-full text-start px-4 py-2.5 text-sm hover:bg-white/10 transition-colors" style={{ color:C.text }}>
+              {brandLabel(b, lang)}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const DARK_THEME = {
   bg:'#111111', panel:'#1A1A1A', card:'#FFCB74', cardText:'#1C1300', cardMuted:'rgba(28,19,0,0.62)', input:'#3A3A3A',
   border:'rgba(255,203,116,0.18)', borderFocus:'rgba(255,203,116,0.70)',
@@ -3369,19 +3424,12 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
               <label className="block text-[10px] font-bold tracking-widest uppercase mb-1" style={{ color:`${C.gold}80` }}>
                 {tr.prof_car_type} <span style={{ color:'#f87171' }}>*</span>
               </label>
-              <select value={carForm.car_type}
-                onChange={e => {
-                  const brand = carBrands.find(b => (b.name_ar||b.name_en) === e.target.value);
-                  setCarForm(f => ({ ...f, car_type: e.target.value, car_brand_id: brand?.id || null, car_category: '' }));
-                }}
-                className={`w-full px-3 py-2.5 rounded-xl text-sm ${C.selectCls} outline-none transition-all appearance-none cursor-pointer`}
-                style={{ background:C.input, border:`1px solid ${C.border}` }}
-                onFocus={e=>e.target.style.borderColor=C.borderFocus}
-                onBlur={e=>e.target.style.borderColor=C.border}>
-                <option value="">{lang==='ar'?'اختر النوع':'Select Brand'}</option>
-                {sortByEn(carBrands.length > 0 ? carBrands : CAR_BRANDS.map(b => ({ id:b.key, name_ar:b.ar, name_en:b.en })))
-                  .map(b => { const v=b.name_ar||b.name_en; return <option key={b.id} value={v}>{brandLabel(b, lang)}</option>; })}
-              </select>
+              <BrandSearchSelect
+                value={carForm.car_type}
+                onSelect={brand => setCarForm(f => ({ ...f, car_type: brand.name_ar||brand.name_en, car_brand_id: brand.id, car_category: '' }))}
+                brands={carBrands.length > 0 ? carBrands : CAR_BRANDS.map(b => ({ id:b.key, name_ar:b.ar, name_en:b.en }))}
+                lang={lang} placeholder={lang==='ar'?'اختر النوع':'Select Brand'}
+              />
             </div>
             {/* Category dropdown - filtered by brand */}
             <div>
@@ -3502,16 +3550,11 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                           <div className="p-4 space-y-3">
                             <p className="text-xs font-bold tracking-widest uppercase" style={{ color:`${C.gold}80` }}>{tr.prof_edit_car}</p>
                             {/* Brand */}
-                            <select value={editCarForm.car_type}
-                              onChange={e => {
-                                const b = carBrands.find(br => (br.name_ar||br.name_en) === e.target.value);
-                                setEditCarForm(f => ({ ...f, car_type: e.target.value, car_brand_id: b?.id || null, car_category: '' }));
-                              }}
-                              className="w-full px-3 py-2.5 rounded-xl text-sm outline-none appearance-none cursor-pointer"
-                              style={inputStyle} onFocus={e=>Object.assign(e.target.style,focusStyle)} onBlur={e=>e.target.style.borderColor=C.border}>
-                              <option value="">{isRtl?'اختر النوع':'Select Brand'}</option>
-                              {sortByEn(carBrands).map(b => { const v=b.name_ar||b.name_en; return <option key={b.id} value={v}>{brandLabel(b, lang)}</option>; })}
-                            </select>
+                            <BrandSearchSelect
+                              value={editCarForm.car_type}
+                              onSelect={brand => setEditCarForm(f => ({ ...f, car_type: brand.name_ar||brand.name_en, car_brand_id: brand.id, car_category: '' }))}
+                              brands={carBrands} lang={lang} placeholder={isRtl?'اختر النوع':'Select Brand'}
+                            />
                             {/* Category */}
                             <select value={editCarForm.car_category}
                               onChange={e => setEditCarForm(f => ({ ...f, car_category: e.target.value }))}
@@ -3836,16 +3879,12 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
   const carFields = (
     <>
       <Field label={tr.carBrand}>
-        <select value={formData.carBrandKey}
-          onChange={e => {
-            const brand = carBrands.find(b => (b.name_ar||b.name_en) === e.target.value);
-            setFormData(p => ({ ...p, carBrandKey: e.target.value, carBrandId: brand?.id || null, carCategoryKey: '' }));
-          }}
-          className={`${C.inputCls} appearance-none cursor-pointer`} style={{ background: C.input, border: `1px solid ${C.border}` }}>
-          <option value="">{tr.selectBrand}</option>
-          {sortByEn(carBrands.length > 0 ? carBrands : CAR_BRANDS.map(b => ({ id: b.key, name_ar: b.ar, name_en: b.en })))
-            .map(b => { const v=b.name_ar||b.name_en; return <option key={b.id} value={v}>{brandLabel(b, lang)}</option>; })}
-        </select>
+        <BrandSearchSelect
+          value={formData.carBrandKey}
+          onSelect={brand => setFormData(p => ({ ...p, carBrandKey: brand.name_ar||brand.name_en, carBrandId: brand.id, carCategoryKey: '' }))}
+          brands={carBrands.length > 0 ? carBrands : CAR_BRANDS.map(b => ({ id: b.key, name_ar: b.ar, name_en: b.en }))}
+          lang={lang} placeholder={tr.selectBrand}
+        />
       </Field>
       <Field label={tr.carCategory}>
         <select value={formData.carCategoryKey}
