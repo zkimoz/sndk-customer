@@ -4,6 +4,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")!;
 const FROM_EMAIL = Deno.env.get("NOTIFY_FROM_EMAIL") || "SNDK <onboarding@resend.dev>";
 
+// Always-notified department inboxes, in addition to any staff member who has
+// opted in individually via notify_email in الموظفين.
+const DEPARTMENT_EMAILS = ["info@sndkqa.com", "workshop@sndkqa.com", "customerservice@sndkqa.com"];
+
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -42,7 +46,8 @@ serve(async (req) => {
       .eq("notify_email", true)
       .not("email", "is", null);
 
-    if (!staffList?.length) return new Response(JSON.stringify({ sent: 0 }), { status: 200 });
+    const recipients = [...new Set([...DEPARTMENT_EMAILS, ...(staffList || []).map((s: { email: string }) => s.email)])];
+    if (!recipients.length) return new Response(JSON.stringify({ sent: 0 }), { status: 200 });
 
     let subject = "";
     let html = "";
@@ -65,11 +70,11 @@ serve(async (req) => {
     }
 
     const results = await Promise.allSettled(
-      staffList.map((s: { email: string }) =>
+      recipients.map((email: string) =>
         fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ from: FROM_EMAIL, to: s.email, subject, html }),
+          body: JSON.stringify({ from: FROM_EMAIL, to: email, subject, html }),
         })
       )
     );
