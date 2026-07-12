@@ -2036,7 +2036,9 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     if (isApproved) {
       const linkedAppt = appts.find(a => a.id === order.appointment_id);
       const jobNumber = linkedAppt?.job_cards?.[0]?.job_number;
-      supabase.functions.invoke('notify-staff', {
+      // 'clever-endpoint' is the notify-staff Edge Function's actual deployed slug
+      // (auto-assigned by the Supabase dashboard's "Via Editor" flow, doesn't match its display name).
+      supabase.functions.invoke('clever-endpoint', {
         body: { event: 'quotation_approved', jobNumber, customerName: profile?.full_name },
       }).catch(() => {});
     }
@@ -4045,7 +4047,7 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
         if (error) throw error;
       }
       const serviceLabel = cart.length > 0 ? cart.map(s => s.name).join(' · ') : (formData.serviceName || '');
-      supabase.functions.invoke('notify-staff', {
+      supabase.functions.invoke('clever-endpoint', {
         body: {
           event: 'new_booking',
           customerName: user ? (profile?.full_name || formData.name) : formData.name,
