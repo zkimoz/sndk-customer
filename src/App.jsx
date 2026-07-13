@@ -44,6 +44,7 @@ const T = {
     confirmEmailMsg:'تم إرسال رسالة تفعيل إلى بريدك الإلكتروني. يُرجى تفقّد صندوق الوارد، وفي حال عدم وصولها يُرجى التحقق من مجلد البريد غير المرغوب فيه (Junk / Spam).',
     emailConfirmedMsg:'تم تفعيل بريدك الإلكتروني بنجاح، مرحباً بك في سندك!',
     myAccount:'حسابي', authError:'خطأ في البريد أو كلمة المرور', phoneAlreadyUsed:'رقم الجوال هذا مسجل بحساب آخر بالفعل',
+    emailAlreadyUsed:'هذا البريد الإلكتروني مسجل بالفعل — يرجى إعادة تعيين كلمة المرور', resetPasswordCta:'إعادة تعيين كلمة المرور',
     forgotPw:'نسيت كلمة المرور؟',
     forgotTitle:'استرجاع كلمة المرور',
     forgotByEmail:'عن طريق الإيميل',
@@ -193,6 +194,7 @@ const T = {
     confirmEmailMsg:'A confirmation email has been sent to your inbox. Please check your inbox, and if you don’t see it, check your Junk/Spam folder.',
     emailConfirmedMsg:'Your email has been confirmed successfully — welcome to SNDK!',
     myAccount:'My Account', authError:'Invalid email or password', phoneAlreadyUsed:'This phone number is already registered to another account',
+    emailAlreadyUsed:'This email is already registered — please reset your password', resetPasswordCta:'Reset Password',
     forgotPw:'Forgot password?',
     forgotTitle:'Reset Password',
     forgotByEmail:'Via Email',
@@ -4319,11 +4321,12 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
   const [phoneVerified, setPhoneVerified] = useState(false);
   const [foundEmail, setFoundEmail] = useState('');
   const [showPw, setShowPw] = useState(false);
+  const [emailExists, setEmailExists] = useState(false);
   const isSignUp = mode === 'signup';
 
   const inp = { background:C.input, border:`1px solid ${C.border}`, color:C.text };
 
-  const goBack = () => { setIsForgot(false); setDone(false); setError(''); setPhoneVerified(false); setFoundEmail(''); setForgotPhone(''); setEmail(''); };
+  const goBack = () => { setIsForgot(false); setDone(false); setError(''); setEmailExists(false); setPhoneVerified(false); setFoundEmail(''); setForgotPhone(''); setEmail(''); };
 
   // ── forgot password submit ──
   const handleForgot = async e => {
@@ -4353,13 +4356,13 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
 
   // ── sign in / sign up submit ──
   const handleSubmit = async e => {
-    e.preventDefault(); setError(''); setLoading(true);
+    e.preventDefault(); setError(''); setEmailExists(false); setLoading(true);
     try {
       if (isSignUp) {
         const { data: phoneTaken, error:phoneCheckErr } = await supabase.rpc('phone_number_exists', { check_phone: phone, check_email: email });
         if (!phoneCheckErr && phoneTaken) throw new Error(tr.phoneAlreadyUsed);
 
-        const { error:signUpErr } = await supabase.auth.signUp({
+        const { data: signUpData, error:signUpErr } = await supabase.auth.signUp({
           email, password,
           options: { data: { full_name:fullName, phone_number:phone, language_preference:isRtl?'ar':'en' } },
         });
@@ -4368,6 +4371,14 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
           // email is still on its way, so treat this like a normal success.
           if (signUpErr.status === 429) { setDone(true); return; }
           throw signUpErr;
+        }
+        // Supabase deliberately doesn't error when the email is already
+        // registered (that would let an attacker enumerate accounts) — the
+        // documented signal instead is an empty `identities` array, meaning
+        // no new account was actually created.
+        if (signUpData?.user && signUpData.user.identities?.length === 0) {
+          setEmailExists(true);
+          throw new Error(tr.emailAlreadyUsed);
         }
         // The profile row itself is created server-side by a DB trigger from
         // the signup metadata above (it runs with elevated privileges, unlike
@@ -4467,7 +4478,17 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
                 </>
               )}
 
-              {error && <p className="text-sm text-center py-1 rounded-lg" style={{ color:'#f87171', background:'rgba(248,113,113,0.1)' }}>{error}</p>}
+              {error && (
+                <div className="text-center py-1 rounded-lg space-y-1.5" style={{ background:'rgba(248,113,113,0.1)' }}>
+                  <p className="text-sm px-2" style={{ color:'#f87171' }}>{error}</p>
+                  {emailExists && (
+                    <button type="button" onClick={()=>{ setIsForgot(true); setError(''); setEmailExists(false); }}
+                      className="text-xs font-black underline" style={{ color:'#722F37' }}>
+                      {tr.resetPasswordCta}
+                    </button>
+                  )}
+                </div>
+              )}
 
               <button type="submit" disabled={loading}
                 className="w-full py-3.5 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all"
@@ -4520,7 +4541,7 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
               <div className="flex items-center justify-between mb-1.5">
                 <label className={labelCls} style={{ color:'rgba(114,47,55,0.75)' }}>{tr.password}</label>
                 {!isSignUp && (
-                  <button type="button" onClick={() => { setIsForgot(true); setError(''); }}
+                  <button type="button" onClick={() => { setIsForgot(true); setError(''); setEmailExists(false); }}
                     className="text-[11px] font-bold" style={{ color:'#722F37' }}>
                     {tr.forgotPw}
                   </button>
