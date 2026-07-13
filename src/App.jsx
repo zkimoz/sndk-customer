@@ -4081,10 +4081,17 @@ function ScheduleStep({ lang, tr, formData, setFormData, setStep, prevStep }) {
             input, so there's no need to fake one — the WebKit-only filter in
             index.css recolors it gold on Chrome/Safari; Firefox just shows
             its own default icon, which is still visible and functional. */}
-        <input type="date" min={today} autoComplete="off" value={formData.date}
+        {/* dir="ltr" is deliberate even in RTL/Arabic mode — WebKit's native
+            date-input widget (calendar icon, min/max validation, the value
+            it renders) gets corrupted inside an RTL-directed ancestor on
+            iOS Safari specifically, which is why this only misbehaved when
+            the device language was Arabic. A date's day/month/year
+            structure is LTR regardless of UI language, so forcing it here
+            doesn't affect anything the customer would expect to read RTL. */}
+        <input type="date" dir="ltr" min={today} autoComplete="off" value={formData.date}
           onChange={e=>setFormData(p=>({...p,date: e.target.value && e.target.value < today ? today : e.target.value}))}
           className={`${C.inputCls} ${C.colorScheme} cursor-pointer`}
-          style={{ background:C.input, border:`1px solid ${C.border}`, color: formData.date ? C.text : C.muted }}
+          style={{ background:C.input, border:`1px solid ${C.border}`, color: formData.date ? C.text : C.muted, textAlign: isRtl?'right':'left' }}
           onFocus={e=>e.target.style.borderColor=C.borderFocus} onBlur={e=>e.target.style.borderColor=C.border}/>
       </Field>
       <Field label={tr.selectTime}>
