@@ -4058,26 +4058,21 @@ function ScheduleStep({ lang, tr, formData, setFormData, setStep, prevStep }) {
   const isRtl = lang === 'ar';
   const today = new Date().toISOString().split('T')[0];
   const canGo = formData.date && formData.timeKey;
-  const dateInputRef = useRef(null);
-  const openDatePicker = () => {
-    const el = dateInputRef.current;
-    if (!el) return;
-    if (el.showPicker) el.showPicker(); else el.focus();
-  };
   return (
     <FormShell title={tr.pickTime}>
       <Field label={tr.date}>
-        <div className="relative">
-          <input ref={dateInputRef} type="date" min={today} value={formData.date} onChange={e=>setFormData(p=>({...p,date:e.target.value}))}
-            className="absolute inset-0 w-full h-full opacity-0" tabIndex={-1}/>
-          <div onClick={openDatePicker}
-            className={`${C.inputCls} cursor-pointer flex items-center`}
-            style={{ background:C.input, border:`1px solid ${C.border}`, color: formData.date ? C.text : C.muted }}>
-            {formData.date
-              ? new Date(formData.date + 'T00:00:00').toLocaleDateString(isRtl ? 'ar-QA' : 'en-QA', { year:'numeric', month:'long', day:'numeric' })
-              : (isRtl ? 'اختر التاريخ' : 'Select a date')}
-          </div>
-        </div>
+        {/* A real, always-visible native date input — the previous version hid
+            this completely (opacity:0) and opened it via showPicker()/focus(),
+            which silently does nothing on browsers without showPicker()
+            support (older Safari especially), making the picker unusable.
+            Every browser renders its own calendar icon on a native date
+            input, so there's no need to fake one — the WebKit-only filter in
+            index.css recolors it gold on Chrome/Safari; Firefox just shows
+            its own default icon, which is still visible and functional. */}
+        <input type="date" min={today} value={formData.date} onChange={e=>setFormData(p=>({...p,date:e.target.value}))}
+          className={`${C.inputCls} ${C.colorScheme} cursor-pointer`}
+          style={{ background:C.input, border:`1px solid ${C.border}`, color: formData.date ? C.text : C.muted }}
+          onFocus={e=>e.target.style.borderColor=C.borderFocus} onBlur={e=>e.target.style.borderColor=C.border}/>
       </Field>
       <Field label={tr.selectTime}>
         <div className="grid grid-cols-2 gap-3">
