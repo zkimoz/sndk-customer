@@ -4063,6 +4063,13 @@ function ScheduleStep({ lang, tr, formData, setFormData, setStep, prevStep }) {
   // from a previous visit via autofill, bypassing the picker entirely — so
   // re-check explicitly instead of just trusting the picker's own validation.
   const canGo = formData.date && formData.date >= today && formData.timeKey;
+  // Scrub a stale past date out of React state itself the moment this step
+  // mounts, in case Safari's native widget restored one independently of
+  // any onChange event — this doesn't touch a still-valid prior selection
+  // (e.g. the customer went back a step and returned).
+  useEffect(() => {
+    if (formData.date && formData.date < today) setFormData(p => ({ ...p, date: '' }));
+  }, []);
   return (
     <FormShell title={tr.pickTime}>
       <Field label={tr.date}>
