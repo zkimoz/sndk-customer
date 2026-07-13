@@ -550,6 +550,12 @@ const BOOKING_YEAR_OPTIONS = (() => {
 // that isn't safe in a storage path (spaces, slashes, etc).
 const sanitizeForPath = s => (s || '').trim().replace(/[/\\?#]+/g, '-').replace(/\s+/g, '_');
 
+// Print windows are built as raw HTML strings and rendered via document.write()
+// — any free text the customer typed themselves (their name, a typed
+// signature) interpolated into them unescaped is a stored-XSS vector that
+// can run in a staff member's browser too when they open the same document.
+const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+
 const sortByEn = arr => [...arr].sort((a, b) =>
   (a.name_en || a.name_ar || '').localeCompare(b.name_en || b.name_ar || '', 'en', { sensitivity: 'base' })
 );
@@ -1455,19 +1461,19 @@ function openQuotationPDF(order, linked, profile, jobCard) {
 <div class="section">
   <div class="section-title">بيانات العميل / Customer Info</div>
   <div class="grid2">
-    <div class="field"><div class="field-label">الاسم / Name</div><div class="field-value">${profile?.full_name || '—'}</div></div>
-    <div class="field"><div class="field-label">الجوال / Phone</div><div class="field-value" dir="ltr">${profile?.phone_number ? '+974 ' + profile.phone_number : '—'}</div></div>
+    <div class="field"><div class="field-label">الاسم / Name</div><div class="field-value">${escapeHtml(profile?.full_name) || '—'}</div></div>
+    <div class="field"><div class="field-label">الجوال / Phone</div><div class="field-value" dir="ltr">${profile?.phone_number ? '+974 ' + escapeHtml(profile.phone_number) : '—'}</div></div>
   </div>
 </div>
 
 <div class="section">
   <div class="section-title">بيانات السيارة / Car Info</div>
   <div class="grid2" style="margin-bottom:8px">
-    <div class="field"><div class="field-label">السيارة / Car</div><div class="field-value">${[car.car_type, car.car_category, car.production_year].filter(Boolean).join(' ') || '—'}</div></div>
-    <div class="field"><div class="field-label">اللوحة / Plate</div><div class="field-value" dir="ltr">${car.plate_number || '—'}</div></div>
+    <div class="field"><div class="field-label">السيارة / Car</div><div class="field-value">${escapeHtml([car.car_type, car.car_category, car.production_year].filter(Boolean).join(' ')) || '—'}</div></div>
+    <div class="field"><div class="field-label">اللوحة / Plate</div><div class="field-value" dir="ltr">${escapeHtml(car.plate_number) || '—'}</div></div>
   </div>
-  ${car.chassis_number ? `<div class="field"><div class="field-label">رقم الشاصيه / VIN</div><div class="field-value" dir="ltr" style="font-family:monospace;letter-spacing:1px">${car.chassis_number}</div></div>` : ''}
-  ${serviceLabel ? `<div class="field" style="margin-top:8px"><div class="field-label">الخدمة / Service</div><div class="field-value">${serviceLabel}</div></div>` : ''}
+  ${car.chassis_number ? `<div class="field"><div class="field-label">رقم الشاصيه / VIN</div><div class="field-value" dir="ltr" style="font-family:monospace;letter-spacing:1px">${escapeHtml(car.chassis_number)}</div></div>` : ''}
+  ${serviceLabel ? `<div class="field" style="margin-top:8px"><div class="field-label">الخدمة / Service</div><div class="field-value">${escapeHtml(serviceLabel)}</div></div>` : ''}
 </div>
 
 ${(jobCard?.mileage_in || jobCard?.mileage_out) ? `
@@ -1590,7 +1596,7 @@ ${isApproved ? `
   ${order.signed_by ? `
   <div style="margin-top:12px;padding-top:10px;border-top:1px dashed #86efac;text-align:center">
     <p style="font-size:11px;color:#555;margin-bottom:4px">توقيع العميل / Customer Signature:</p>
-    <p style="font-size:22px;font-family:Georgia,serif;font-style:italic;color:#15803d">${order.signed_by}</p>
+    <p style="font-size:22px;font-family:Georgia,serif;font-style:italic;color:#15803d">${escapeHtml(order.signed_by)}</p>
   </div>` : ''}
 </div>` : `
 <div class="pending-box">⏳ بانتظار موافقة العميل / Pending Customer Approval</div>`}
@@ -1781,18 +1787,18 @@ function printCustomerInvoice(jobCard, appt, order, profile, brandsData = [], ca
         <div class="lbl-ar">بيانات العميل</div>
         <div class="lbl-en">Customer Info</div>
         <div class="name-label">الاسم / Name</div>
-        <div class="val">${profile?.full_name||'—'}</div>
-        ${profile?.phone_number?`<div class="sub"><span class="label-ar">الهاتف</span> <span class="label-en">Phone</span>: <span dir="ltr">+974 ${profile.phone_number}</span></div>`:''}
+        <div class="val">${escapeHtml(profile?.full_name)||'—'}</div>
+        ${profile?.phone_number?`<div class="sub"><span class="label-ar">الهاتف</span> <span class="label-en">Phone</span>: <span dir="ltr">+974 ${escapeHtml(profile.phone_number)}</span></div>`:''}
       </div>
       <div class="info-box">
         <div class="lbl-ar">بيانات السيارة</div>
         <div class="lbl-en">Vehicle Info</div>
         <div class="sub" style="margin-bottom:4px"><span class="label-ar">النوع</span> <span class="label-en">Type</span>:</div>
-        <div class="val">${carTypeAr}${carTypeEn&&carTypeEn!==carTypeAr?` <span style="color:#64748b;font-weight:500">/ ${carTypeEn}</span>`:''}</div>
-        ${carCatAr?`<div class="sub"><span class="label-ar">الفئة</span> <span class="label-en">Category</span>: <strong>${carCatAr}${carCatEn&&carCatEn!==carCatAr?` / ${carCatEn}`:''}</strong></div>`:''}
-        ${car.production_year?`<div class="sub"><span class="label-ar">موديل</span> <span class="label-en">Model Year</span>: <strong>${car.production_year}</strong></div>`:''}
-        ${car.plate_number?`<div class="sub"><span class="label-ar">رقم اللوحة</span> <span class="label-en">Plate Number</span>: <strong>${car.plate_number}</strong></div>`:''}
-        ${car.chassis_number?`<div class="sub" style="font-family:monospace;font-size:10px"><span class="label-ar">رقم الشاصية</span> <span class="label-en">VIN</span>: ${car.chassis_number}</div>`:''}
+        <div class="val">${escapeHtml(carTypeAr)}${carTypeEn&&carTypeEn!==carTypeAr?` <span style="color:#64748b;font-weight:500">/ ${escapeHtml(carTypeEn)}</span>`:''}</div>
+        ${carCatAr?`<div class="sub"><span class="label-ar">الفئة</span> <span class="label-en">Category</span>: <strong>${escapeHtml(carCatAr)}${carCatEn&&carCatEn!==carCatAr?` / ${escapeHtml(carCatEn)}`:''}</strong></div>`:''}
+        ${car.production_year?`<div class="sub"><span class="label-ar">موديل</span> <span class="label-en">Model Year</span>: <strong>${escapeHtml(car.production_year)}</strong></div>`:''}
+        ${car.plate_number?`<div class="sub"><span class="label-ar">رقم اللوحة</span> <span class="label-en">Plate Number</span>: <strong>${escapeHtml(car.plate_number)}</strong></div>`:''}
+        ${car.chassis_number?`<div class="sub" style="font-family:monospace;font-size:10px"><span class="label-ar">رقم الشاصية</span> <span class="label-en">VIN</span>: ${escapeHtml(car.chassis_number)}</div>`:''}
       </div>
       <div class="info-box">
         <div class="lbl-ar">أمر الشغل</div>
@@ -3091,15 +3097,19 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
   const saveProfile = async () => {
     if (!editForm.full_name?.trim() || editForm.phone_number?.length !== 8) return;
     setSavingProfile(true);
-    await supabase.from('profiles').update({
+    const { error } = await supabase.from('profiles').update({
       full_name: editForm.full_name.trim(),
       phone_number: editForm.phone_number,
       zone_number: editForm.zone_number?.trim() || null,
       street_number: editForm.street_number?.trim() || null,
       building_number: editForm.building_number?.trim() || null,
     }).eq('id', user.id);
-    await onProfileUpdated?.();
     setSavingProfile(false);
+    if (error) {
+      alert((isRtl ? 'خطأ في الحفظ: ' : 'Error saving: ') + error.message);
+      return;
+    }
+    await onProfileUpdated?.();
     setEditing(false);
     setProfileMsg(tr.prof_save_ok);
     setTimeout(() => setProfileMsg(''), 3000);
@@ -3111,27 +3121,37 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
     let registration_image_url = null;
     if (registrationFile) {
       const ext = registrationFile.name.split('.').pop();
-      const plateKey = sanitizeForPath(carForm.plate_number) || `${user.id}_${Date.now()}`;
-      const path = `${plateKey}.${ext}`;
+      // Namespaced under the owner's user id so a customer can't overwrite or
+      // read another customer's registration image by typing their plate
+      // number — the bucket is public, so the path itself is the only gate.
+      const plateKey = sanitizeForPath(carForm.plate_number) || `${Date.now()}`;
+      const path = `${user.id}/${plateKey}.${ext}`;
       const { error: upErr } = await supabase.storage.from('car-registration').upload(path, registrationFile, { upsert: true });
-      if (!upErr) {
-        const { data: { publicUrl } } = supabase.storage.from('car-registration').getPublicUrl(path);
-        registration_image_url = publicUrl;
+      if (upErr) {
+        setAddingCar(false);
+        alert((isRtl ? 'فشل رفع صورة الاستمارة: ' : 'Failed to upload registration image: ') + upErr.message);
+        return;
       }
+      const { data: { publicUrl } } = supabase.storage.from('car-registration').getPublicUrl(path);
+      registration_image_url = publicUrl;
     }
-    await supabase.from('cars').insert({
+    const { error: insErr } = await supabase.from('cars').insert({
       profile_id: user.id,
       car_type: carForm.car_type,
       car_category: carForm.car_category || null,
       production_year: carForm.production_year ? parseInt(carForm.production_year) : null,
-      plate_number: carForm.plate_number.trim() || null,
-      chassis_number: carForm.chassis_number.trim() || null,
+      plate_number: carForm.plate_number?.trim() || null,
+      chassis_number: carForm.chassis_number?.trim() || null,
       registration_image_url,
     });
+    setAddingCar(false);
+    if (insErr) {
+      alert((isRtl ? 'خطأ في إضافة السيارة: ' : 'Error adding car: ') + insErr.message);
+      return;
+    }
     setCarForm({ car_type:'', car_brand_id:null, car_category:'', production_year:'', plate_number:'', chassis_number:'' });
     setRegistrationFile(null);
     setShowAddCar(false);
-    setAddingCar(false);
     loadCars();
   };
 
@@ -3181,15 +3201,18 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
     let registration_image_url = editCarForm.registration_image_url;
     if (registrationEditFile) {
       const ext = registrationEditFile.name.split('.').pop();
-      const path = `${sanitizeForPath(editCarForm.plate_number)}.${ext}`;
+      const path = `${user.id}/${sanitizeForPath(editCarForm.plate_number)}.${ext}`;
       const { error: upErr } = await supabase.storage
         .from('car-registration').upload(path, registrationEditFile, { upsert: true });
-      if (!upErr) {
-        const { data: { publicUrl } } = supabase.storage.from('car-registration').getPublicUrl(path);
-        registration_image_url = publicUrl;
+      if (upErr) {
+        setSavingCar(false);
+        alert((isRtl ? 'فشل رفع صورة الاستمارة: ' : 'Failed to upload registration image: ') + upErr.message);
+        return;
       }
+      const { data: { publicUrl } } = supabase.storage.from('car-registration').getPublicUrl(path);
+      registration_image_url = publicUrl;
     }
-    await supabase.from('cars').update({
+    const { error: updErr } = await supabase.from('cars').update({
       car_type: editCarForm.car_type,
       car_category: editCarForm.car_category || null,
       production_year: editCarForm.production_year ? parseInt(editCarForm.production_year) : null,
@@ -3198,6 +3221,10 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
       registration_image_url,
     }).eq('id', carId).eq('profile_id', user.id);
     setSavingCar(false);
+    if (updErr) {
+      alert((isRtl ? 'خطأ في حفظ السيارة: ' : 'Error saving car: ') + updErr.message);
+      return;
+    }
     setEditingCarId(null);
     setRegistrationEditFile(null);
     loadCars();
