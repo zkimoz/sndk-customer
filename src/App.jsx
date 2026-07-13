@@ -4057,7 +4057,12 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
 function ScheduleStep({ lang, tr, formData, setFormData, setStep, prevStep }) {
   const isRtl = lang === 'ar';
   const today = new Date().toISOString().split('T')[0];
-  const canGo = formData.date && formData.timeKey;
+  // Belt-and-suspenders past-date guard: the native `min` attribute stops the
+  // picker UI from offering past dates, but some browsers (iOS Safari in
+  // particular) can re-populate the field with a stale value it remembered
+  // from a previous visit via autofill, bypassing the picker entirely — so
+  // re-check explicitly instead of just trusting the picker's own validation.
+  const canGo = formData.date && formData.date >= today && formData.timeKey;
   return (
     <FormShell title={tr.pickTime}>
       <Field label={tr.date}>
@@ -4069,7 +4074,8 @@ function ScheduleStep({ lang, tr, formData, setFormData, setStep, prevStep }) {
             input, so there's no need to fake one — the WebKit-only filter in
             index.css recolors it gold on Chrome/Safari; Firefox just shows
             its own default icon, which is still visible and functional. */}
-        <input type="date" min={today} value={formData.date} onChange={e=>setFormData(p=>({...p,date:e.target.value}))}
+        <input type="date" min={today} autoComplete="off" value={formData.date}
+          onChange={e=>setFormData(p=>({...p,date: e.target.value && e.target.value < today ? today : e.target.value}))}
           className={`${C.inputCls} ${C.colorScheme} cursor-pointer`}
           style={{ background:C.input, border:`1px solid ${C.border}`, color: formData.date ? C.text : C.muted }}
           onFocus={e=>e.target.style.borderColor=C.borderFocus} onBlur={e=>e.target.style.borderColor=C.border}/>
@@ -4098,8 +4104,17 @@ function ScheduleStep({ lang, tr, formData, setFormData, setStep, prevStep }) {
 // ── STEP 4 · REVIEW ───────────────────────────────────────────────────
 function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading, user, profile, cart }) {
   const slot = getSlot(formData.timeKey);
+  const isRtl = lang === 'ar';
 
   const submit = async () => {
+    // Final guard against booking a past date — ScheduleStep already blocks
+    // this in the UI, but re-check here too in case formData carried a stale
+    // date in from somewhere the picker's own validation never touched.
+    const today = new Date().toISOString().split('T')[0];
+    if (formData.date && formData.date < today) {
+      alert(isRtl ? 'التاريخ المختار في الماضي — من فضلك اختر تاريخ صحيح' : 'The selected date is in the past — please pick a valid date');
+      return;
+    }
     setLoading(true);
     try {
       // Store cart as JSON array in service_type
