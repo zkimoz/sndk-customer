@@ -1288,8 +1288,11 @@ function SignatureModal({ isRtl, theme, onConfirm, onClose }) {
       sigName = typedName.trim();
     }
     setSaving(true);
-    await onConfirm(sigData, sigName);
-    setSaving(false);
+    try {
+      await onConfirm(sigData, sigName);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -1488,13 +1491,13 @@ ${(jobCard?.mileage_in || jobCard?.mileage_out) ? `
 ${jobCard?.customer_complaints ? `
 <div class="section">
   <div class="section-title">ملاحظات العميل / Customer Complaints</div>
-  <div class="textarea-field">${jobCard.customer_complaints}</div>
+  <div class="textarea-field">${escapeHtml(jobCard.customer_complaints)}</div>
 </div>` : ''}
 
 ${jobCard?.work_done ? `
 <div class="section">
   <div class="section-title">الأعمال المنجزة / Work Done</div>
-  <div class="textarea-field">${jobCard.work_done}</div>
+  <div class="textarea-field">${escapeHtml(jobCard.work_done)}</div>
 </div>` : ''}
 
 ${(partItems.length > 0 || laborItems.length > 0) ? `
@@ -2047,6 +2050,15 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     if (!orderId) return;
     const now = new Date().toISOString();
     const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    // orders has no profile_id column of its own (only via appointment_id) —
+    // this is a re-pricing write, so re-verify ownership through the linked
+    // appointment as a defense-in-depth check independent of RLS.
+    const { data: apptCheck } = await supabase.from('appointments').select('id').eq('id', order.appointment_id).eq('profile_id', user.id).maybeSingle();
+    if (!apptCheck) {
+      alert(isRtl ? 'حدث خطأ — لا يمكن التحقق من ملكية هذا الطلب' : 'Something went wrong — could not verify ownership of this order');
+      return;
+    }
     const serviceKeys = serviceKeysOf(order);
     const selection = serviceSelections[orderId] || {};
     const decisions = {};
@@ -2120,7 +2132,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
       status: 'cancelled',
       cancelled_at: new Date().toISOString(),
       cancelled_by: 'customer',
-    }).eq('id', appt.id);
+    }).eq('id', appt.id).eq('profile_id', user.id);
     if (error) { alert(isRtl ? 'خطأ: ' + error.message : 'Error: ' + error.message); }
     else { setAppts(prev => prev.map(a => a.id === appt.id ? { ...a, status: 'cancelled' } : a)); }
     setCancellingId(null);
