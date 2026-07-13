@@ -4172,11 +4172,12 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
       // Fire-and-forget — the booking itself must never hang or fail because a staff
       // notification is slow/broken. Still logged (not silently swallowed) so a
       // failure is visible in devtools instead of vanishing without a trace.
+      const carLabel = [formData.carBrandKey, formData.carCategoryKey, formData.carModel].filter(Boolean).join(' · ');
       supabase.functions.invoke('clever-endpoint', {
         body: {
           event: 'new_booking',
           customerName: user ? (profile?.full_name || formData.name) : formData.name,
-          serviceLabel, appointmentDate: formData.date, appointmentTime: formData.timeKey,
+          serviceLabel, carLabel, appointmentDate: formData.date, appointmentTime: formData.timeKey,
         },
       }).then(({ error: notifyErr }) => { if (notifyErr) console.error('notify-staff failed:', notifyErr); })
         .catch((notifyErr) => console.error('notify-staff failed:', notifyErr));

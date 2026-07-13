@@ -59,7 +59,7 @@ serve(async (req) => {
 
   try {
     const {
-      event, jobNumber, customerName, serviceLabel, appointmentDate, appointmentTime,
+      event, jobNumber, customerName, serviceLabel, carLabel, appointmentDate, appointmentTime,
       customerId, statusLabelAr, statusLabelEn, invoicePdfBase64, invoiceFilename,
     } = await req.json();
 
@@ -139,6 +139,7 @@ serve(async (req) => {
         subject = bi(`📅 حجز موعد جديد — ${customerName || ""}`, `New appointment booking — ${customerName || ""}`);
         html = wrap(bi("حجز موعد جديد", "New Appointment Booking"), [
           [bi("العميل", "Customer"), customerName],
+          [bi("نوع السيارة", "Car Type"), carLabel],
           [bi("الخدمة", "Service"), serviceLabel],
           [bi("التاريخ", "Date"), appointmentDate],
           [bi("الوقت", "Time"), appointmentTime],
