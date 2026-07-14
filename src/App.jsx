@@ -4368,21 +4368,32 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
 }
 
 // ── STEP 3 · SCHEDULE ─────────────────────────────────────────────────
+// Workshop is closed Fridays — parsed from the YYYY-MM-DD parts directly
+// (not `new Date(dateStr)`, which parses as UTC and can shift the
+// weekday by one day depending on the browser's local timezone offset).
+const isFriday = (dateStr) => {
+  if (!dateStr) return false;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d).getDay() === 5;
+};
+
 function ScheduleStep({ lang, tr, formData, setFormData, setStep, prevStep }) {
   const isRtl = lang === 'ar';
   const today = new Date().toISOString().split('T')[0];
+  const [fridayWarning, setFridayWarning] = useState(false);
   // Belt-and-suspenders past-date guard: the native `min` attribute stops the
   // picker UI from offering past dates, but some browsers (iOS Safari in
   // particular) can re-populate the field with a stale value it remembered
   // from a previous visit via autofill, bypassing the picker entirely — so
   // re-check explicitly instead of just trusting the picker's own validation.
-  const canGo = formData.date && formData.date >= today && formData.timeKey;
-  // Scrub a stale past date out of React state itself the moment this step
-  // mounts, in case Safari's native widget restored one independently of
-  // any onChange event — this doesn't touch a still-valid prior selection
-  // (e.g. the customer went back a step and returned).
+  const canGo = formData.date && formData.date >= today && !isFriday(formData.date) && formData.timeKey;
+  // Scrub a stale past date (or a Friday left over from before this rule
+  // existed) out of React state itself the moment this step mounts, in
+  // case Safari's native widget restored one independently of any onChange
+  // event — this doesn't touch a still-valid prior selection (e.g. the
+  // customer went back a step and returned).
   useEffect(() => {
-    if (formData.date && formData.date < today) setFormData(p => ({ ...p, date: '' }));
+    if (formData.date && (formData.date < today || isFriday(formData.date))) setFormData(p => ({ ...p, date: '' }));
   }, []);
   return (
     <FormShell title={tr.pickTime}>
@@ -4402,11 +4413,24 @@ function ScheduleStep({ lang, tr, formData, setFormData, setStep, prevStep }) {
             the device language was Arabic. A date's day/month/year
             structure is LTR regardless of UI language, so forcing it here
             doesn't affect anything the customer would expect to read RTL. */}
+        {/* Native date inputs can't grey out individual weekdays in the
+            picker UI itself — Friday is rejected after the fact instead,
+            with an explicit message so it doesn't look like a silent bug. */}
         <input type="date" dir="ltr" min={today} autoComplete="off" value={formData.date}
-          onChange={e=>setFormData(p=>({...p,date: e.target.value && e.target.value < today ? today : e.target.value}))}
+          onChange={e=>{
+            const v = e.target.value && e.target.value < today ? today : e.target.value;
+            if (v && isFriday(v)) { setFridayWarning(true); setFormData(p=>({...p,date:''})); return; }
+            setFridayWarning(false);
+            setFormData(p=>({...p,date:v}));
+          }}
           className={`${C.inputCls} ${C.colorScheme} cursor-pointer`}
-          style={{ background:C.input, border:`1px solid ${C.border}`, color: formData.date ? C.text : C.muted, textAlign: isRtl?'right':'left' }}
-          onFocus={e=>e.target.style.borderColor=C.borderFocus} onBlur={e=>e.target.style.borderColor=C.border}/>
+          style={{ background:C.input, border:`1px solid ${fridayWarning?'#f87171':C.border}`, color: formData.date ? C.text : C.muted, textAlign: isRtl?'right':'left' }}
+          onFocus={e=>e.target.style.borderColor=C.borderFocus} onBlur={e=>e.target.style.borderColor=fridayWarning?'#f87171':C.border}/>
+        {fridayWarning && (
+          <p className="text-xs mt-1.5" style={{ color:'#f87171' }}>
+            {isRtl ? 'يوم الجمعة إجازة — من فضلك اختر يوماً آخر' : 'We\'re closed on Fridays — please pick another day'}
+          </p>
+        )}
       </Field>
       <Field label={tr.selectTime}>
         <div className="grid grid-cols-2 gap-3">
@@ -4443,6 +4467,10 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
     const today = new Date().toISOString().split('T')[0];
     if (!formData.isQuoteOnly && formData.date && formData.date < today) {
       alert(isRtl ? 'التاريخ المختار في الماضي — من فضلك اختر تاريخ صحيح' : 'The selected date is in the past — please pick a valid date');
+      return;
+    }
+    if (!formData.isQuoteOnly && formData.date && isFriday(formData.date)) {
+      alert(isRtl ? 'يوم الجمعة إجازة — من فضلك اختر يوماً آخر' : "We're closed on Fridays — please pick another day");
       return;
     }
     setLoading(true);
