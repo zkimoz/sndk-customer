@@ -2700,7 +2700,11 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           {/* Paid / Remaining */}
                           {(relOrd.order_items?.length > 0) && (() => {
                             const paid = (relOrd.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
-                            const remaining = gt - paid;
+                            // Same live, decision-aware total as "Quotation Total" above —
+                            // otherwise this stays pinned to the persisted order total and
+                            // doesn't move as the customer approves/rejects services before
+                            // confirming.
+                            const remaining = selectedQuotationTotal(relOrd) - paid;
                             return (
                               <div className="rounded-xl px-3 py-2 space-y-1" style={{ background:'rgba(0,0,0,0.08)' }}>
                                 <div className="flex items-center justify-between">
