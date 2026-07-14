@@ -2082,23 +2082,25 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
       }, 0);
   };
 
-  const toggleServiceSelection = (orderId, key) => {
+  // Each service needs an explicit 'approved' or 'rejected' decision — no
+  // implicit default — so "Confirm & Sign" can require every service to be
+  // decided before it's even clickable, instead of silently treating
+  // whatever wasn't checked as rejected.
+  const setServiceDecision = (orderId, key, decision) => {
+    setServiceSelections(prev => ({ ...prev, [orderId]: { ...(prev[orderId]||{}), [key]: decision } }));
+  };
+  const setAllServiceSelection = (orderId, decision) => {
     const order = orders.find(o => o.id === orderId);
     const allKeys = serviceKeysOf(order);
-    setServiceSelections(prev => {
-      const current = prev[orderId] || Object.fromEntries(allKeys.map(k=>[k,false]));
-      return { ...prev, [orderId]: { ...current, [key]: !current[key] } };
-    });
+    setServiceSelections(prev => ({ ...prev, [orderId]: Object.fromEntries(allKeys.map(k=>[k,decision])) }));
   };
-  const setAllServiceSelection = (orderId, value) => {
+  const getServiceDecision = (orderId, key) => serviceSelections[orderId]?.[key]; // undefined | 'approved' | 'rejected'
+  const isServiceSelected  = (orderId, key) => getServiceDecision(orderId, key) === 'approved';
+  const allServicesDecided = (orderId) => {
     const order = orders.find(o => o.id === orderId);
     const allKeys = serviceKeysOf(order);
-    setServiceSelections(prev => ({ ...prev, [orderId]: Object.fromEntries(allKeys.map(k=>[k,value])) }));
-  };
-  const isServiceSelected = (orderId, key) => {
-    const current = serviceSelections[orderId];
-    if (!current || current[key] === undefined) return false; // default: not selected — the customer picks explicitly
-    return current[key];
+    if (allKeys.length === 0) return true; // legacy/general-only quotation — nothing to decide per-service
+    return allKeys.every(k => getServiceDecision(orderId, k) !== undefined);
   };
 
   const approveWithSignature = async (sigData, sigName) => {
@@ -2118,7 +2120,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     const serviceKeys = serviceKeysOf(order);
     const selection = serviceSelections[orderId] || {};
     const decisions = {};
-    serviceKeys.forEach(key => { decisions[key] = (selection[key] === true) ? 'approved' : 'rejected'; });
+    serviceKeys.forEach(key => { decisions[key] = selection[key] === 'approved' ? 'approved' : 'rejected'; });
     const approvedCount = Object.values(decisions).filter(d => d === 'approved').length;
     // A quotation with no service groups (legacy / general-only) is a simple whole-order approval
     const isApproved = serviceKeys.length === 0 ? true : approvedCount > 0;
@@ -2423,14 +2425,14 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                   <p className="text-xs font-bold" style={{ color:cc.sub }}>{isRtl?'الخدمات المطلوبة:':'Requested Services:'}</p>
                                   {!decided && services.length > 1 && (
                                     <div className="flex items-center gap-2">
-                                      <button onClick={()=>setAllServiceSelection(relOrd.id, true)} className="text-[10px] font-bold underline" style={{ color:cc.fg }}>{isRtl?'تحديد الكل':'Select all'}</button>
-                                      <button onClick={()=>setAllServiceSelection(relOrd.id, false)} className="text-[10px] font-bold underline" style={{ color:cc.sub }}>{isRtl?'إلغاء الكل':'Deselect all'}</button>
+                                      <button onClick={()=>setAllServiceSelection(relOrd.id, 'approved')} className="text-[10px] font-bold underline" style={{ color:'#22c55e' }}>{isRtl?'الموافقة على الكل':'Approve all'}</button>
+                                      <button onClick={()=>setAllServiceSelection(relOrd.id, 'rejected')} className="text-[10px] font-bold underline" style={{ color:'#ef4444' }}>{isRtl?'رفض الكل':'Reject all'}</button>
                                     </div>
                                   )}
                                 </div>
                                 {services.map(s => {
-                                  const selected = isServiceSelected(relOrd.id, s.key);
-                                  const decision = relOrd.service_decisions?.[s.key];
+                                  const liveDecision = getServiceDecision(relOrd.id, s.key); // undefined | 'approved' | 'rejected' — before signing
+                                  const decision = relOrd.service_decisions?.[s.key]; // locked-in decision — after signing
                                   const lineItems = (relOrd.order_items || []).filter(i =>
                                     (i.service_name?.ar || i.service_name?.en) === s.key);
                                   const originalLineTotal = it => Number(it.sell_price||0) * Number(it.quantity||1);
@@ -2441,13 +2443,6 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                   return (
                                     <div key={s.key} className="rounded-lg overflow-hidden" style={{ background:'rgba(0,0,0,0.08)' }}>
                                       <div className="flex items-center gap-2 px-3 py-2">
-                                        {!decided && (
-                                          <button onClick={()=>toggleServiceSelection(relOrd.id, s.key)}
-                                            className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 transition-all"
-                                            style={{ background: selected ? '#16a34a' : 'transparent', border:`2px solid ${selected ? '#16a34a' : cc.sub}` }}>
-                                            {selected && <Check size={12} color="#fff"/>}
-                                          </button>
-                                        )}
                                         <div className="min-w-0 flex-1">
                                           {(s.category_ar || s.category_en) && (
                                             <p className="text-[9px] font-bold uppercase tracking-wider truncate" style={{ color:cc.sub }}>{isRtl?(s.category_ar||s.category_en):(s.category_en||s.category_ar)}</p>
@@ -2466,6 +2461,24 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                           )}
                                         </div>
                                       </div>
+                                      {!decided && (
+                                        <div className="flex items-center gap-2 px-3 pb-2">
+                                          <button onClick={()=>setServiceDecision(relOrd.id, s.key, 'approved')}
+                                            className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold transition-all active:scale-95"
+                                            style={liveDecision==='approved'
+                                              ? { background:'#16a34a', color:'#fff' }
+                                              : { background:'transparent', color:cc.sub, border:`1.5px solid ${cc.sub}60` }}>
+                                            <Check size={12}/>{isRtl?'موافق':'Approve'}
+                                          </button>
+                                          <button onClick={()=>setServiceDecision(relOrd.id, s.key, 'rejected')}
+                                            className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold transition-all active:scale-95"
+                                            style={liveDecision==='rejected'
+                                              ? { background:'#ef4444', color:'#fff' }
+                                              : { background:'transparent', color:cc.sub, border:`1.5px solid ${cc.sub}60` }}>
+                                            <X size={12}/>{isRtl?'رفض':'Reject'}
+                                          </button>
+                                        </div>
+                                      )}
                                       {(partItems.length > 0 || laborItems.length > 0) && (
                                         <div className="px-3 pb-2 pt-1 space-y-1" style={{ borderTop:'1px solid rgba(255,255,255,0.08)' }}>
                                           {partItems.map((it,i) => {
@@ -2554,14 +2567,24 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                               </button>
                             );
                           })()}
-                          {/* Confirm decision */}
-                          {!relOrd.customer_approved && !relOrd.customer_rejected && (
-                            <button onClick={() => setSigModal({ open:true, orderId:relOrd.id })}
-                              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-black transition-all active:scale-95"
-                              style={{ background:'#16a34a', color:'#fff' }}>
-                              <Check size={15}/>{isRtl ? 'تأكيد القرار والتوقيع' : 'Confirm Decision & Sign'}
-                            </button>
-                          )}
+                          {/* Confirm decision — disabled until every service has an explicit approve/reject */}
+                          {!relOrd.customer_approved && !relOrd.customer_rejected && (() => {
+                            const canConfirm = allServicesDecided(relOrd.id);
+                            return (
+                              <div>
+                                <button onClick={() => canConfirm && setSigModal({ open:true, orderId:relOrd.id })} disabled={!canConfirm}
+                                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-black transition-all active:scale-95 disabled:active:scale-100 disabled:cursor-not-allowed"
+                                  style={canConfirm ? { background:'#16a34a', color:'#fff' } : { background:'rgba(148,163,184,0.25)', color:cc.sub }}>
+                                  <Check size={15}/>{isRtl ? 'تأكيد القرار والتوقيع' : 'Confirm Decision & Sign'}
+                                </button>
+                                {!canConfirm && (
+                                  <p className="text-[10px] text-center mt-1.5" style={{ color:cc.sub }}>
+                                    {isRtl ? 'حدد "موافق" أو "رفض" لكل خدمة قبل التأكيد' : 'Approve or reject every service before confirming'}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })()}
                           {/* Approved summary + signature */}
                           {relOrd.customer_approved && (() => {
                             const decisions = relOrd.service_decisions || {};
