@@ -2530,15 +2530,18 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             style={{ background:cc.fg, color:'#111111' }}>
                             <FileImage size={16}/>{isRtl ? 'فتح أمر الشغل PDF' : 'Open Job Card PDF'}
                           </button>
-                          {/* Total — reflects only the services currently checked (0 until the customer picks any) */}
-                          {gt > 0 && (
+                          {/* Total — reflects only the services currently checked (0 until the customer picks any).
+                              Gated on there being a quotation at all (order_items present), not on the total
+                              being positive — a single free/fully-discounted service has a real total of 0
+                              and must still show, instead of looking like the quotation never sent. */}
+                          {(relOrd.order_items?.length > 0) && (
                             <div className="flex items-center justify-between px-1">
                               <span className="text-xs" style={{ color:cc.sub }}>{isRtl ? 'إجمالي عرض السعر:' : 'Quotation Total:'}</span>
                               <span className="text-base font-black" style={{ color:cc.fg }}>{selectedQuotationTotal(relOrd).toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
                             </div>
                           )}
                           {/* Paid / Remaining */}
-                          {gt > 0 && (() => {
+                          {(relOrd.order_items?.length > 0) && (() => {
                             const paid = (relOrd.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
                             const remaining = gt - paid;
                             return (
