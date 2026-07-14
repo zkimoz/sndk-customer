@@ -6,7 +6,7 @@ import {
   Menu, X, ChevronLeft, ChevronRight, ChevronDown, User, Calendar,
   Wrench, ArrowRight, Lock, LogOut, MapPin, Mail,
   ClipboardList, Package, ShoppingCart, Trash2, Upload, FileImage, Pencil, Check,
-  Sun, Moon, Eye, EyeOff, PlayCircle, Wallet,
+  Sun, Moon, Eye, EyeOff, PlayCircle, Wallet, AlertCircle,
 } from 'lucide-react';
 
 // ── Translations ───────────────────────────────────────────────────────
@@ -715,6 +715,7 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [authModal, setAuthModal] = useState(null);
   const [authReason, setAuthReason] = useState(null);
+  const [showBelongingsNotice, setShowBelongingsNotice] = useState(false); // personal-belongings disclaimer, shown fresh on every booking entry
   const [user, setUser]         = useState(null);
   const [profile, setProfile]   = useState(null);
   const [carBrands, setCarBrands]           = useState([]);
@@ -827,7 +828,8 @@ export default function App() {
     if (authReason === 'book' || authReason === 'quote') {
       // formData.isQuoteOnly was already set by startBooking/startQuoteRequest
       // before the auth modal opened, so both reasons land on the same step.
-      setPage('booking'); setStep(2); setAuthReason(null);
+      setAuthReason(null);
+      setShowBelongingsNotice(true);
     }
   };
 
@@ -848,12 +850,14 @@ export default function App() {
     goServices();
   };
 
-  // بدء الحجز من سلة الخدمات
+  // بدء الحجز من سلة الخدمات — every entry into the booking flow shows the
+  // personal-belongings disclaimer first (see showBelongingsNotice), fresh
+  // each time, before landing on DetailsStep.
   const startBooking = () => {
     if (cart.length === 0) return;
     setFormData(p => ({ ...p, isQuoteOnly: false }));
     if (!user) { setAuthReason('book'); setAuthModal('signup'); return; }
-    setPage('booking'); setStep(2);
+    setShowBelongingsNotice(true);
   };
 
   // Same flow as booking, minus scheduling — for a customer who just wants
@@ -862,6 +866,10 @@ export default function App() {
     if (cart.length === 0) return;
     setFormData(p => ({ ...p, isQuoteOnly: true }));
     if (!user) { setAuthReason('quote'); setAuthModal('signup'); return; }
+    setShowBelongingsNotice(true);
+  };
+  const acknowledgeBelongingsNotice = () => {
+    setShowBelongingsNotice(false);
     setPage('booking'); setStep(2);
   };
 
@@ -1241,6 +1249,24 @@ export default function App() {
       {showNewPassword && (
         <NewPasswordModal tr={tr} isRtl={isRtl} onClose={() => setShowNewPassword(false)}/>
       )}
+      {showBelongingsNotice && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background:'rgba(0,0,0,0.7)' }}>
+          <div className="rounded-2xl p-6 max-w-sm w-full text-center space-y-4" style={{ background:C.card, border:`1px solid ${C.gold}30` }}>
+            <AlertCircle size={36} style={{ color:C.gold }} className="mx-auto"/>
+            <h3 className="font-black text-lg" style={{ color:C.cardText }}>{isRtl?'تنبيه هام':'Important Notice'}</h3>
+            <p className="text-sm leading-relaxed" style={{ color:C.cardMuted }}>
+              {isRtl
+                ? 'فريقنا والورشة غير مسؤولين عن أي متعلقات شخصية تُترك داخل السيارة.'
+                : 'Our team and the workshop are not responsible for any personal belongings left inside the car.'}
+            </p>
+            <button onClick={acknowledgeBelongingsNotice}
+              className="w-full py-3 rounded-xl font-black text-sm transition-all active:scale-95"
+              style={{ background:C.gold, color:C.btnTxt }}>
+              {isRtl?'تم':'OK'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1516,6 +1542,7 @@ function openQuotationPDF(order, linked, profile, jobCard) {
   .approval-en{font-size:13px;font-weight:700;color:#15803d;margin-bottom:10px}
   .approval-date{font-size:11px;color:#555;border-top:1px dashed #86efac;padding-top:8px}
   .pending-box{margin-top:16px;padding:12px;border:2px dashed #f59e0b;border-radius:9px;background:#fffbeb;text-align:center;font-size:12px;color:#92400e}
+  .disclaimer-box{margin-top:14px;padding:10px 14px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;text-align:center;font-size:10.5px;color:#64748b;line-height:1.6}
   .footer{margin-top:24px;padding-top:10px;border-top:1px solid #eee;display:flex;justify-content:space-between;font-size:10px;color:#aaa}
 </style>
 </head>
@@ -1681,6 +1708,11 @@ ${isApproved ? `
   </div>` : ''}
 </div>` : `
 <div class="pending-box">⏳ بانتظار موافقة العميل / Pending Customer Approval</div>`}
+
+<div class="disclaimer-box">
+  فريقنا والورشة غير مسؤولين عن أي متعلقات شخصية تُترك داخل السيارة.<br>
+  Our team and the workshop are not responsible for any personal belongings left inside the car.
+</div>
 
 <div class="footer">
   <span>سندك — قطر / SNDK — Qatar</span>
