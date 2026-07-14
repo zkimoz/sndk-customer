@@ -322,6 +322,15 @@ const JC_STATUS_COLOR = {
 };
 const JOB_STATUS_ORDER = ['waiting','confirmed','en_route','car_received','at_workshop','in_maintenance','maintenance_done','washing','awaiting_invoice','returning','delivered'];
 
+// Spare-parts status shown to the customer next to the main job status —
+// separate from order.status's broader lifecycle values (draft/pending/etc.),
+// only these two are staff-settable now.
+const PARTS_STATUS_LABEL = {
+  sourcing: { ar:'جاري تجهيز قطع الغيار', en:'Preparing parts' },
+  ready:    { ar:'تم تسليم قطع الغيار للورشة', en:'Parts delivered to workshop' },
+};
+const PARTS_STATUS_COLOR = { sourcing:'#eab308', ready:'#22c55e' };
+
 const getStatusTimes = (history, statusKey) => {
   if (!Array.isArray(history)) return null;
   const idx = history.findIndex(h => h.status === statusKey);
@@ -2491,9 +2500,22 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                         </div>
                         {/* Job status + number */}
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                          <span className="px-2.5 py-1 rounded-full text-xs font-bold text-white" style={{ background:jcColor }}>
-                            {jcLabel}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {relOrd && PARTS_STATUS_LABEL[relOrd.status] && (
+                              <span className="flex flex-col items-end text-[9px] font-bold px-2 py-1 rounded-full text-white leading-tight text-end"
+                                style={{ background:PARTS_STATUS_COLOR[relOrd.status] }}>
+                                <span>{isRtl ? PARTS_STATUS_LABEL[relOrd.status].ar : PARTS_STATUS_LABEL[relOrd.status].en}</span>
+                                {relOrd.parts_status_at && (
+                                  <span className="opacity-80 font-normal">
+                                    {new Date(relOrd.parts_status_at).toLocaleString(isRtl?'ar-QA':'en-QA',{dateStyle:'short',timeStyle:'short'})}
+                                  </span>
+                                )}
+                              </span>
+                            )}
+                            <span className="px-2.5 py-1 rounded-full text-xs font-bold text-white" style={{ background:jcColor }}>
+                              {jcLabel}
+                            </span>
+                          </div>
                           <span className="text-[10px] font-mono" style={{ color:cc.sub }}>{jc.job_number}</span>
                         </div>
                       </div>
