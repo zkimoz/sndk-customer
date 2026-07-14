@@ -2162,7 +2162,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
       <div className="grid grid-cols-3 rounded-2xl overflow-hidden" style={{ border:`1px solid ${C.border}` }}>
         {[{ key:'appts',     label: isRtl ? 'المواعيد' : 'Appointments', icon:Calendar },
           { key:'orders',    label: isRtl ? 'الطلبات'  : 'My Orders',    icon:ClipboardList },
-          { key:'cancelled', label: isRtl ? 'الملغية'  : 'Cancelled',    icon:X }].map(item => (
+          { key:'cancelled', label: isRtl ? 'المواعيد أو الطلبات الملغية' : 'Cancelled Appointments/Orders', icon:X }].map(item => (
           <button key={item.key} onClick={() => setTab(item.key)}
             className="flex items-center justify-center gap-2 py-3 text-sm font-bold transition-all"
             style={tab===item.key
