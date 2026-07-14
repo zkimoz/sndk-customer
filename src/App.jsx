@@ -586,6 +586,27 @@ const resolveLangName = (rawValue, refList = [], lang = 'ar') => {
 const carTypeLabel     = (car, carBrands = [], lang = 'ar') => resolveLangName(car?.car_type, carBrands, lang);
 const carCategoryLabel = (car, carCats = [], lang = 'ar')   => resolveLangName(car?.car_category, carCats, lang);
 
+// A job card's live status/videos change the moment staff act on them (so
+// other staff stay in sync), but the customer should only see whatever
+// staff last explicitly published via "Save All" in the admin app — not a
+// half-finished edit in progress. customer_snapshot is written only by that
+// save, so every customer-facing read goes through this instead of the raw
+// columns. Falls back to a safe 'waiting' state for rows saved before this
+// snapshot existed.
+const publishedJobCard = (jc) => {
+  if (!jc) return jc;
+  const snap = jc.customer_snapshot || {};
+  return {
+    ...jc,
+    job_status: snap.job_status || 'waiting',
+    status_history: snap.status_history || [],
+    reception_videos: snap.reception_videos || '[]',
+    reception_video_url: snap.reception_video_url || null,
+    workshop_notes_videos: snap.workshop_notes_videos || '[]',
+    customer_complaints: snap.customer_complaints || null,
+  };
+};
+
 // Searchable car-brand picker — the customer can type in Arabic or English
 // regardless of which language the site is currently displayed in, since
 // brand names are matched against both name_ar and name_en at once.
@@ -1959,7 +1980,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   const loadData = async () => {
     if (!user) { setLoading(false); return; }
     const { data: apptData } = await supabase.from('appointments')
-      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos)')
+      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, customer_snapshot)')
       .eq('profile_id', user.id)
       .order('appointment_date', { ascending: false });
     setAppts(apptData || []);
@@ -2303,7 +2324,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                   </div>
                 ) : jcAppts.map((a, ai) => {
                   const cc     = CARD_BG_CYCLE[1]; // always maroon
-                  const jc     = a.job_cards[0];
+                  const jc     = publishedJobCard(a.job_cards[0]);
                   const car    = a.cars;
                   const relOrd = orderByApptId[a.id];
                   const jcColor = JC_STATUS_COLOR[jc.job_status] || '#94a3b8';
@@ -3206,7 +3227,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
     if (history[carId]) return;
     const { data } = await supabase
       .from('appointments')
-      .select('*, orders(*, order_items(*), payments(*)), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos)')
+      .select('*, orders(*, order_items(*), payments(*)), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, customer_snapshot)')
       .eq('car_id', carId)
       .order('appointment_date', { ascending: false });
     setHistory(p => ({ ...p, [carId]: data || [] }));
@@ -3842,7 +3863,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                             const svcs = parseServices(appt.service_type);
                             const svcLabel = svcs ? svcs.map(s => s.name || '').join(' · ') : (appt.service_type || '—');
                             const order = appt.orders?.[0];
-                            const jobCard = appt.job_cards?.[0];
+                            const jobCard = publishedJobCard(appt.job_cards?.[0]);
                             const ORD_LABEL = {
                               draft:     isRtl ? 'مسودة عرض السعر'  : 'Draft Quote',
                               pending:   isRtl ? 'بانتظار الموافقة' : 'Awaiting Approval',
