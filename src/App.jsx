@@ -3801,6 +3801,15 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                         {isRtl?<ChevronLeft size={18}/>:<ChevronRight size={18}/>}
                       </div>
                     </button>
+                    {car.registration_image_url && (
+                      <button
+                        onClick={e => { e.stopPropagation(); window.open(car.registration_image_url, '_blank'); }}
+                        className="p-2 rounded-xl flex-shrink-0 transition-all"
+                        style={{ background:'rgba(0,0,0,0.10)', color:cc.fg }}
+                        title={tr.prof_reg_view}>
+                        <Eye size={14}/>
+                      </button>
+                    )}
                     <button
                       onClick={e => { e.stopPropagation(); if (!isOpen) setExpandedCar(car.id); openEditCar(car); }}
                       className="p-2 rounded-xl flex-shrink-0 transition-all"
