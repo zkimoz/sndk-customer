@@ -2724,7 +2724,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                 </div>
                                 {pendingExcess > 0.001 && (
                                   <div className="flex items-center justify-between pt-1 mt-1" style={{ borderTop:`1px dashed ${cc.sub}40` }}>
-                                    <span className="text-[11px] font-bold" style={{ color:C.gold }}>{isRtl ? 'دفعت زيادة — هتضاف لمحفظتك عند اكتمال الطلب:' : "You overpaid — added to your wallet once complete:"}</span>
+                                    <span className="text-[11px] font-bold" style={{ color:C.gold }}>{isRtl ? 'الزيادة:' : 'Overpaid:'}</span>
                                     <span className="text-sm font-bold" style={{ color:C.gold }}>+{pendingExcess.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
                                   </div>
                                 )}
