@@ -3410,9 +3410,18 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
     : carCategories;
 
   const deleteCar = async (carId) => {
-    const msg = isRtl ? 'هل أنت متأكد من حذف هذه السيارة؟' : 'Are you sure you want to delete this car?';
-    if (!window.confirm(msg)) return;
     setDeletingCarId(carId); setCarDeleteError('');
+    // A car with any service history stays on record permanently — the
+    // customer can't self-delete it (would orphan/hide past job cards);
+    // only staff can handle that, deliberately, via customer service.
+    const { data: history } = await supabase.from('job_cards').select('id').eq('car_id', carId).eq('profile_id', user.id).limit(1);
+    if (history?.length) {
+      setCarDeleteError(isRtl ? 'لا يمكن حذف هذه السيارة لوجود تاريخ صيانة مسجل لها — يرجى الاتصال بخدمة العملاء' : 'This car has service history and can\'t be deleted — please contact customer service');
+      setDeletingCarId(null);
+      return;
+    }
+    const msg = isRtl ? 'هل أنت متأكد من حذف هذه السيارة؟' : 'Are you sure you want to delete this car?';
+    if (!window.confirm(msg)) { setDeletingCarId(null); return; }
     const { error } = await supabase.from('cars').delete().eq('id', carId).eq('profile_id', user.id);
     if (error) {
       setCarDeleteError(isRtl ? 'لا يمكن الحذف — السيارة مرتبطة بمواعيد مسجلة.' : 'Cannot delete — car has linked appointments.');
