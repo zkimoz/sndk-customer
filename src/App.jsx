@@ -666,7 +666,18 @@ const APPT_STATUS_LABELS = {
 
 // ── APP ────────────────────────────────────────────────────────────────
 export default function App() {
-  const [lang, setLang]         = useState('ar');
+  const [lang, setLang]         = useState(() => localStorage.getItem('sndk_lang') || 'ar');
+  // Wraps setLang so a language switch also persists — to localStorage for
+  // guests/before login resolves, and to the account's own profile row so it
+  // follows the customer to any device the next time they log in.
+  const changeLang = (next) => {
+    setLang(prev => {
+      const value = typeof next === 'function' ? next(prev) : next;
+      localStorage.setItem('sndk_lang', value);
+      if (user) supabase.from('profiles').update({ language_preference: value }).eq('id', user.id).then(({ error }) => { if (error) console.error('save language_preference failed:', error); });
+      return value;
+    });
+  };
   const [page, setPage]         = useState('home'); // 'home' | 'services' | 'profile' | 'booking' | 'orders'
   const [step, setStep]         = useState(1);
   const [expandedService, setExpandedService] = useState(null);
@@ -715,6 +726,10 @@ export default function App() {
     if (data) {
       setProfile(data);
       setFormData(p => ({ ...p, name: data.full_name || p.name, phone: data.phone_number || p.phone }));
+      if (data.language_preference === 'ar' || data.language_preference === 'en') {
+        setLang(data.language_preference);
+        localStorage.setItem('sndk_lang', data.language_preference);
+      }
     }
   };
 
@@ -925,7 +940,7 @@ export default function App() {
               </div>
             )}
             <div className="flex gap-2">
-              <button onClick={()=>setLang(l=>l==='ar'?'en':'ar')}
+              <button onClick={()=>changeLang(l=>l==='ar'?'en':'ar')}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all"
                 style={{ color:C.muted }}>
                 <Globe size={12}/>{tr.switchLang}
@@ -954,7 +969,7 @@ export default function App() {
               <button onClick={toggleTheme} className="p-2 rounded-lg transition-colors" style={{ color:C.gold }}>
                 {theme==='dark' ? <Sun size={17}/> : <Moon size={17}/>}
               </button>
-              <button onClick={()=>setLang(l=>l==='ar'?'en':'ar')} className="px-2 py-1 rounded-lg text-xs font-bold" style={{ color:C.gold }}>{tr.switchLang}</button>
+              <button onClick={()=>changeLang(l=>l==='ar'?'en':'ar')} className="px-2 py-1 rounded-lg text-xs font-bold" style={{ color:C.gold }}>{tr.switchLang}</button>
               {user ? (
                 <button onClick={goProfile} className="w-8 h-8 rounded-full flex items-center justify-center font-black text-sm" style={{ background:C.gold, color:C.btnTxt }}>
                   {(profile?.full_name||user.email||'?')[0].toUpperCase()}
@@ -1148,7 +1163,7 @@ export default function App() {
                 </>
               )}
               <div className="flex gap-2">
-                <button onClick={()=>{setLang(l=>l==='ar'?'en':'ar');setMenuOpen(false);}} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-bold" style={{ color:C.muted }}>
+                <button onClick={()=>{changeLang(l=>l==='ar'?'en':'ar');setMenuOpen(false);}} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-bold" style={{ color:C.muted }}>
                   <Globe size={12}/>{tr.switchLang}
                 </button>
                 <button onClick={toggleTheme} className="flex items-center justify-center px-3 py-2 rounded-xl transition-all" style={{ color:C.muted, border:`1px solid ${C.border}` }}>
