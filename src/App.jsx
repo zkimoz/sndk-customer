@@ -743,6 +743,7 @@ export default function App() {
     name:'', phone:'', carBrandKey:'', carBrandId: null, carCategoryKey:'',
     carModel:'', carId: null, carPlateNumber:'', carChassisNumber:'', carRegistrationFile: null,
     serviceKey:'', serviceName:'', subServiceKey:'', subServiceName:'', date:'', timeKey:'', notes:'',
+    isQuoteOnly: false,
   });
 
   const [theme, setTheme] = useState(() => {
@@ -758,7 +759,7 @@ export default function App() {
 
   const tr    = T[lang];
   const isRtl = lang === 'ar';
-  const resetForm = () => setFormData({ name:'',phone:'',carBrandKey:'',carBrandId:null,carCategoryKey:'',carModel:'',carId:null,carPlateNumber:'',carChassisNumber:'',carRegistrationFile:null,serviceKey:'',serviceName:'',subServiceKey:'',subServiceName:'',date:'',timeKey:'',notes:'' });
+  const resetForm = () => setFormData({ name:'',phone:'',carBrandKey:'',carBrandId:null,carCategoryKey:'',carModel:'',carId:null,carPlateNumber:'',carChassisNumber:'',carRegistrationFile:null,serviceKey:'',serviceName:'',subServiceKey:'',subServiceName:'',date:'',timeKey:'',notes:'',isQuoteOnly:false });
 
   const fetchProfile = async (userId) => {
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
@@ -828,7 +829,9 @@ export default function App() {
   // Called after successful login
   const handleAuthSuccess = () => {
     setAuthModal(null);
-    if (authReason === 'book') {
+    if (authReason === 'book' || authReason === 'quote') {
+      // formData.isQuoteOnly was already set by startBooking/startQuoteRequest
+      // before the auth modal opened, so both reasons land on the same step.
       setPage('booking'); setStep(2); setAuthReason(null);
     }
   };
@@ -853,7 +856,17 @@ export default function App() {
   // بدء الحجز من سلة الخدمات
   const startBooking = () => {
     if (cart.length === 0) return;
+    setFormData(p => ({ ...p, isQuoteOnly: false }));
     if (!user) { setAuthReason('book'); setAuthModal('signup'); return; }
+    setPage('booking'); setStep(2);
+  };
+
+  // Same flow as booking, minus scheduling — for a customer who just wants
+  // a price before committing to bring the car in at all.
+  const startQuoteRequest = () => {
+    if (cart.length === 0) return;
+    setFormData(p => ({ ...p, isQuoteOnly: true }));
+    if (!user) { setAuthReason('quote'); setAuthModal('signup'); return; }
     setPage('booking'); setStep(2);
   };
 
@@ -869,7 +882,7 @@ export default function App() {
     setPage('orders'); setMenuOpen(false);
   };
 
-  const shared = { lang, tr, formData, setFormData, setStep, isRtl, user, profile, setAuthModal, carBrands, carCategories, brandCategories, serviceCategories, allSubServices, cart, addToCart, removeFromCart, startBooking };
+  const shared = { lang, tr, formData, setFormData, setStep, isRtl, user, profile, setAuthModal, carBrands, carCategories, brandCategories, serviceCategories, allSubServices, cart, addToCart, removeFromCart, startBooking, startQuoteRequest };
 
   const isBooking = page === 'booking' && step >= 2;
 
@@ -1055,7 +1068,7 @@ export default function App() {
             {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount} theme={theme}/>}
             {page==='booking' && step===2 && <DetailsStep {...shared} prevStep={()=>setPage('home')}/>}
             {page==='booking' && step===3 && <ScheduleStep {...shared} prevStep={()=>setStep(2)}/>}
-            {page==='booking' && step===4 && <ReviewStep   {...shared} prevStep={()=>setStep(3)} loading={loading} setLoading={setLoading}/>}
+            {page==='booking' && step===4 && <ReviewStep   {...shared} prevStep={()=>setStep(formData.isQuoteOnly ? 2 : 3)} loading={loading} setLoading={setLoading}/>}
             {page==='booking' && step===5 && <SuccessStep  tr={tr} name={formData.name} resetAll={()=>{ resetForm(); clearCart(); setPage('home'); setStep(1); }} goOrders={()=>{ resetForm(); clearCart(); setStep(1); goOrders(); }}/>}
           </main>
 
@@ -1156,6 +1169,12 @@ export default function App() {
                     {isRtl ? 'احجز الكل ←' : 'Book All →'}
                   </button>
                 </div>
+                <button onClick={() => { setCartOpen(false); startQuoteRequest(); }}
+                  className="w-full py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95"
+                  style={{ background:'transparent', color:C.muted, border:`1px dashed ${C.border}` }}>
+                  {!user && <Lock size={9} className="inline me-1.5"/>}
+                  {isRtl ? 'اطلب عرض سعر بس (من غير حجز موعد)' : 'Request a quote only (no appointment)'}
+                </button>
               </>
             )}
           </div>
@@ -2070,14 +2089,17 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   // checkbox for them to opt out with. Pass itemType ('part'|'labor') to
   // narrow it to just that column's payment row.
   const selectedQuotationTotal = (order, itemType = null) => {
-    const decided = order?.customer_approved || order?.customer_rejected;
     return (order?.order_items || [])
       .filter(it => !itemType || it.item_type === itemType)
       .reduce((sum, it) => {
         const lt = Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
         const key = it.service_name?.ar || it.service_name?.en;
         if (!key) return sum + lt;
-        const included = decided ? order.service_decisions?.[key] === 'approved' : isServiceSelected(order.id, key);
+        // A service already decided in a previous round (staff sent an
+        // additional quotation later) uses its locked-in decision; a new,
+        // not-yet-decided one uses whatever the customer has picked live.
+        const locked = !!order?.service_decisions?.[key];
+        const included = locked ? order.service_decisions[key] === 'approved' : isServiceSelected(order.id, key);
         return included ? sum + lt : sum;
       }, 0);
   };
@@ -2096,11 +2118,17 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   };
   const getServiceDecision = (orderId, key) => serviceSelections[orderId]?.[key]; // undefined | 'approved' | 'rejected'
   const isServiceSelected  = (orderId, key) => getServiceDecision(orderId, key) === 'approved';
-  const allServicesDecided = (orderId) => {
+  // Only services not already locked in from a previous round need a fresh
+  // local decision — this is what lets staff send an additional quotation
+  // later without re-asking about services the customer already settled.
+  const undecidedServiceKeys = (orderId) => {
     const order = orders.find(o => o.id === orderId);
-    const allKeys = serviceKeysOf(order);
-    if (allKeys.length === 0) return true; // legacy/general-only quotation — nothing to decide per-service
-    return allKeys.every(k => getServiceDecision(orderId, k) !== undefined);
+    return serviceKeysOf(order).filter(k => !order?.service_decisions?.[k]);
+  };
+  const allServicesDecided = (orderId) => {
+    const undecided = undecidedServiceKeys(orderId);
+    if (undecided.length === 0) return true;
+    return undecided.every(k => getServiceDecision(orderId, k) !== undefined);
   };
 
   const approveWithSignature = async (sigData, sigName) => {
@@ -2119,8 +2147,15 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     }
     const serviceKeys = serviceKeysOf(order);
     const selection = serviceSelections[orderId] || {};
-    const decisions = {};
-    serviceKeys.forEach(key => { decisions[key] = selection[key] === 'approved' ? 'approved' : 'rejected'; });
+    // Services already decided in an earlier round (order.service_decisions)
+    // stay exactly as they were — only the ones the customer just picked in
+    // this round get written, so an additional quotation sent later never
+    // re-litigates work already approved and done.
+    const decisions = { ...(order.service_decisions || {}) };
+    serviceKeys.forEach(key => {
+      if (decisions[key]) return;
+      decisions[key] = selection[key] === 'approved' ? 'approved' : 'rejected';
+    });
     const approvedCount = Object.values(decisions).filter(d => d === 'approved').length;
     // A quotation with no service groups (legacy / general-only) is a simple whole-order approval
     const isApproved = serviceKeys.length === 0 ? true : approvedCount > 0;
@@ -2281,10 +2316,17 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             </p>
                           )}
                         </div>
-                        <span className="px-2.5 py-1 rounded-full text-xs font-bold flex-shrink-0"
-                          style={{ background:st.bg, color:st.text }}>
-                          {st.label}
-                        </span>
+                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                          {a.is_quote_request && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background:`${C.gold}20`, color:C.gold }}>
+                              {isRtl ? '🏷️ طلب عرض سعر' : '🏷️ Quote request'}
+                            </span>
+                          )}
+                          <span className="px-2.5 py-1 rounded-full text-xs font-bold"
+                            style={{ background:st.bg, color:st.text }}>
+                            {st.label}
+                          </span>
+                        </div>
                       </div>
                       {/* Date */}
                       {(a.appointment_date || a.appointment_time) && (
@@ -2418,12 +2460,15 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             if (services.length === 0) return null;
                             const order = { high:0, medium:1, low:2 };
                             services.sort((a,b)=>order[a.priority]-order[b.priority]);
-                            const decided = relOrd.customer_approved || relOrd.customer_rejected;
+                            // Per-service, not per-order — a service already decided in an
+                            // earlier round (staff sent an additional quotation later) must
+                            // stay locked and not be re-offered for decision.
+                            const undecidedServices = services.filter(s => !relOrd.service_decisions?.[s.key]);
                             return (
                               <div className="space-y-1.5">
                                 <div className="flex items-center justify-between">
                                   <p className="text-xs font-bold" style={{ color:cc.sub }}>{isRtl?'الخدمات المطلوبة:':'Requested Services:'}</p>
-                                  {!decided && services.length > 1 && (
+                                  {undecidedServices.length > 1 && (
                                     <div className="flex items-center gap-2">
                                       <button onClick={()=>setAllServiceSelection(relOrd.id, 'approved')} className="text-[10px] font-bold underline" style={{ color:'#22c55e' }}>{isRtl?'الموافقة على الكل':'Approve all'}</button>
                                       <button onClick={()=>setAllServiceSelection(relOrd.id, 'rejected')} className="text-[10px] font-bold underline" style={{ color:'#ef4444' }}>{isRtl?'رفض الكل':'Reject all'}</button>
@@ -2461,7 +2506,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                           )}
                                         </div>
                                       </div>
-                                      {!decided && (
+                                      {!decision && (
                                         <div className="flex items-center gap-2 px-3 pb-2">
                                           <button onClick={()=>setServiceDecision(relOrd.id, s.key, 'approved')}
                                             className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold transition-all active:scale-95"
@@ -2570,8 +2615,16 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                               </button>
                             );
                           })()}
-                          {/* Confirm decision — disabled until every service has an explicit approve/reject */}
-                          {!relOrd.customer_approved && !relOrd.customer_rejected && (() => {
+                          {/* Confirm decision — disabled until every service has an explicit approve/reject.
+                              Shown whenever there's fresh work to decide on: either this order was never
+                              decided at all, or (legacy quotations with no per-service breakdown aside)
+                              staff sent an additional quotation later with new undecided services. */}
+                          {(() => {
+                            const allKeys = serviceKeysOf(relOrd);
+                            const hasNewWork = allKeys.length === 0
+                              ? !relOrd.customer_approved && !relOrd.customer_rejected
+                              : undecidedServiceKeys(relOrd.id).length > 0;
+                            if (!hasNewWork) return null;
                             const canConfirm = allServicesDecided(relOrd.id);
                             return (
                               <div>
@@ -4222,7 +4275,7 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
             {carFields}
           </div>
         )}
-        <NavBtns tr={tr} onBack={prevStep} onNext={() => setStep(3)} canNext={canGo}/>
+        <NavBtns tr={tr} onBack={prevStep} onNext={() => setStep(formData.isQuoteOnly ? 4 : 3)} canNext={canGo}/>
       </FormShell>
     );
   }
@@ -4323,8 +4376,10 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
     // Final guard against booking a past date — ScheduleStep already blocks
     // this in the UI, but re-check here too in case formData carried a stale
     // date in from somewhere the picker's own validation never touched.
+    // Doesn't apply to a quote-only request, which never goes through
+    // ScheduleStep and has no date to validate.
     const today = new Date().toISOString().split('T')[0];
-    if (formData.date && formData.date < today) {
+    if (!formData.isQuoteOnly && formData.date && formData.date < today) {
       alert(isRtl ? 'التاريخ المختار في الماضي — من فضلك اختر تاريخ صحيح' : 'The selected date is in the past — please pick a valid date');
       return;
     }
@@ -4364,7 +4419,9 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
         }
         const { error: apptErr } = await supabase.from('appointments').insert([{
           profile_id: user.id, car_id: carId,
-          appointment_date: formData.date, appointment_time: formData.timeKey,
+          appointment_date: formData.isQuoteOnly ? null : formData.date,
+          appointment_time: formData.isQuoteOnly ? null : formData.timeKey,
+          is_quote_request: formData.isQuoteOnly,
           service_type: serviceType,
           customer_notes: formData.notes, status: 'pending',
         }]);
@@ -4385,11 +4442,17 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
       // notification is slow/broken. Still logged (not silently swallowed) so a
       // failure is visible in devtools instead of vanishing without a trace.
       const carLabel = [formData.carBrandKey, formData.carCategoryKey, formData.carModel].filter(Boolean).join(' · ');
+      // No dedicated "quote request" staff event exists (it would need an edge
+      // function redeploy) — flagging it in the customer name is enough for
+      // staff to immediately tell it apart from a real scheduled booking.
+      const rawName = user ? (profile?.full_name || formData.name) : formData.name;
+      const customerName = formData.isQuoteOnly ? `🏷️ [طلب سعر بدون حجز] ${rawName}` : rawName;
       supabase.functions.invoke('clever-endpoint', {
         body: {
           event: 'new_booking',
-          customerName: user ? (profile?.full_name || formData.name) : formData.name,
-          serviceLabel, carLabel, appointmentDate: formData.date, appointmentTime: formData.timeKey,
+          customerName, serviceLabel, carLabel,
+          appointmentDate: formData.isQuoteOnly ? null : formData.date,
+          appointmentTime: formData.isQuoteOnly ? null : formData.timeKey,
         },
       }).then(({ error: notifyErr }) => { if (notifyErr) console.error('notify-staff failed:', notifyErr); })
         .catch((notifyErr) => console.error('notify-staff failed:', notifyErr));
@@ -4407,7 +4470,9 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
       : [{ label: tr.customer, value: `${formData.name}  ·  +974 ${formData.phone}` }]
     ),
     { label: tr.car,       value: carDisplay || '—' },
-    { label: tr.apptLabel, value: `${formData.date}  ·  ${slot?.[lang]}` },
+    ...(formData.isQuoteOnly
+      ? [{ label: isRtl?'النوع':'Type', value: isRtl?'طلب عرض سعر — بدون حجز موعد':'Quote request — no appointment' }]
+      : [{ label: tr.apptLabel, value: `${formData.date}  ·  ${slot?.[lang]}` }]),
     ...(formData.notes ? [{ label: tr.notes, value: formData.notes }] : []),
   ];
 
