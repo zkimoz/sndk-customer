@@ -971,7 +971,7 @@ export default function App() {
                     className="w-full mt-1.5 py-1.5 rounded-xl text-[10px] font-bold transition-all active:scale-95"
                     style={{ background:'transparent', color:C.muted, border:`1px dashed ${C.border}` }}>
                     {!user && <Lock size={9} className="inline me-1"/>}
-                    {isRtl ? 'اطلب عرض سعر بس' : 'Request a quote only'}
+                    {isRtl ? 'طلب عرض سعر فقط' : 'Request a quote only'}
                   </button>
                 </>
               )}
@@ -1179,7 +1179,7 @@ export default function App() {
                   className="w-full py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95"
                   style={{ background:'transparent', color:C.muted, border:`1px dashed ${C.border}` }}>
                   {!user && <Lock size={9} className="inline me-1.5"/>}
-                  {isRtl ? 'اطلب عرض سعر بس (من غير حجز موعد)' : 'Request a quote only (no appointment)'}
+                  {isRtl ? 'طلب عرض سعر فقط' : 'Request a quote only'}
                 </button>
               </>
             )}
