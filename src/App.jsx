@@ -326,10 +326,11 @@ const JOB_STATUS_ORDER = ['waiting','confirmed','en_route','car_received','at_wo
 // separate from order.status's broader lifecycle values (draft/pending/etc.),
 // only these two are staff-settable now.
 const PARTS_STATUS_LABEL = {
+  pending:  { ar:'في انتظار موافقة العميل', en:'Awaiting customer approval' },
   sourcing: { ar:'جاري تجهيز قطع الغيار', en:'Preparing parts' },
   ready:    { ar:'تم تسليم قطع الغيار للورشة', en:'Parts delivered to workshop' },
 };
-const PARTS_STATUS_COLOR = { sourcing:'#eab308', ready:'#22c55e' };
+const PARTS_STATUS_COLOR = { pending:'#60a5fa', sourcing:'#eab308', ready:'#22c55e' };
 
 const getStatusTimes = (history, statusKey) => {
   if (!Array.isArray(history)) return null;
@@ -2256,6 +2257,10 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     const newPartsTotal = approvedItems.filter(it => it.item_type === 'part').reduce((s,it) => s + lineTotal(it), 0);
     const newLaborTotal = approvedItems.filter(it => it.item_type === 'labor').reduce((s,it) => s + lineTotal(it), 0);
 
+    // The moment the customer approves, parts status moves on its own from
+    // "awaiting customer approval" to "preparing parts" — only if it's still
+    // sitting at 'pending', so it never steps on progress staff already made.
+    const autoPartsStatus = (isApproved && order.status === 'pending') ? { status: 'sourcing', parts_status_at: now } : {};
     const { error: decErr } = await supabase.from('orders').update({
       customer_approved: isApproved, customer_rejected: isRejected, approved_at: now,
       service_decisions: decisions,
@@ -2263,6 +2268,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
       // Only meaningful when this round actually had part items — the
       // signature modal only asks the question (and passes non-null) then.
       ...(wantsOldParts !== null && wantsOldParts !== undefined ? { wants_old_parts: wantsOldParts } : {}),
+      ...autoPartsStatus,
     }).eq('id', orderId);
     if (decErr) {
       alert(isRtl ? 'خطأ في حفظ القرار: ' + decErr.message : 'Error saving decision: ' + decErr.message);
@@ -2287,6 +2293,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
       ? { ...o, customer_approved:isApproved, customer_rejected:isRejected, approved_at:now, service_decisions:decisions,
           total_parts_price:newPartsTotal, total_labor_price:newLaborTotal,
           ...(wantsOldParts !== null && wantsOldParts !== undefined ? { wants_old_parts: wantsOldParts } : {}),
+          ...autoPartsStatus,
           ...localSig }
       : o
     ));
@@ -2501,7 +2508,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                         {/* Job status + number */}
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
                           <div className="flex items-center gap-1.5">
-                            {relOrd && PARTS_STATUS_LABEL[relOrd.status] && (
+                            {relOrd && relOrd.sent_to_customer && PARTS_STATUS_LABEL[relOrd.status] && (
                               <span className="flex flex-col items-end text-[9px] font-bold px-2 py-1 rounded-full text-white leading-tight text-end"
                                 style={{ background:PARTS_STATUS_COLOR[relOrd.status] }}>
                                 <span>{isRtl ? PARTS_STATUS_LABEL[relOrd.status].ar : PARTS_STATUS_LABEL[relOrd.status].en}</span>
