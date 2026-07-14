@@ -23,6 +23,7 @@ const T = {
     carBrand:'نوع السيارة', selectBrand:'اختر النوع',
     carCategory:'الفئة', selectCategory:'اختر الفئة',
     carYear:'سنة الموديل', yearHint:'4 أرقام',
+    carRegistration:'صورة الاستمارة', carRegistrationRequired:'صورة الاستمارة مطلوبة لتسجيل سيارة جديدة',
     pickTime:'اختر موعدك', date:'التاريخ', selectTime:'اختر وقتاً',
     notes:'شكاوى وملاحظات إضافية عن السيارة', notesPh:'اكتب أي عطل أو شكوى أو ملاحظة عن سيارتك...',
     reviewTitle:'مراجعة وتأكيد',
@@ -173,6 +174,7 @@ const T = {
     carBrand:'Car Brand', selectBrand:'Select Brand',
     carCategory:'Category', selectCategory:'Select Category',
     carYear:'Model Year', yearHint:'4 digits',
+    carRegistration:'Registration Card', carRegistrationRequired:'Registration card is required to register a new car',
     pickTime:'Choose Appointment', date:'Date', selectTime:'Select a Time',
     notes:'Complaints & Additional Notes About the Car', notesPh:'Describe any issue, complaint, or note about your car...',
     reviewTitle:'Review & Confirm',
@@ -718,7 +720,7 @@ export default function App() {
   const clearCart = () => setCart([]);
   const [formData, setFormData] = useState({
     name:'', phone:'', carBrandKey:'', carBrandId: null, carCategoryKey:'',
-    carModel:'', carId: null,
+    carModel:'', carId: null, carPlateNumber:'', carChassisNumber:'', carRegistrationFile: null,
     serviceKey:'', serviceName:'', subServiceKey:'', subServiceName:'', date:'', timeKey:'', notes:'',
   });
 
@@ -735,7 +737,7 @@ export default function App() {
 
   const tr    = T[lang];
   const isRtl = lang === 'ar';
-  const resetForm = () => setFormData({ name:'',phone:'',carBrandKey:'',carBrandId:null,carCategoryKey:'',carModel:'',carId:null,serviceKey:'',serviceName:'',subServiceKey:'',subServiceName:'',date:'',timeKey:'',notes:'' });
+  const resetForm = () => setFormData({ name:'',phone:'',carBrandKey:'',carBrandId:null,carCategoryKey:'',carModel:'',carId:null,carPlateNumber:'',carChassisNumber:'',carRegistrationFile:null,serviceKey:'',serviceName:'',subServiceKey:'',subServiceName:'',date:'',timeKey:'',notes:'' });
 
   const fetchProfile = async (userId) => {
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
@@ -3989,7 +3991,7 @@ function ServiceCard({ service, lang, span, onClick }) {
 }
 
 // ── STEP 2 · DETAILS ──────────────────────────────────────────────────
-function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user, carBrands, carCategories, brandCategories }) {
+function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user, carBrands, carCategories, brandCategories, isRtl }) {
   const [userCars, setUserCars]       = useState([]);
   const [carsLoading, setCarsLoading] = useState(false);
   const [addingNew, setAddingNew]     = useState(false);
@@ -4021,7 +4023,7 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
     }));
   };
 
-  const clearSelection = () => setFormData(p => ({ ...p, carId: null, carBrandKey: '', carBrandId: null, carCategoryKey: '', carModel: '' }));
+  const clearSelection = () => setFormData(p => ({ ...p, carId: null, carBrandKey: '', carBrandId: null, carCategoryKey: '', carModel: '', carPlateNumber: '', carChassisNumber: '', carRegistrationFile: null }));
 
   // Filter categories by selected brand (fallback: show all if no linkages defined)
   const linkedCatIds = new Set(
@@ -4031,10 +4033,14 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
     ? carCategories.filter(c => linkedCatIds.has(c.id))
     : carCategories;
 
-  // Shared car fields (used in both logged-in add-new and guest mode)
+  // Shared car fields (used in both logged-in add-new and guest mode) — when
+  // registering a new car during booking, the customer must enter the same
+  // full data set as the profile's own add-car form (type, category, year,
+  // plate, chassis, registration image), with type/category/year/registration
+  // required so staff always receive a complete, verifiable car record.
   const carFields = (
     <>
-      <Field label={tr.carBrand}>
+      <Field label={<>{tr.carBrand} <span style={{ color:'#f87171' }}>*</span></>}>
         <BrandSearchSelect
           value={formData.carBrandKey}
           onSelect={brand => setFormData(p => ({ ...p, carBrandKey: brand.name_ar||brand.name_en, carBrandId: brand.id, carCategoryKey: '' }))}
@@ -4042,7 +4048,7 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
           lang={lang} placeholder={tr.selectBrand}
         />
       </Field>
-      <Field label={tr.carCategory}>
+      <Field label={<>{tr.carCategory} <span style={{ color:'#f87171' }}>*</span></>}>
         <select value={formData.carCategoryKey}
           onChange={e => setFormData(p => ({ ...p, carCategoryKey: e.target.value }))}
           disabled={!formData.carBrandKey}
@@ -4052,19 +4058,43 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
           {sortByEn(filteredCats).map(c => { const v=c.name_ar||c.name_en; return <option key={c.id} value={v}>{catLabel(c, lang)}</option>; })}
         </select>
       </Field>
-      <Field label={tr.carYear}>
+      <Field label={<>{tr.carYear} <span style={{ color:'#f87171' }}>*</span></>}>
         <select value={formData.carModel} onChange={e => setFormData(p => ({ ...p, carModel: e.target.value }))}
           className={`${C.inputCls} appearance-none cursor-pointer`} style={{ background: C.input, border: `1px solid ${C.border}` }}>
           <option value="">{tr.selectYear}</option>
           {BOOKING_YEAR_OPTIONS.map(y => <option key={y} value={String(y)}>{y}</option>)}
         </select>
       </Field>
+      <Field label={tr.prof_plate}>
+        <input type="text" dir="ltr" placeholder={tr.prof_plate_ph} value={formData.carPlateNumber}
+          onChange={e => setFormData(p => ({ ...p, carPlateNumber: e.target.value }))}
+          className={C.inputCls} style={{ background: C.input, border: `1px solid ${C.border}`, textAlign: isRtl?'right':'left' }}
+          onFocus={e => e.target.style.borderColor = C.borderFocus} onBlur={e => e.target.style.borderColor = C.border}/>
+      </Field>
+      <Field label={tr.prof_chassis}>
+        <input type="text" dir="ltr" maxLength={17} placeholder={tr.prof_chassis_ph} value={formData.carChassisNumber}
+          onChange={e => setFormData(p => ({ ...p, carChassisNumber: e.target.value.toUpperCase() }))}
+          className={C.inputCls} style={{ background: C.input, border: `1px solid ${C.border}`, textAlign: isRtl?'right':'left' }}
+          onFocus={e => e.target.style.borderColor = C.borderFocus} onBlur={e => e.target.style.borderColor = C.border}/>
+      </Field>
+      <Field label={<>{tr.carRegistration} <span style={{ color:'#f87171' }}>*</span></>}>
+        <label className="flex items-center gap-2 px-4 py-3.5 rounded-xl cursor-pointer text-sm transition-all"
+          style={{ background: C.input, border: `1px solid ${formData.carRegistrationFile ? C.gold : C.border}` }}>
+          <Upload size={14} style={{ color: formData.carRegistrationFile ? C.gold : C.muted, flexShrink:0 }}/>
+          <span className="truncate" style={{ color: formData.carRegistrationFile ? C.gold : C.muted }}>
+            {formData.carRegistrationFile ? formData.carRegistrationFile.name : tr.prof_reg_upload}
+          </span>
+          <input type="file" accept="image/*,application/pdf" className="hidden"
+            onChange={e => setFormData(p => ({ ...p, carRegistrationFile: e.target.files[0] || null }))}/>
+        </label>
+        <p className="text-[10px] mt-1.5" style={{ color: C.muted }}>{tr.carRegistrationRequired}</p>
+      </Field>
     </>
   );
 
   // ── Logged-in path ────────────────────────────────────────────────
   if (user) {
-    const canGo = formData.carId !== null || (addingNew && !!formData.carBrandKey && formData.carModel.length === 4);
+    const canGo = formData.carId !== null || (addingNew && !!formData.carBrandKey && !!formData.carCategoryKey && formData.carModel.length === 4 && !!formData.carRegistrationFile);
     return (
       <FormShell title={tr.yourCar}>
         {/* Selected car chip */}
@@ -4240,12 +4270,27 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
       if (user) {
         let carId = formData.carId;
         if (!carId) {
+          let registration_image_url = null;
+          if (formData.carRegistrationFile) {
+            const ext = formData.carRegistrationFile.name.split('.').pop();
+            // Namespaced under the owner's user id, same as the profile's own
+            // add-car upload — the bucket is public, so the path is the gate.
+            const plateKey = sanitizeForPath(formData.carPlateNumber) || `${Date.now()}`;
+            const path = `${user.id}/${plateKey}.${ext}`;
+            const { error: upErr } = await supabase.storage.from('car-registration').upload(path, formData.carRegistrationFile, { upsert: true });
+            if (upErr) throw new Error((isRtl ? 'فشل رفع صورة الاستمارة: ' : 'Failed to upload registration image: ') + upErr.message);
+            const { data: { publicUrl } } = supabase.storage.from('car-registration').getPublicUrl(path);
+            registration_image_url = publicUrl;
+          }
           const { data: carData, error: carErr } = await supabase.from('cars')
             .insert([{
               profile_id: user.id,
               car_type: formData.carBrandKey,
               car_category: formData.carCategoryKey || null,
               production_year: parseInt(formData.carModel) || null,
+              plate_number: formData.carPlateNumber?.trim() || null,
+              chassis_number: formData.carChassisNumber?.trim() || null,
+              registration_image_url,
             }]).select('id').single();
           if (carErr) throw carErr;
           carId = carData.id;
