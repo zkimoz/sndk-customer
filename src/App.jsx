@@ -1325,12 +1325,13 @@ const parseServices = (st) => {
   return null;
 };
 
-function SignatureModal({ isRtl, theme, onConfirm, onClose }) {
+function SignatureModal({ isRtl, theme, hasParts, onConfirm, onClose }) {
   const canvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [mode, setMode] = useState('draw');
   const [typedName, setTypedName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [wantsOldParts, setWantsOldParts] = useState(null); // null | true | false — required when hasParts
   const lastPos = useRef({ x:0, y:0 });
 
   useEffect(() => {
@@ -1376,6 +1377,10 @@ function SignatureModal({ isRtl, theme, onConfirm, onClose }) {
 
   const confirm = async () => {
     if (saving) return;
+    if (hasParts && wantsOldParts === null) {
+      alert(isRtl ? 'من فضلك حدد إجابتك على سؤال قطع الغيار القديمة أولاً' : 'Please answer the old parts question first');
+      return;
+    }
     let sigData = null, sigName = null;
     if (mode === 'draw') {
       const canvas = canvasRef.current;
@@ -1391,7 +1396,7 @@ function SignatureModal({ isRtl, theme, onConfirm, onClose }) {
     }
     setSaving(true);
     try {
-      await onConfirm(sigData, sigName);
+      await onConfirm(sigData, sigName, hasParts ? wantsOldParts : null);
     } finally {
       setSaving(false);
     }
@@ -1413,6 +1418,25 @@ function SignatureModal({ isRtl, theme, onConfirm, onClose }) {
             <X size={18}/>
           </button>
         </div>
+        {hasParts && (
+          <div className="px-5 pt-4">
+            <p className="text-sm font-bold mb-2" style={{ color:mc.txt }}>
+              {isRtl ? 'هل تريد استرجاع قطع الغيار القديمة؟' : 'Do you want to keep the old spare parts?'}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={()=>setWantsOldParts(true)}
+                className="py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95"
+                style={wantsOldParts===true ? { background:'#16a34a', color:'#fff' } : { background:'rgba(0,0,0,0.12)', color:mc.sub }}>
+                {isRtl?'نعم':'Yes'}
+              </button>
+              <button onClick={()=>setWantsOldParts(false)}
+                className="py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95"
+                style={wantsOldParts===false ? { background:'#ef4444', color:'#fff' } : { background:'rgba(0,0,0,0.12)', color:mc.sub }}>
+                {isRtl?'لا':'No'}
+              </button>
+            </div>
+          </div>
+        )}
         <div className="px-5 pt-4 flex gap-2">
           {[{ k:'draw', ar:'✍️ رسم التوقيع', en:'✍️ Draw' }, { k:'type', ar:'⌨️ كتابة الاسم', en:'⌨️ Type Name' }].map(m => (
             <button key={m.k} onClick={() => setMode(m.k)} className="flex-1 py-2 rounded-xl text-xs font-bold transition-all"
@@ -1705,6 +1729,12 @@ ${isApproved ? `
   <div style="margin-top:12px;padding-top:10px;border-top:1px dashed #86efac;text-align:center">
     <p style="font-size:11px;color:#555;margin-bottom:4px">توقيع العميل / Customer Signature:</p>
     <p style="font-size:22px;font-family:Georgia,serif;font-style:italic;color:#15803d">${escapeHtml(order.signed_by)}</p>
+  </div>` : ''}
+  ${order.wants_old_parts !== null && order.wants_old_parts !== undefined ? `
+  <div style="margin-top:12px;padding-top:10px;border-top:1px dashed #86efac;text-align:center">
+    <p style="font-size:12px;font-weight:700;color:#1e293b">${order.wants_old_parts
+      ? 'العميل يريد قطع الغيار القديمة / Customer wants the old spare parts'
+      : 'العميل لا يريد قطع الغيار القديمة / Customer does not want the old spare parts'}</p>
   </div>` : ''}
 </div>` : `
 <div class="pending-box">⏳ بانتظار موافقة العميل / Pending Customer Approval</div>`}
@@ -2175,7 +2205,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     return undecided.every(k => getServiceDecision(orderId, k) !== undefined);
   };
 
-  const approveWithSignature = async (sigData, sigName) => {
+  const approveWithSignature = async (sigData, sigName, wantsOldParts) => {
     const orderId = sigModal.orderId;
     if (!orderId) return;
     const now = new Date().toISOString();
@@ -2221,6 +2251,9 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
       customer_approved: isApproved, customer_rejected: isRejected, approved_at: now,
       service_decisions: decisions,
       total_parts_price: newPartsTotal, total_labor_price: newLaborTotal,
+      // Only meaningful when this round actually had part items — the
+      // signature modal only asks the question (and passes non-null) then.
+      ...(wantsOldParts !== null && wantsOldParts !== undefined ? { wants_old_parts: wantsOldParts } : {}),
     }).eq('id', orderId);
     if (decErr) {
       alert(isRtl ? 'خطأ في حفظ القرار: ' + decErr.message : 'Error saving decision: ' + decErr.message);
@@ -2243,7 +2276,9 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
 
     setOrders(prev => prev.map(o => o.id === orderId
       ? { ...o, customer_approved:isApproved, customer_rejected:isRejected, approved_at:now, service_decisions:decisions,
-          total_parts_price:newPartsTotal, total_labor_price:newLaborTotal, ...localSig }
+          total_parts_price:newPartsTotal, total_labor_price:newLaborTotal,
+          ...(wantsOldParts !== null && wantsOldParts !== undefined ? { wants_old_parts: wantsOldParts } : {}),
+          ...localSig }
       : o
     ));
     setSigModal({ open:false, orderId:null });
@@ -2870,6 +2905,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
         <SignatureModal
           isRtl={isRtl}
           theme={theme}
+          hasParts={(orders.find(o => o.id === sigModal.orderId)?.order_items || []).some(i => i.item_type === 'part')}
           onConfirm={approveWithSignature}
           onClose={() => setSigModal({ open:false, orderId:null })}
         />
