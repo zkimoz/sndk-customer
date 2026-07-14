@@ -471,14 +471,6 @@ const CAR_BRANDS = [
   { key:'kia',      ar:'كيا',         en:'Kia',      cats:[{key:'sedan',ar:'سيدان',en:'Sedan'},{key:'suv',ar:'دفع رباعي',en:'SUV'}]},
 ];
 
-const TIME_SLOTS = [
-  { key:'09:00 AM', ar:'٩:٠٠ ص', en:'9:00 AM' },
-  { key:'11:00 AM', ar:'١١:٠٠ ص', en:'11:00 AM' },
-  { key:'02:00 PM', ar:'٢:٠٠ م', en:'2:00 PM' },
-  { key:'04:00 PM', ar:'٤:٠٠ م', en:'4:00 PM' },
-  { key:'06:00 PM', ar:'٦:٠٠ م', en:'6:00 PM' },
-];
-
 // ── Category style map (icon + colors) keyed by name ──────────────────
 const CAT_STYLE = {
   'صيانة دورية':        { icon:Cog },
@@ -542,7 +534,6 @@ const enrichCat = (cat, idx) => {
 // ── Helpers ────────────────────────────────────────────────────────────
 const getBrand   = k => CAR_BRANDS.find(b => b.key === k);
 const getCat     = (bk,ck) => getBrand(bk)?.cats.find(c => c.key === ck);
-const getSlot    = k => TIME_SLOTS.find(t => t.key === k);
 
 const BOOKING_YEAR_OPTIONS = (() => {
   const yr = new Date().getFullYear();
@@ -731,6 +722,7 @@ export default function App() {
   const [brandCategories, setBrandCategories] = useState([]); // [{brand_id, category_id}]
   const [serviceCategories, setServiceCategories] = useState([]);
   const [allSubServices, setAllSubServices]       = useState([]);
+  const [timeSlots, setTimeSlots]                 = useState([]); // staff-controlled, from time_slots
   const [cart, setCart] = useState([]); // [{id, name, catId, catName}]
   const [cartOpen, setCartOpen] = useState(false);
   const [homeAnnouncements, setHomeAnnouncements] = useState([]);
@@ -817,6 +809,9 @@ export default function App() {
     // Load all active announcements for slideshow
     supabase.from('announcements').select('*').eq('is_active', true).order('id', { ascending:false })
       .then(({ data }) => { if (data?.length) setHomeAnnouncements(data); });
+    // Staff-controlled appointment time slots (capacity, open/closed)
+    supabase.from('time_slots').select('*').eq('is_active', true).order('sort_order').order('slot_key')
+      .then(({ data }) => { if (data) setTimeSlots(data); });
     return () => subscription.unsubscribe();
   }, []);
 
@@ -882,7 +877,7 @@ export default function App() {
     setPage('orders'); setMenuOpen(false);
   };
 
-  const shared = { lang, tr, formData, setFormData, setStep, isRtl, user, profile, setAuthModal, carBrands, carCategories, brandCategories, serviceCategories, allSubServices, cart, addToCart, removeFromCart, startBooking, startQuoteRequest };
+  const shared = { lang, tr, formData, setFormData, setStep, isRtl, user, profile, setAuthModal, carBrands, carCategories, brandCategories, serviceCategories, allSubServices, cart, addToCart, removeFromCart, startBooking, startQuoteRequest, timeSlots };
 
   const isBooking = page === 'booking' && step >= 2;
 
@@ -4377,10 +4372,13 @@ const isFriday = (dateStr) => {
   return new Date(y, m - 1, d).getDay() === 5;
 };
 
-function ScheduleStep({ lang, tr, formData, setFormData, setStep, prevStep }) {
+function ScheduleStep({ lang, tr, formData, setFormData, setStep, prevStep, timeSlots }) {
   const isRtl = lang === 'ar';
   const today = new Date().toISOString().split('T')[0];
   const [fridayWarning, setFridayWarning] = useState(false);
+  const [blockedWarning, setBlockedWarning] = useState('');
+  const [slotCounts, setSlotCounts] = useState({}); // { [slot_key]: booked_count }
+  const [loadingSlots, setLoadingSlots] = useState(false);
   // Belt-and-suspenders past-date guard: the native `min` attribute stops the
   // picker UI from offering past dates, but some browsers (iOS Safari in
   // particular) can re-populate the field with a stale value it remembered
@@ -4395,6 +4393,36 @@ function ScheduleStep({ lang, tr, formData, setFormData, setStep, prevStep }) {
   useEffect(() => {
     if (formData.date && (formData.date < today || isFriday(formData.date))) setFormData(p => ({ ...p, date: '' }));
   }, []);
+  // Whenever the date changes: check it isn't a fully-blocked day, and load
+  // how many cars are already booked in each slot (get_slot_availability is
+  // a SECURITY DEFINER RPC — it only ever returns aggregate counts, never
+  // other customers' actual appointment rows, so this is safe under RLS).
+  useEffect(() => {
+    if (!formData.date) { setSlotCounts({}); setBlockedWarning(''); return; }
+    let cancelled = false;
+    setLoadingSlots(true);
+    (async () => {
+      const { data: blocked } = await supabase.from('blocked_dates').select('reason').eq('blocked_date', formData.date).maybeSingle();
+      if (cancelled) return;
+      if (blocked) {
+        setBlockedWarning(blocked.reason || (isRtl?'هذا اليوم غير متاح للحجز':'This day is not available for booking'));
+        setFormData(p => ({ ...p, date: '', timeKey: '' }));
+        setLoadingSlots(false);
+        return;
+      }
+      setBlockedWarning('');
+      const { data: counts } = await supabase.rpc('get_slot_availability', { p_date: formData.date });
+      if (cancelled) return;
+      const map = {};
+      (counts||[]).forEach(c => { map[c.appointment_time] = Number(c.booked_count)||0; });
+      setSlotCounts(map);
+      // The previously-picked time might have just filled up under a new date
+      const slot = timeSlots.find(s => s.slot_key === formData.timeKey);
+      if (slot && (map[slot.slot_key]||0) >= slot.capacity) setFormData(p => ({ ...p, timeKey: '' }));
+      setLoadingSlots(false);
+    })();
+    return () => { cancelled = true; };
+  }, [formData.date]);
   return (
     <FormShell title={tr.pickTime}>
       <Field label={tr.date}>
@@ -4421,27 +4449,46 @@ function ScheduleStep({ lang, tr, formData, setFormData, setStep, prevStep }) {
             const v = e.target.value && e.target.value < today ? today : e.target.value;
             if (v && isFriday(v)) { setFridayWarning(true); setFormData(p=>({...p,date:''})); return; }
             setFridayWarning(false);
-            setFormData(p=>({...p,date:v}));
+            setFormData(p=>({...p,date:v,timeKey:''}));
           }}
           className={`${C.inputCls} ${C.colorScheme} cursor-pointer`}
-          style={{ background:C.input, border:`1px solid ${fridayWarning?'#f87171':C.border}`, color: formData.date ? C.text : C.muted, textAlign: isRtl?'right':'left' }}
-          onFocus={e=>e.target.style.borderColor=C.borderFocus} onBlur={e=>e.target.style.borderColor=fridayWarning?'#f87171':C.border}/>
+          style={{ background:C.input, border:`1px solid ${(fridayWarning||blockedWarning)?'#f87171':C.border}`, color: formData.date ? C.text : C.muted, textAlign: isRtl?'right':'left' }}
+          onFocus={e=>e.target.style.borderColor=C.borderFocus} onBlur={e=>e.target.style.borderColor=(fridayWarning||blockedWarning)?'#f87171':C.border}/>
         {fridayWarning && (
           <p className="text-xs mt-1.5" style={{ color:'#f87171' }}>
             {isRtl ? 'يوم الجمعة إجازة — من فضلك اختر يوماً آخر' : 'We\'re closed on Fridays — please pick another day'}
           </p>
         )}
+        {blockedWarning && (
+          <p className="text-xs mt-1.5" style={{ color:'#f87171' }}>{blockedWarning}</p>
+        )}
       </Field>
       <Field label={tr.selectTime}>
-        <div className="grid grid-cols-2 gap-3">
-          {TIME_SLOTS.map(slot=>(
-            <button key={slot.key} onClick={()=>setFormData(p=>({...p,timeKey:slot.key}))}
-              className="py-3.5 rounded-xl text-sm font-bold transition-all active:scale-95"
-              style={formData.timeKey===slot.key ? { background:C.gold, color:C.btnTxt, boxShadow:`0 0 20px ${C.gold}50` } : { background:C.input, border:`1px solid ${C.border}`, color:C.muted }}>
-              {slot[lang]}
-            </button>
-          ))}
-        </div>
+        {!formData.date ? (
+          <p className="text-xs" style={{ color:C.muted }}>{isRtl?'اختر التاريخ أولاً':'Pick a date first'}</p>
+        ) : loadingSlots ? (
+          <div className="flex items-center gap-2 py-2" style={{ color:C.muted }}><Loader2 size={14} className="animate-spin"/><span className="text-xs">{isRtl?'جاري التحقق من الأوقات المتاحة...':'Checking available times...'}</span></div>
+        ) : timeSlots.length === 0 ? (
+          <p className="text-xs" style={{ color:C.muted }}>{isRtl?'لا توجد أوقات متاحة حالياً':'No time slots available right now'}</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {timeSlots.map(slot=>{
+              const isFull = (slotCounts[slot.slot_key]||0) >= slot.capacity;
+              const isSelected = formData.timeKey===slot.slot_key;
+              return (
+                <button key={slot.slot_key} disabled={isFull} onClick={()=>setFormData(p=>({...p,timeKey:slot.slot_key}))}
+                  className="py-3.5 rounded-xl text-sm font-bold transition-all active:scale-95 disabled:active:scale-100 disabled:cursor-not-allowed"
+                  style={isSelected
+                    ? { background:C.gold, color:C.btnTxt, boxShadow:`0 0 20px ${C.gold}50` }
+                    : isFull ? { background:'transparent', border:`1px solid ${C.border}`, color:C.dim, opacity:0.5, textDecoration:'line-through' }
+                    : { background:C.input, border:`1px solid ${C.border}`, color:C.muted }}>
+                  {isRtl?slot.label_ar:(slot.label_en||slot.label_ar)}
+                  {isFull && <span className="block text-[10px] mt-0.5">{isRtl?'مكتمل':'Full'}</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </Field>
       <Field label={tr.notes}>
         <textarea rows={3} placeholder={tr.notesPh} value={formData.notes} onChange={e=>setFormData(p=>({...p,notes:e.target.value}))}
@@ -4454,8 +4501,8 @@ function ScheduleStep({ lang, tr, formData, setFormData, setStep, prevStep }) {
 }
 
 // ── STEP 4 · REVIEW ───────────────────────────────────────────────────
-function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading, user, profile, cart, carBrands, carCategories }) {
-  const slot = getSlot(formData.timeKey);
+function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading, user, profile, cart, carBrands, carCategories, timeSlots }) {
+  const slot = timeSlots.find(s => s.slot_key === formData.timeKey);
   const isRtl = lang === 'ar';
 
   const submit = async () => {
@@ -4562,7 +4609,7 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
     { label: tr.car,       value: carDisplay || '—' },
     ...(formData.isQuoteOnly
       ? [{ label: isRtl?'النوع':'Type', value: isRtl?'طلب عرض سعر — بدون حجز موعد':'Quote request — no appointment' }]
-      : [{ label: tr.apptLabel, value: `${formData.date}  ·  ${slot?.[lang]}` }]),
+      : [{ label: tr.apptLabel, value: `${formData.date}  ·  ${slot ? (isRtl?slot.label_ar:(slot.label_en||slot.label_ar)) : ''}` }]),
     ...(formData.notes ? [{ label: tr.notes, value: formData.notes }] : []),
   ];
 
