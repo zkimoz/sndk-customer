@@ -1486,7 +1486,8 @@ function openQuotationPDF(order, linked, profile, jobCard) {
   *{margin:0;padding:0;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}
   body{font-family:Arial,sans-serif;background:#fff;color:#1a1a1a;padding:24px;max-width:820px;margin:0 auto}
   .print-btn{position:fixed;top:14px;right:14px;background:#8A1538;color:#fff;border:none;padding:10px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;z-index:999;box-shadow:0 2px 8px rgba(0,0,0,0.2)}
-  @media print{.print-btn{display:none}body{padding:0}}
+  .close-btn{position:fixed;top:14px;left:14px;background:#fff;color:#8A1538;border:1.5px solid #8A1538;padding:10px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;z-index:999;box-shadow:0 2px 8px rgba(0,0,0,0.2)}
+  @media print{.print-btn,.close-btn{display:none}body{padding:0}}
   .header{display:flex;justify-content:space-between;align-items:flex-start;padding:18px 0 14px;border-bottom:3px solid #8A1538;margin-bottom:18px}
   .brand-ar{font-size:30px;font-weight:900;color:#8A1538;line-height:1}
   .brand-en{font-size:13px;color:#D4AF37;font-weight:700;margin-top:3px}
@@ -1524,6 +1525,7 @@ function openQuotationPDF(order, linked, profile, jobCard) {
 </style>
 </head>
 <body>
+<button class="close-btn" onclick="window.close()">✕ إغلاق / Close</button>
 <button class="print-btn" onclick="window.print()">🖨️ طباعة / Save as PDF</button>
 
 <div class="header">
@@ -1845,7 +1847,16 @@ function printCustomerInvoice(jobCard, appt, order, profile, brandsData = [], ca
     .footer .f-ar{font-size:12px;color:#475569;font-weight:600;margin-bottom:3px}
     .footer .f-en{font-size:12px;color:#94a3b8;font-weight:500}
     @media print{body{background:#fff;padding:0}.page{box-shadow:none;border-radius:0;max-width:100%}}
+    .action-bar{position:fixed;top:14px;left:14px;right:14px;display:flex;justify-content:space-between;z-index:999}
+    .action-btn{border:none;padding:10px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.2)}
+    .print-btn{background:#8A1538;color:#fff}
+    .close-btn{background:#fff;color:#8A1538;border:1.5px solid #8A1538}
+    @media print{.action-bar{display:none}}
   </style></head><body>
+  <div class="action-bar">
+    <button class="action-btn close-btn" onclick="window.close()">✕ إغلاق / Close</button>
+    <button class="action-btn print-btn" onclick="window.print()">🖨️ طباعة / Save as PDF</button>
+  </div>
   <div class="page">
 
     <!-- HEADER -->
@@ -3238,6 +3249,11 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
   const [history, setHistory]         = useState({});
   const [expandedCar, setExpandedCar] = useState(null);
   const [loadingCars, setLoadingCars] = useState(true);
+  // Shown in an in-app modal instead of a new tab/window — on mobile Safari
+  // (especially the iPad/PWA case) opening a file with target="_blank" often
+  // leaves no obvious way back to the app, since there's no browser chrome
+  // to navigate with. An in-app viewer never leaves the page at all.
+  const [viewingRegistration, setViewingRegistration] = useState(null);
 
   // Edit profile state
   const [editing, setEditing]         = useState(false);
@@ -3816,7 +3832,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                     </button>
                     {car.registration_image_url && (
                       <button
-                        onClick={e => { e.stopPropagation(); window.open(car.registration_image_url, '_blank'); }}
+                        onClick={e => { e.stopPropagation(); setViewingRegistration(car.registration_image_url); }}
                         className="flex items-center gap-1.5 px-3 py-2 rounded-xl flex-shrink-0 text-xs font-bold transition-all"
                         style={{ background:'rgba(0,0,0,0.10)', color:cc.fg }}>
                         <Eye size={14}/>{isRtl?'عرض استمارة السيارة':'View Car Registration'}
@@ -3899,11 +3915,11 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                                 {registrationEditFile ? registrationEditFile.name : (editCarForm.registration_image_url ? (isRtl?'استمارة محفوظة — اضغط للتغيير':'Saved — tap to replace') : tr.prof_reg_upload)}
                               </span>
                               {editCarForm.registration_image_url && !registrationEditFile && (
-                                <a href={editCarForm.registration_image_url} target="_blank" rel="noreferrer"
-                                  onClick={e=>e.stopPropagation()}
+                                <button type="button"
+                                  onClick={e=>{ e.stopPropagation(); e.preventDefault(); setViewingRegistration(editCarForm.registration_image_url); }}
                                   className="text-[10px] underline flex-shrink-0" style={{ color:C.gold }}>
                                   {tr.prof_reg_view}
-                                </a>
+                                </button>
                               )}
                               <input type="file" accept="image/*,application/pdf" className="hidden"
                                 onChange={e => setRegistrationEditFile(e.target.files[0] || null)}/>
@@ -3930,11 +3946,11 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                         <p className="text-xs font-bold tracking-widest uppercase" style={{ color:`${C.gold}80` }}>{tr.myHistory}</p>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           {car.registration_image_url && (
-                            <a href={car.registration_image_url} target="_blank" rel="noreferrer"
-                              onClick={e=>e.stopPropagation()}
+                            <button
+                              onClick={e=>{ e.stopPropagation(); setViewingRegistration(car.registration_image_url); }}
                               className="text-xs font-bold px-3 py-1.5 rounded-lg transition-all" style={{ background:'rgba(255,255,255,0.08)', color:C.muted }}>
                               {tr.prof_reg_view}
-                            </a>
+                            </button>
                           )}
                           <button onClick={()=>onBook(car)} className="text-xs font-bold px-3 py-1.5 rounded-lg transition-all" style={{ background:`${C.gold}20`, color:C.gold }}>
                             + {tr.bookNow}
@@ -4070,6 +4086,25 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
           </div>
         )}
       </div>
+
+      {/* Registration viewer — in-app instead of a new tab, so there's
+          always an obvious way back (mobile Safari/iPad can strand a
+          user on a target="_blank" file with no visible way to return). */}
+      {viewingRegistration && (
+        <div className="fixed inset-0 z-[100] flex flex-col" style={{ background:'rgba(0,0,0,0.92)' }} onClick={()=>setViewingRegistration(null)}>
+          <div className="flex items-center justify-between p-4 flex-shrink-0">
+            <span className="text-sm font-bold text-white">{tr.prof_reg_view}</span>
+            <button onClick={()=>setViewingRegistration(null)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white"
+              style={{ background:'rgba(255,255,255,0.15)' }}>
+              <X size={14}/>{isRtl?'إغلاق':'Close'}
+            </button>
+          </div>
+          <div className="flex-1 min-h-0" onClick={e=>e.stopPropagation()}>
+            <iframe src={viewingRegistration} title="registration" className="w-full h-full border-0" style={{ background:'#fff' }}/>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
