@@ -1063,7 +1063,7 @@ export default function App() {
           {/* Page Content */}
           <main className="flex-1 overflow-y-auto pb-24 md:pb-8">
             {page==='home'    && <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements} goOrders={goOrders} pendingQuotCount={pendingQuotCount}/>}
-            {page==='services'&& <ServicesView lang={lang} tr={tr} isRtl={isRtl} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} theme={theme}/>}
+            {page==='services'&& <ServicesView lang={lang} tr={tr} isRtl={isRtl} user={user} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} theme={theme}/>}
             {page==='profile' && user && <ProfileView lang={lang} tr={tr} isRtl={isRtl} profile={profile} user={user} onBook={(car)=>bookFromProfile(car)} goServices={goServices} goOrders={goOrders} onProfileUpdated={()=>fetchProfile(user.id)} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories}/>}
             {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount} theme={theme}/>}
             {page==='booking' && step===2 && <DetailsStep {...shared} prevStep={()=>setPage('home')}/>}
@@ -3003,7 +3003,7 @@ function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, service
 }
 
 // ── SERVICES VIEW ──────────────────────────────────────────────────────
-function ServicesView({ lang, tr, isRtl, expanded, setExpanded, serviceCategories, allSubServices, cart, addToCart, removeFromCart, theme }) {
+function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCategories, allSubServices, cart, addToCart, removeFromCart, theme }) {
   const btnAccent = theme === 'light' ? '#8A1538' : C.gold;
   const loading = serviceCategories.length === 0;
   const [unsureOpenFor, setUnsureOpenFor] = useState(null); // category id whose "describe your fault" box is open
@@ -3022,7 +3022,7 @@ function ServicesView({ lang, tr, isRtl, expanded, setExpanded, serviceCategorie
       <div className="p-4 md:p-8 max-w-3xl md:mx-auto space-y-4" style={{ paddingBottom: '24px' }}>
         <div className="mb-2">
           <h1 className={`text-2xl font-black ${C.selectCls}`}>{tr.allServices}</h1>
-          <p className="text-sm mt-1" style={{ color:C.muted }}>{tr.browseFreely}</p>
+          {!user && <p className="text-sm mt-1" style={{ color:C.muted }}>{tr.browseFreely}</p>}
           <div className="w-10 h-0.5 rounded-full mt-2" style={{ background:`${C.gold}70` }}/>
         </div>
 
