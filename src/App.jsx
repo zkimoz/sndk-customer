@@ -1075,7 +1075,7 @@ export default function App() {
             {page==='booking' && step===2 && <DetailsStep {...shared} prevStep={()=>setPage('home')}/>}
             {page==='booking' && step===3 && <ScheduleStep {...shared} prevStep={()=>setStep(2)}/>}
             {page==='booking' && step===4 && <ReviewStep   {...shared} prevStep={()=>setStep(formData.isQuoteOnly ? 2 : 3)} loading={loading} setLoading={setLoading}/>}
-            {page==='booking' && step===5 && <SuccessStep  tr={tr} name={formData.name} resetAll={()=>{ resetForm(); clearCart(); setPage('home'); setStep(1); }} goOrders={()=>{ resetForm(); clearCart(); setStep(1); goOrders(); }}/>}
+            {page==='booking' && step===5 && <SuccessStep  tr={tr} isRtl={isRtl} name={formData.name} isQuoteOnly={formData.isQuoteOnly} resetAll={()=>{ resetForm(); clearCart(); setPage('home'); setStep(1); }} goOrders={()=>{ resetForm(); clearCart(); setStep(1); goOrders(); }}/>}
           </main>
 
           {/* Mobile Bottom Nav */}
@@ -4517,7 +4517,9 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
       <button onClick={submit} disabled={loading}
         className="w-full py-4 rounded-xl font-black text-[15px] tracking-wide transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
         style={{ background:C.gold, color:C.btnTxt, boxShadow:`0 0 28px ${C.gold}50` }}>
-        {loading?<><Loader2 size={17} className="animate-spin"/>{tr.confirming}</>:tr.confirm}
+        {loading
+          ? <><Loader2 size={17} className="animate-spin"/>{formData.isQuoteOnly ? (isRtl?'جاري الإرسال...':'Sending...') : tr.confirming}</>
+          : (formData.isQuoteOnly ? (isRtl?'إرسال طلب عرض السعر':'Send Quote Request') : tr.confirm)}
       </button>
       <button onClick={prevStep} className="w-full py-3.5 rounded-xl font-medium text-sm transition-all" style={{ border:`1px solid ${C.border}`, color:C.muted }}>{tr.edit}</button>
     </FormShell>
@@ -4525,16 +4527,20 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
 }
 
 // ── STEP 5 · SUCCESS ──────────────────────────────────────────────────
-function SuccessStep({ tr, name, resetAll, goOrders }) {
+function SuccessStep({ tr, isRtl, name, isQuoteOnly, resetAll, goOrders }) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[65vh] text-center p-8 space-y-6">
       <div className="w-24 h-24 rounded-full flex items-center justify-center" style={{ background:`${C.gold}15`, border:`1px solid ${C.gold}35`, boxShadow:`0 0 50px ${C.gold}20` }}>
         <CheckCircle2 size={48} color={C.gold}/>
       </div>
       <div className="space-y-2">
-        <h2 className={`text-3xl font-black ${C.selectCls}`}>{tr.successTitle}</h2>
+        <h2 className={`text-3xl font-black ${C.selectCls}`}>
+          {isQuoteOnly ? (isRtl?'تم إرسال طلب عرض السعر!':'Quote request sent!') : tr.successTitle}
+        </h2>
         {name&&<p className="font-bold text-lg" style={{ color:C.gold }}>{name}</p>}
-        <p className="text-sm leading-relaxed max-w-xs mx-auto" style={{ color:C.muted }}>{tr.successMsg}</p>
+        <p className="text-sm leading-relaxed max-w-xs mx-auto" style={{ color:C.muted }}>
+          {isQuoteOnly ? (isRtl?'سنراجع طلبك ونبعتلك عرض السعر قريباً.':"We'll review your request and send you a quotation soon.") : tr.successMsg}
+        </p>
       </div>
       <button onClick={goOrders} className="w-full max-w-xs py-4 rounded-xl font-black transition-all active:scale-[0.98]" style={{ background:C.gold, color:C.btnTxt, boxShadow:`0 0 28px ${C.gold}50` }}>
         {tr.navOrders}
