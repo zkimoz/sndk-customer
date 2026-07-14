@@ -2341,6 +2341,9 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                               <Calendar size={9}/>{a.appointment_date}
                             </p>
                           )}
+                          {jc.customer_complaints && (
+                            <p className="text-xs italic mt-1.5" style={{ color:cc.sub }}>{jc.customer_complaints}</p>
+                          )}
                         </div>
                         {/* Job status + number */}
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
