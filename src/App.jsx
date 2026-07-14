@@ -939,7 +939,7 @@ export default function App() {
               </div>
               {cart.length === 0 ? (
                 <p className="text-[11px]" style={{ color:C.muted }}>
-                  {isRtl ? 'سلتك فارغة — اختر خدمة الأول عشان تقدر تحجز أو تطلب عرض سعر' : 'Your cart is empty — pick a service first to book or request a quote'}
+                  {isRtl ? 'سلتك فارغة، يرجى اختيار خدمة للحجز أو لطلب عرض سعر' : 'Your cart is empty, please choose a service to book or request a quote'}
                 </p>
               ) : (
                 <>
@@ -1136,7 +1136,7 @@ export default function App() {
               <div className="py-10 flex flex-col items-center gap-3">
                 <ShoppingCart size={40} style={{ color:`${C.gold}30` }}/>
                 <p className="text-sm" style={{ color:C.muted }}>
-                  {isRtl ? 'سلتك فارغة — اختر خدمة من القائمة' : 'Your cart is empty — pick a service'}
+                  {isRtl ? 'سلتك فارغة، يرجى اختيار خدمة للحجز أو لطلب عرض سعر' : 'Your cart is empty, please choose a service to book or request a quote'}
                 </p>
                 <button onClick={() => { setCartOpen(false); goServices(); }}
                   className="mt-2 px-5 py-2.5 rounded-xl text-sm font-bold"
