@@ -4370,11 +4370,13 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
     </>
   );
 
-  // ── Logged-in path ────────────────────────────────────────────────
-  if (user) {
-    const canGo = formData.carId !== null || (addingNew && !!formData.carBrandKey && !!formData.carCategoryKey && formData.carModel.length === 4 && !!formData.carRegistrationFile);
-    return (
-      <FormShell title={tr.yourCar}>
+  // Booking always requires an account — startBooking/startQuoteRequest send
+  // anyone unauthenticated to the auth modal first, so this step is only ever
+  // reached once `user` is set. Guarded defensively in case that ever changes.
+  if (!user) return null;
+  const canGo = formData.carId !== null || (addingNew && !!formData.carBrandKey && !!formData.carCategoryKey && formData.carModel.length === 4 && !!formData.carRegistrationFile);
+  return (
+    <FormShell title={tr.yourCar}>
         {/* Selected car chip */}
         {formData.carId && !addingNew && (
           <div className="rounded-2xl p-4 flex items-center justify-between" style={{ background: C.card, border: `1px solid ${C.gold}40` }}>
@@ -4435,31 +4437,6 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
         )}
         <NavBtns tr={tr} onBack={prevStep} onNext={() => setStep(formData.isQuoteOnly ? 4 : 3)} canNext={canGo}/>
       </FormShell>
-    );
-  }
-
-  // ── Guest path ────────────────────────────────────────────────────
-  const canGoGuest = formData.name.trim() && formData.phone.length === 8 && formData.carBrandKey && formData.carModel.length === 4;
-  return (
-    <FormShell title={tr.yourDetails}>
-      <Field label={tr.fullName}>
-        <input type="text" placeholder={tr.fullNamePh} value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
-          className={C.inputCls} style={{ background: C.input, border: `1px solid ${C.border}` }}
-          onFocus={e => e.target.style.borderColor = C.borderFocus} onBlur={e => e.target.style.borderColor = C.border}/>
-      </Field>
-      <Field label={tr.phone}>
-        <div className="flex gap-2">
-          <div className="flex items-center px-3 rounded-xl text-sm font-mono whitespace-nowrap" style={{ background: C.input, border: `1px solid ${C.border}`, color: C.muted }}>+974</div>
-          <input type="tel" placeholder={tr.phoneHint} value={formData.phone}
-            onChange={e => { const v = e.target.value.replace(/\D/g, ''); if (v.length <= 8) setFormData(p => ({ ...p, phone: v })); }}
-            className={`${C.inputCls} flex-1`} style={{ background: C.input, border: `1px solid ${C.border}` }}
-            onFocus={e => e.target.style.borderColor = C.borderFocus} onBlur={e => e.target.style.borderColor = C.border}/>
-        </div>
-        {formData.phone.length > 0 && formData.phone.length !== 8 && <p className="text-xs mt-1.5" style={{ color: '#f87171' }}>{tr.phoneError}</p>}
-      </Field>
-      {carFields}
-      <NavBtns tr={tr} onBack={prevStep} onNext={() => setStep(3)} canNext={canGoGuest}/>
-    </FormShell>
   );
 }
 
@@ -4607,6 +4584,9 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
   const isRtl = lang === 'ar';
 
   const submit = async () => {
+    // Booking always requires an account (see DetailsStep) — guarded
+    // defensively in case this is ever somehow reached without one.
+    if (!user) return;
     // Final guard against booking a past date — ScheduleStep already blocks
     // this in the UI, but re-check here too in case formData carried a stale
     // date in from somewhere the picker's own validation never touched.
@@ -4644,54 +4624,42 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
       const serviceType = cart.length > 0
         ? JSON.stringify(cart.map(s => ({ id: s.id, name: s.name, catName: s.catName })))
         : (formData.serviceName || '');
-      if (user) {
-        let carId = formData.carId;
-        if (!carId) {
-          let registration_image_url = null;
-          if (formData.carRegistrationFile) {
-            const ext = formData.carRegistrationFile.name.split('.').pop();
-            // Namespaced under the owner's user id, same as the profile's own
-            // add-car upload — the bucket is public, so the path is the gate.
-            const plateKey = sanitizeForPath(formData.carPlateNumber) || `${Date.now()}`;
-            const path = `${user.id}/${plateKey}.${ext}`;
-            const { error: upErr } = await supabase.storage.from('car-registration').upload(path, formData.carRegistrationFile, { upsert: true });
-            if (upErr) throw new Error((isRtl ? 'فشل رفع صورة الاستمارة: ' : 'Failed to upload registration image: ') + upErr.message);
-            const { data: { publicUrl } } = supabase.storage.from('car-registration').getPublicUrl(path);
-            registration_image_url = publicUrl;
-          }
-          const { data: carData, error: carErr } = await supabase.from('cars')
-            .insert([{
-              profile_id: user.id,
-              car_type: formData.carBrandKey,
-              car_category: formData.carCategoryKey || null,
-              production_year: parseInt(formData.carModel) || null,
-              plate_number: formData.carPlateNumber?.trim() || null,
-              chassis_number: formData.carChassisNumber?.trim() || null,
-              registration_image_url,
-            }]).select('id').single();
-          if (carErr) throw carErr;
-          carId = carData.id;
+      let carId = formData.carId;
+      if (!carId) {
+        let registration_image_url = null;
+        if (formData.carRegistrationFile) {
+          const ext = formData.carRegistrationFile.name.split('.').pop();
+          // Namespaced under the owner's user id, same as the profile's own
+          // add-car upload — the bucket is public, so the path is the gate.
+          const plateKey = sanitizeForPath(formData.carPlateNumber) || `${Date.now()}`;
+          const path = `${user.id}/${plateKey}.${ext}`;
+          const { error: upErr } = await supabase.storage.from('car-registration').upload(path, formData.carRegistrationFile, { upsert: true });
+          if (upErr) throw new Error((isRtl ? 'فشل رفع صورة الاستمارة: ' : 'Failed to upload registration image: ') + upErr.message);
+          const { data: { publicUrl } } = supabase.storage.from('car-registration').getPublicUrl(path);
+          registration_image_url = publicUrl;
         }
-        const { error: apptErr } = await supabase.from('appointments').insert([{
-          profile_id: user.id, car_id: carId,
-          appointment_date: formData.isQuoteOnly ? null : formData.date,
-          appointment_time: formData.isQuoteOnly ? null : formData.timeKey,
-          is_quote_request: formData.isQuoteOnly,
-          service_type: serviceType,
-          customer_notes: formData.notes, status: 'pending',
-        }]);
-        if (apptErr) throw apptErr;
-      } else {
-        const { error } = await supabase.from('bookings').insert([{
-          customer_name: formData.name, customer_phone: formData.phone,
-          car_type: formData.carBrandKey, car_model: formData.carModel,
-          car_category: formData.carCategoryKey || null,
-          service_type: serviceType,
-          appointment_date: formData.date, appointment_time: formData.timeKey,
-          notes: formData.notes,
-        }]);
-        if (error) throw error;
+        const { data: carData, error: carErr } = await supabase.from('cars')
+          .insert([{
+            profile_id: user.id,
+            car_type: formData.carBrandKey,
+            car_category: formData.carCategoryKey || null,
+            production_year: parseInt(formData.carModel) || null,
+            plate_number: formData.carPlateNumber?.trim() || null,
+            chassis_number: formData.carChassisNumber?.trim() || null,
+            registration_image_url,
+          }]).select('id').single();
+        if (carErr) throw carErr;
+        carId = carData.id;
       }
+      const { error: apptErr } = await supabase.from('appointments').insert([{
+        profile_id: user.id, car_id: carId,
+        appointment_date: formData.isQuoteOnly ? null : formData.date,
+        appointment_time: formData.isQuoteOnly ? null : formData.timeKey,
+        is_quote_request: formData.isQuoteOnly,
+        service_type: serviceType,
+        customer_notes: formData.notes, status: 'pending',
+      }]);
+      if (apptErr) throw apptErr;
       const serviceLabel = cart.length > 0 ? cart.map(s => s.name).join(' · ') : (formData.serviceName || '');
       // Fire-and-forget — the booking itself must never hang or fail because a staff
       // notification is slow/broken. Still logged (not silently swallowed) so a
@@ -4700,7 +4668,7 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
       // No dedicated "quote request" staff event exists (it would need an edge
       // function redeploy) — flagging it in the customer name is enough for
       // staff to immediately tell it apart from a real scheduled booking.
-      const rawName = user ? (profile?.full_name || formData.name) : formData.name;
+      const rawName = profile?.full_name || formData.name;
       const customerName = formData.isQuoteOnly ? `🏷️ [طلب سعر بدون حجز] ${rawName}` : rawName;
       supabase.functions.invoke('clever-endpoint', {
         body: {
@@ -4720,10 +4688,7 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
   const cartItems  = cart.length > 0 ? cart : [];
 
   const metaRows = [
-    ...(user
-      ? [{ label: tr.customer, value: `${profile?.full_name || formData.name}  ·  +974 ${profile?.phone_number || formData.phone}` }]
-      : [{ label: tr.customer, value: `${formData.name}  ·  +974 ${formData.phone}` }]
-    ),
+    { label: tr.customer, value: `${profile?.full_name || formData.name}  ·  +974 ${profile?.phone_number || formData.phone}` },
     { label: tr.car,       value: carDisplay || '—' },
     ...(formData.isQuoteOnly
       ? [{ label: isRtl?'النوع':'Type', value: isRtl?'طلب عرض سعر — بدون حجز موعد':'Quote request — no appointment' }]
