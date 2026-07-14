@@ -2412,9 +2412,11 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                   const decision = relOrd.service_decisions?.[s.key];
                                   const lineItems = (relOrd.order_items || []).filter(i =>
                                     (i.service_name?.ar || i.service_name?.en) === s.key);
-                                  const lineTotal = it => Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
+                                  const originalLineTotal = it => Number(it.sell_price||0) * Number(it.quantity||1);
+                                  const lineTotal = it => originalLineTotal(it) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
                                   const laborItems = lineItems.filter(i => i.item_type === 'labor');
                                   const partItems   = lineItems.filter(i => i.item_type === 'part');
+                                  const groupHasDiscount = lineItems.some(it => Number(it.discount_pct||0) > 0);
                                   return (
                                     <div key={s.key} className="rounded-lg overflow-hidden" style={{ background:'rgba(0,0,0,0.08)' }}>
                                       <div className="flex items-center gap-2 px-3 py-2">
@@ -2445,25 +2447,40 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                       </div>
                                       {(partItems.length > 0 || laborItems.length > 0) && (
                                         <div className="px-3 pb-2 pt-1 space-y-1" style={{ borderTop:'1px solid rgba(255,255,255,0.08)' }}>
-                                          {partItems.map((it,i) => (
+                                          {partItems.map((it,i) => {
+                                            const hasDiscount = Number(it.discount_pct||0) > 0;
+                                            return (
                                             <div key={`p-${i}`} className="flex items-center justify-between gap-2 text-[11px]">
                                               <span style={{ color:cc.sub }}>
                                                 <span className="opacity-70">{isRtl?'قطعة —':'Part —'}</span> {isRtl?(it.item_name?.ar||it.item_name?.en):(it.item_name?.en||it.item_name?.ar)}
                                               </span>
-                                              <span className="font-bold flex-shrink-0" style={{ color:cc.txt }}>{lineTotal(it).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                                              <span className="flex-shrink-0 flex items-center gap-1.5">
+                                                {hasDiscount && <span className="line-through opacity-50" style={{ color:cc.sub }}>{originalLineTotal(it).toFixed(3)}</span>}
+                                                <span className="font-bold" style={{ color: hasDiscount ? '#22c55e' : cc.txt }}>{lineTotal(it).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                                              </span>
                                             </div>
-                                          ))}
-                                          {laborItems.map((it,i) => (
+                                            );
+                                          })}
+                                          {laborItems.map((it,i) => {
+                                            const hasDiscount = Number(it.discount_pct||0) > 0;
+                                            return (
                                             <div key={`l-${i}`} className="flex items-center justify-between gap-2 text-[11px]">
                                               <span style={{ color:cc.sub }}>
                                                 <span className="opacity-70">{isRtl?'عمالة —':'Labor —'}</span> {isRtl?(it.item_name?.ar||it.item_name?.en):(it.item_name?.en||it.item_name?.ar)}
                                               </span>
-                                              <span className="font-bold flex-shrink-0" style={{ color:cc.txt }}>{lineTotal(it).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                                              <span className="flex-shrink-0 flex items-center gap-1.5">
+                                                {hasDiscount && <span className="line-through opacity-50" style={{ color:cc.sub }}>{originalLineTotal(it).toFixed(3)}</span>}
+                                                <span className="font-bold" style={{ color: hasDiscount ? '#22c55e' : cc.txt }}>{lineTotal(it).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                                              </span>
                                             </div>
-                                          ))}
+                                            );
+                                          })}
                                           <div className="flex items-center justify-between gap-2 text-[11px] pt-1 mt-1" style={{ borderTop:'1px dashed rgba(255,255,255,0.15)' }}>
                                             <span className="font-bold" style={{ color:cc.sub }}>{isRtl?'إجمالي الخدمة':'Service total'}</span>
-                                            <span className="font-black flex-shrink-0" style={{ color:cc.fg }}>{lineItems.reduce((s,it)=>s+lineTotal(it),0).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                                            <span className="flex-shrink-0 flex items-center gap-1.5">
+                                              {groupHasDiscount && <span className="line-through opacity-50 text-[10px]" style={{ color:cc.sub }}>{lineItems.reduce((s,it)=>s+originalLineTotal(it),0).toFixed(3)}</span>}
+                                              <span className="font-black" style={{ color: groupHasDiscount ? '#22c55e' : cc.fg }}>{lineItems.reduce((s,it)=>s+lineTotal(it),0).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                                            </span>
                                           </div>
                                         </div>
                                       )}
