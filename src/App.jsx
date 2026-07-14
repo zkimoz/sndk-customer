@@ -2159,9 +2159,10 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
       <h1 className="text-2xl font-black" style={{ color:C.gold }}>{tr.myOrders}</h1>
 
       {/* Tabs */}
-      <div className="grid grid-cols-2 rounded-2xl overflow-hidden" style={{ border:`1px solid ${C.border}` }}>
-        {[{ key:'appts',  label: isRtl ? 'المواعيد' : 'Appointments', icon:Calendar },
-          { key:'orders', label: isRtl ? 'الطلبات'  : 'My Orders',    icon:ClipboardList }].map(item => (
+      <div className="grid grid-cols-3 rounded-2xl overflow-hidden" style={{ border:`1px solid ${C.border}` }}>
+        {[{ key:'appts',     label: isRtl ? 'المواعيد' : 'Appointments', icon:Calendar },
+          { key:'orders',    label: isRtl ? 'الطلبات'  : 'My Orders',    icon:ClipboardList },
+          { key:'cancelled', label: isRtl ? 'الملغية'  : 'Cancelled',    icon:X }].map(item => (
           <button key={item.key} onClick={() => setTab(item.key)}
             className="flex items-center justify-center gap-2 py-3 text-sm font-bold transition-all"
             style={tab===item.key
@@ -2180,7 +2181,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
         <>
           {/* ── قسم 1: المواعيد (بدون أمر شغل) ── */}
           {tab==='appts' && (() => {
-            const noJcAppts = appts.filter(a => !a.job_cards?.length);
+            const noJcAppts = appts.filter(a => !a.job_cards?.length && a.status !== 'cancelled');
             return (
               <div className="space-y-3">
                 {noJcAppts.length === 0 ? (
@@ -2259,7 +2260,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
           {/* ── قسم 2: الطلبات (مواعيد عندها أمر شغل) ── */}
           {tab==='orders' && (() => {
             // Closed job cards move to the car's maintenance history under حسابي — not shown here
-            const jcAppts = appts.filter(a => a.job_cards?.length > 0 && !a.job_cards[0].closed_at);
+            const jcAppts = appts.filter(a => a.job_cards?.length > 0 && !a.job_cards[0].closed_at && a.status !== 'cancelled');
             return (
               <div className="space-y-3">
                 {jcAppts.length === 0 ? (
@@ -2591,6 +2592,74 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           <span className="text-xs font-bold">{isRtl ? 'جاري إعداد عرض السعر...' : 'Preparing quotation...'}</span>
                         </div>
                       )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+          {/* ── قسم 3: الطلبات الملغية (من العميل أو الموظف) ── */}
+          {tab==='cancelled' && (() => {
+            const cancelledAppts = appts.filter(a => a.status === 'cancelled');
+            return (
+              <div className="space-y-3">
+                {cancelledAppts.length === 0 ? (
+                  <div className="py-16 text-center space-y-2" style={{ color:C.muted }}>
+                    <X size={44} className="mx-auto opacity-25"/>
+                    <p className="text-sm">{isRtl ? 'لا توجد طلبات ملغية' : 'No cancelled orders'}</p>
+                  </div>
+                ) : cancelledAppts.map((a, ai) => {
+                  const cc  = CARD_BG_CYCLE[ai % 2];
+                  const car = a.cars;
+                  const jc  = a.job_cards?.[0];
+                  const cancelledByLabel = a.cancelled_by === 'staff'
+                    ? (isRtl ? 'أُلغي بواسطة سندك' : 'Cancelled by SNDK')
+                    : (isRtl ? 'أُلغي بواسطتك' : 'Cancelled by you');
+                  return (
+                    <div key={a.id} className="rounded-2xl p-4 space-y-3"
+                      style={{ background:cc.bg, border:'1px solid rgba(239,68,68,0.4)' }}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          {(() => {
+                            const svcs = parseServices(a.service_type);
+                            return svcs ? (
+                              <div className="flex flex-wrap gap-1.5">
+                                {svcs.map((s, i) => (
+                                  <span key={i} className="text-xs font-semibold px-2.5 py-1 rounded-full"
+                                    style={{ background:'rgba(0,0,0,0.12)', color:cc.txt, border:`1px solid ${cc.fg}40` }}>
+                                    {s.name || s}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : <p className="font-bold text-sm" style={{ color:cc.txt }}>{a.service_type||'—'}</p>;
+                          })()}
+                          {car && (
+                            <p className="text-xs mt-1.5" style={{ color:cc.sub }}>
+                              {[car.car_type, car.car_category, car.production_year].filter(Boolean).join(' · ')}
+                            </p>
+                          )}
+                          {jc?.job_number && (
+                            <p className="text-[10px] mt-0.5 font-mono" style={{ color:cc.sub }}>{jc.job_number}</p>
+                          )}
+                        </div>
+                        <span className="px-2.5 py-1 rounded-full text-xs font-bold flex-shrink-0"
+                          style={{ background:'rgba(239,68,68,0.15)', color:'#ef4444' }}>
+                          {APPT_ST.cancelled.label}
+                        </span>
+                      </div>
+                      {(a.appointment_date || a.appointment_time) && (
+                        <div className="flex items-center gap-2 text-xs" style={{ color:cc.sub }}>
+                          <Calendar size={11}/>
+                          <span>{a.appointment_date}</span>
+                          {a.appointment_time && <span style={{ color:cc.sub }}>· {a.appointment_time}</span>}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 text-xs font-semibold" style={{ color:'#ef4444' }}>
+                        <X size={11}/>
+                        <span>{cancelledByLabel}</span>
+                        {a.cancelled_at && <span style={{ color:cc.sub, fontWeight:600 }}>· {new Date(a.cancelled_at).toLocaleDateString(isRtl?'ar-EG':'en-GB')}</span>}
+                      </div>
                     </div>
                   );
                 })}
