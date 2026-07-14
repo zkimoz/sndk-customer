@@ -2096,7 +2096,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     if (apptData?.length) {
       const ids = apptData.map(a => a.id);
       const { data: ordData } = await supabase
-        .from('orders').select('*, order_items(*), payments(*)')
+        .from('orders').select('*, order_items(*), payments(*), wallet_transactions(amount, status, type)')
         .in('appointment_id', ids).order('created_at', { ascending: false });
       const loaded = ordData || [];
       setOrders(loaded);
@@ -2705,6 +2705,13 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             // doesn't move as the customer approves/rejects services before
                             // confirming.
                             const remaining = selectedQuotationTotal(relOrd) - paid;
+                            // Any payment beyond this order's own total never lands in `paid`
+                            // above (staff-side capping keeps it there) — it's held as a
+                            // pending wallet credit against this specific order instead, so
+                            // show it here too, not just in the Wallet tab.
+                            const pendingExcess = (relOrd.wallet_transactions || [])
+                              .filter(w => w.type === 'overpayment_credit' && w.status === 'pending')
+                              .reduce((s,w) => s + Number(w.amount || 0), 0);
                             return (
                               <div className="rounded-xl px-3 py-2 space-y-1" style={{ background:'rgba(0,0,0,0.08)' }}>
                                 <div className="flex items-center justify-between">
@@ -2715,6 +2722,12 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                   <span className="text-xs" style={{ color:cc.sub }}>{isRtl ? 'المتبقي:' : 'Remaining:'}</span>
                                   <span className="text-sm font-bold" style={{ color: remaining < -0.001 ? '#ef4444' : remaining > 0.001 ? cc.fg : '#22c55e' }}>{remaining.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
                                 </div>
+                                {pendingExcess > 0.001 && (
+                                  <div className="flex items-center justify-between pt-1 mt-1" style={{ borderTop:`1px dashed ${cc.sub}40` }}>
+                                    <span className="text-[11px] font-bold" style={{ color:C.gold }}>{isRtl ? 'دفعت زيادة — هتضاف لمحفظتك عند اكتمال الطلب:' : "You overpaid — added to your wallet once complete:"}</span>
+                                    <span className="text-sm font-bold" style={{ color:C.gold }}>+{pendingExcess.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
+                                  </div>
+                                )}
                               </div>
                             );
                           })()}
