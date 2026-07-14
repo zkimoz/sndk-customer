@@ -3804,10 +3804,9 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                     {car.registration_image_url && (
                       <button
                         onClick={e => { e.stopPropagation(); window.open(car.registration_image_url, '_blank'); }}
-                        className="p-2 rounded-xl flex-shrink-0 transition-all"
-                        style={{ background:'rgba(0,0,0,0.10)', color:cc.fg }}
-                        title={tr.prof_reg_view}>
-                        <Eye size={14}/>
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl flex-shrink-0 text-xs font-bold transition-all"
+                        style={{ background:'rgba(0,0,0,0.10)', color:cc.fg }}>
+                        <Eye size={14}/>{isRtl?'عرض استمارة السيارة':'View Car Registration'}
                       </button>
                     )}
                     <button
