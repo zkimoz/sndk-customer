@@ -45,9 +45,13 @@ const bi = (ar: string, en: string) => `${ar} / ${en}`;
 // default — omitting them here made the browser's CORS preflight reject the
 // request outright before it ever reached this function (curl/Node fetch calls
 // don't enforce CORS, which is why direct testing always looked fine).
+// The admin app's service-role client (supabaseAdmin) additionally sends a
+// custom 'X-Admin-Client' header on every request it makes — including these
+// notify calls — which must be allow-listed too, or the same silent
+// preflight rejection happens specifically for admin-triggered emails.
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-admin-client",
 };
 
 serve(async (req) => {
