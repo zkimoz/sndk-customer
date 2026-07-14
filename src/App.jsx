@@ -568,6 +568,22 @@ const catLabel = (c, lang) => lang === 'en'
   ? (c.name_en || c.name_ar || '')
   : (c.name_en && c.name_ar ? `${c.name_en} · ${c.name_ar}` : (c.name_ar || c.name_en || ''));
 
+// A saved car's car_type/car_category (and formData's carBrandKey/carCategoryKey,
+// which is seeded from the same column) are stored as a single fixed string —
+// whichever language was picked at save time, almost always Arabic since
+// BrandSearchSelect prefers name_ar. Displaying that raw string means the
+// English site still shows Arabic car names — look the brand/category back
+// up by matching either language column so the label always follows the
+// site's current language instead of the one it happened to be saved in.
+const resolveLangName = (rawValue, refList = [], lang = 'ar') => {
+  if (!rawValue) return '';
+  const match = refList.find(r => r.name_ar === rawValue || r.name_en === rawValue);
+  if (!match) return rawValue;
+  return (lang === 'ar' ? match.name_ar : match.name_en) || match.name_ar || match.name_en || rawValue;
+};
+const carTypeLabel     = (car, carBrands = [], lang = 'ar') => resolveLangName(car?.car_type, carBrands, lang);
+const carCategoryLabel = (car, carCats = [], lang = 'ar')   => resolveLangName(car?.car_category, carCats, lang);
+
 // Searchable car-brand picker — the customer can type in Arabic or English
 // regardless of which language the site is currently displayed in, since
 // brand names are matched against both name_ar and name_en at once.
@@ -2236,7 +2252,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           })()}
                           {car && (
                             <p className="text-xs mt-1.5" style={{ color:cc.sub }}>
-                              {[car.car_type, car.car_category, car.production_year].filter(Boolean).join(' · ')}
+                              {[carTypeLabel(car, carBrandsRef, lang), carCategoryLabel(car, carCatsRef, lang), car.production_year].filter(Boolean).join(' · ')}
                             </p>
                           )}
                         </div>
@@ -2314,7 +2330,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           })()}
                           {car && (
                             <p className="text-xs" style={{ color:cc.sub }}>
-                              {[car.car_type, car.car_category, car.production_year].filter(Boolean).join(' · ')}
+                              {[carTypeLabel(car, carBrandsRef, lang), carCategoryLabel(car, carCatsRef, lang), car.production_year].filter(Boolean).join(' · ')}
                               {car.plate_number ? ` · ${car.plate_number}` : ''}
                             </p>
                           )}
@@ -2651,7 +2667,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           })()}
                           {car && (
                             <p className="text-xs mt-1.5" style={{ color:cc.sub }}>
-                              {[car.car_type, car.car_category, car.production_year].filter(Boolean).join(' · ')}
+                              {[carTypeLabel(car, carBrandsRef, lang), carCategoryLabel(car, carCatsRef, lang), car.production_year].filter(Boolean).join(' · ')}
                             </p>
                           )}
                           {jc?.job_number && (
@@ -3646,7 +3662,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                         <Car size={22} style={{ color:iconCC.fg }}/>
                       </div>
                       <div className="flex-1 text-start min-w-0">
-                        <p className="font-black" style={{ color:cc.txt }}>{car.car_type}{car.car_category ? ` · ${car.car_category}` : ''}</p>
+                        <p className="font-black" style={{ color:cc.txt }}>{[carTypeLabel(car, carBrands, lang), carCategoryLabel(car, carCategories, lang)].filter(Boolean).join(' · ')}</p>
                         <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                           {car.production_year  && <span className="text-xs" style={{ color:cc.sub }}>{car.production_year}</span>}
                           {car.plate_number     && <span className="text-xs font-mono" style={{ color:cc.fg }}>{car.plate_number}</span>}
@@ -4055,7 +4071,7 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
         {formData.carId && !addingNew && (
           <div className="rounded-2xl p-4 flex items-center justify-between" style={{ background: C.card, border: `1px solid ${C.gold}40` }}>
             <div>
-              <p className="font-black" style={{ color: C.cardText }}>{formData.carBrandKey}{formData.carCategoryKey ? ` · ${formData.carCategoryKey}` : ''}</p>
+              <p className="font-black" style={{ color: C.cardText }}>{[resolveLangName(formData.carBrandKey, carBrands, lang), resolveLangName(formData.carCategoryKey, carCategories, lang)].filter(Boolean).join(' · ')}</p>
               {formData.carModel && <p className="text-xs mt-0.5" style={{ color: C.cardMuted }}>{formData.carModel}</p>}
             </div>
             <button onClick={clearSelection} className="text-xs px-3 py-1.5 rounded-xl font-bold" style={{ color: C.cardText, border: `1px solid ${C.cardText}40` }}>
@@ -4079,7 +4095,7 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
                       <Car size={16} style={{ color: C.cardText }}/>
                     </div>
                     <div>
-                      <p className="font-black text-sm" style={{ color: C.cardText }}>{car.car_type}{car.car_category ? ` · ${car.car_category}` : ''}</p>
+                      <p className="font-black text-sm" style={{ color: C.cardText }}>{[carTypeLabel(car, carBrands, lang), carCategoryLabel(car, carCategories, lang)].filter(Boolean).join(' · ')}</p>
                       {(car.production_year || car.plate_number) && (
                         <p className="text-xs mt-0.5" style={{ color: C.cardMuted }}>
                           {[car.production_year, car.plate_number].filter(Boolean).join(' · ')}
@@ -4202,7 +4218,7 @@ function ScheduleStep({ lang, tr, formData, setFormData, setStep, prevStep }) {
 }
 
 // ── STEP 4 · REVIEW ───────────────────────────────────────────────────
-function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading, user, profile, cart }) {
+function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading, user, profile, cart, carBrands, carCategories }) {
   const slot = getSlot(formData.timeKey);
   const isRtl = lang === 'ar';
 
@@ -4270,7 +4286,7 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
     finally { setLoading(false); }
   };
 
-  const carDisplay = [formData.carBrandKey, formData.carCategoryKey, formData.carModel].filter(Boolean).join('  ·  ');
+  const carDisplay = [resolveLangName(formData.carBrandKey, carBrands, lang), resolveLangName(formData.carCategoryKey, carCategories, lang), formData.carModel].filter(Boolean).join('  ·  ');
   const cartItems  = cart.length > 0 ? cart : [];
 
   const metaRows = [
