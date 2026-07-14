@@ -2058,6 +2058,12 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   const [carBrandsRef, setCarBrandsRef] = useState([]);
   const [carCatsRef, setCarCatsRef]     = useState([]);
   const seenIdsRef = useRef(new Set());
+  // Must stay above the `if (!user) return` below — a session dropping while
+  // this view is mounted (auth listener firing setUser(null) without
+  // changing page) would otherwise call fewer hooks on that re-render than
+  // the previous one, which crashes the whole app to a blank screen.
+  const [sigModal, setSigModal] = useState({ open:false, orderId:null });
+  const [serviceSelections, setServiceSelections] = useState({}); // { [orderId]: { [serviceKey]: boolean } }
 
   useEffect(() => {
     supabase.from('car_brands').select('id,name_ar,name_en').then(({ data }) => setCarBrandsRef(data || []));
@@ -2337,8 +2343,6 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
 
   const apptMap       = Object.fromEntries(appts.map(a => [a.id, a]));
   const orderByApptId = Object.fromEntries(orders.map(o => [o.appointment_id, o]));
-  const [sigModal, setSigModal] = useState({ open:false, orderId:null });
-  const [serviceSelections, setServiceSelections] = useState({}); // { [orderId]: { [serviceKey]: boolean } }
 
   return (
     <div className="p-4 md:p-8 space-y-5 max-w-3xl md:mx-auto">
@@ -4616,6 +4620,23 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
     if (!formData.isQuoteOnly && formData.date && isFriday(formData.date)) {
       alert(isRtl ? 'يوم الجمعة إجازة — من فضلك اختر يوماً آخر' : "We're closed on Fridays — please pick another day");
       return;
+    }
+    // Re-check the slot capacity and blocked-date status right before booking —
+    // ScheduleStep only checked this once, when the date/slot was first picked,
+    // which could've been minutes ago (someone else may have taken the last
+    // spot, or staff may have blocked the day since).
+    if (!formData.isQuoteOnly && formData.date && formData.timeKey) {
+      const { data: blocked } = await supabase.from('blocked_dates').select('id').eq('blocked_date', formData.date).maybeSingle();
+      if (blocked) {
+        alert(isRtl ? 'هذا اليوم لم يعد متاحًا للحجز — من فضلك اختر يوماً آخر' : 'This day is no longer available for booking — please pick another day');
+        return;
+      }
+      const { data: counts } = await supabase.rpc('get_slot_availability', { p_date: formData.date });
+      const bookedCount = Number((counts||[]).find(c => c.appointment_time === formData.timeKey)?.booked_count) || 0;
+      if (slot && bookedCount >= slot.capacity) {
+        alert(isRtl ? 'هذا الموعد امتلأ للتو — من فضلك اختر موعداً آخر' : 'This time slot just filled up — please pick another time');
+        return;
+      }
     }
     setLoading(true);
     try {
