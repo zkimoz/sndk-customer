@@ -3359,6 +3359,10 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
 
   const addCar = async () => {
     if (!carForm.car_type) return;
+    if (!registrationFile) {
+      alert(isRtl ? '⚠️ صورة الاستمارة مطلوبة' : '⚠️ Registration card image is required');
+      return;
+    }
     setAddingCar(true);
     let registration_image_url = null;
     if (registrationFile) {
@@ -3737,23 +3741,23 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
             {carField(tr.prof_plate, 'plate_number', 'text', tr.prof_plate_ph)}
             {/* Chassis number */}
             {carField(tr.prof_chassis, 'chassis_number', 'text', tr.prof_chassis_ph)}
-            {/* Registration image upload */}
+            {/* Registration image upload — required when adding a new car */}
             <div>
               <label className="block text-[10px] font-bold tracking-widest uppercase mb-1" style={{ color:`${C.gold}80` }}>
-                {tr.prof_registration}
+                {isRtl ? 'صورة الاستمارة' : 'Registration Card'} <span style={{ color:'#f87171' }}>*</span>
               </label>
               <label className="flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer text-sm transition-all"
                 style={{ background:C.input, border:`1px solid ${registrationFile ? C.gold : C.border}` }}>
                 <Upload size={14} style={{ color: registrationFile ? C.gold : C.muted, flexShrink:0 }}/>
                 <span className="truncate" style={{ color: registrationFile ? C.gold : C.muted }}>
-                  {registrationFile ? registrationFile.name : tr.prof_reg_upload}
+                  {registrationFile ? registrationFile.name : (isRtl ? 'يرجى رفع صورة الاستمارة من الجهتين' : 'Please upload a photo of both sides of the registration')}
                 </span>
                 <input type="file" accept="image/*,application/pdf" className="hidden"
                   onChange={e => setRegistrationFile(e.target.files[0] || null)}/>
               </label>
             </div>
           </div>
-          <button onClick={addCar} disabled={addingCar||!carForm.car_type}
+          <button onClick={addCar} disabled={addingCar||!carForm.car_type||!registrationFile}
             className="w-full py-3.5 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-40"
             style={{ background:C.gold, color:C.btnTxt }}>
             {addingCar?<Loader2 size={14} className="animate-spin"/>:<Car size={14}/>}
