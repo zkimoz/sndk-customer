@@ -939,7 +939,7 @@ export default function App() {
               </div>
               {cart.length === 0 ? (
                 <p className="text-[11px]" style={{ color:C.muted }}>
-                  {isRtl ? 'سلتك فارغة' : 'Your cart is empty'}
+                  {isRtl ? 'سلتك فارغة — اختر خدمة الأول عشان تقدر تحجز أو تطلب عرض سعر' : 'Your cart is empty — pick a service first to book or request a quote'}
                 </p>
               ) : (
                 <>
@@ -966,6 +966,12 @@ export default function App() {
                     style={{ background:C.gold, color:C.btnTxt, boxShadow:`0 2px 10px ${C.gold}50` }}>
                     {!user && <Lock size={10} className="inline me-1.5"/>}
                     {isRtl ? 'احجز الكل ←' : 'Book All →'}
+                  </button>
+                  <button onClick={e => { e.stopPropagation(); startQuoteRequest(); }}
+                    className="w-full mt-1.5 py-1.5 rounded-xl text-[10px] font-bold transition-all active:scale-95"
+                    style={{ background:'transparent', color:C.muted, border:`1px dashed ${C.border}` }}>
+                    {!user && <Lock size={9} className="inline me-1"/>}
+                    {isRtl ? 'اطلب عرض سعر بس' : 'Request a quote only'}
                   </button>
                 </>
               )}
