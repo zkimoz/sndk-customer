@@ -2070,6 +2070,18 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   // the previous one, which crashes the whole app to a blank screen.
   const [sigModal, setSigModal] = useState({ open:false, orderId:null });
   const [serviceSelections, setServiceSelections] = useState({}); // { [orderId]: { [serviceKey]: boolean } }
+  // Booking a date/time for a quote-only request the customer just approved —
+  // the service decisions and quotation are already locked in, this only
+  // needs a date/time, then flips the (already-existing) job card straight
+  // to Confirmed instead of staff having to do it manually.
+  const [bookingAppt, setBookingAppt] = useState(null);
+  const [bookDate, setBookDate] = useState('');
+  const [bookTimeKey, setBookTimeKey] = useState('');
+  const [bookTimeSlots, setBookTimeSlots] = useState([]);
+  const [bookSlotCounts, setBookSlotCounts] = useState({});
+  const [bookBlockedWarning, setBookBlockedWarning] = useState('');
+  const [loadingBookSlots, setLoadingBookSlots] = useState(false);
+  const [confirmingBooking, setConfirmingBooking] = useState(false);
 
   useEffect(() => {
     supabase.from('car_brands').select('id,name_ar,name_en').then(({ data }) => setCarBrandsRef(data || []));
@@ -2338,6 +2350,63 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     setCancellingId(null);
   };
 
+  // Loads once when the booking modal opens — kept above the `if (!user)`
+  // guard below for the same rules-of-hooks reason as sigModal/serviceSelections.
+  useEffect(() => {
+    if (!bookingAppt) return;
+    supabase.from('time_slots').select('*').eq('is_active', true).order('sort_order').order('slot_key')
+      .then(({ data }) => setBookTimeSlots(data || []));
+  }, [bookingAppt?.id]);
+
+  useEffect(() => {
+    if (!bookingAppt || !bookDate) { setBookSlotCounts({}); setBookBlockedWarning(''); return; }
+    let cancelled = false;
+    setLoadingBookSlots(true);
+    (async () => {
+      const { data: blocked } = await supabase.from('blocked_dates').select('reason').eq('blocked_date', bookDate).maybeSingle();
+      if (cancelled) return;
+      if (blocked) {
+        setBookBlockedWarning(blocked.reason || (isRtl?'هذا اليوم غير متاح للحجز':'This day is not available for booking'));
+        setBookTimeKey('');
+        setLoadingBookSlots(false);
+        return;
+      }
+      setBookBlockedWarning('');
+      const { data: counts } = await supabase.rpc('get_slot_availability', { p_date: bookDate });
+      if (cancelled) return;
+      const map = {};
+      (counts||[]).forEach(c => { map[c.appointment_time] = Number(c.booked_count)||0; });
+      setBookSlotCounts(map);
+      setLoadingBookSlots(false);
+    })();
+    return () => { cancelled = true; };
+  }, [bookingAppt?.id, bookDate]);
+
+  const confirmBooking = async () => {
+    if (!bookingAppt || !bookDate || !bookTimeKey) return;
+    setConfirmingBooking(true);
+    const nowIso = new Date().toISOString();
+    const { error: apptErr } = await supabase.from('appointments').update({
+      appointment_date: bookDate, appointment_time: bookTimeKey, is_quote_request: false,
+    }).eq('id', bookingAppt.id).eq('profile_id', user.id);
+    if (apptErr) {
+      alert((isRtl ? 'خطأ في الحجز: ' : 'Booking error: ') + apptErr.message);
+      setConfirmingBooking(false);
+      return;
+    }
+    const jc = bookingAppt.job_cards?.[0];
+    if (jc && jc.job_status === 'waiting') {
+      const nextHistory = [...(Array.isArray(jc.status_history) ? jc.status_history : []), { status:'confirmed', at: nowIso }];
+      const snapshot = { ...(jc.customer_snapshot || {}), job_status:'confirmed', status_history: nextHistory, published_at: nowIso };
+      await supabase.from('job_cards').update({
+        job_status: 'confirmed', status_history: nextHistory, customer_snapshot: snapshot, updated_at: nowIso,
+      }).eq('id', jc.id).eq('profile_id', user.id);
+    }
+    setBookingAppt(null); setBookDate(''); setBookTimeKey('');
+    setConfirmingBooking(false);
+    await loadData();
+  };
+
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 px-6">
@@ -2570,6 +2639,19 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           </div>
                         );
                       })()}
+
+                      {/* ── احجز موعد الآن — طلب عرض سعر تمت الموافقة عليه ولسه من غير موعد ── */}
+                      {a.is_quote_request && !a.appointment_date && relOrd?.customer_approved && (
+                        <div className="mx-4 mb-3 p-3 rounded-xl flex items-center justify-between gap-3 flex-wrap" style={{ background:`${C.gold}18`, border:`1px solid ${C.gold}50` }}>
+                          <span className="text-sm font-bold" style={{ color:C.gold }}>
+                            {isRtl ? 'وافقت على عرض السعر — احجزي معاد استلام السيارة الآن' : "You've approved the quotation — book a car drop-off time now"}
+                          </span>
+                          <button onClick={() => { setBookingAppt(a); setBookDate(''); setBookTimeKey(''); }}
+                            className="px-4 py-2 rounded-xl font-black text-sm flex-shrink-0" style={{ background:C.gold, color:C.btnTxt }}>
+                            {isRtl ? 'احجز موعد' : 'Book Appointment'}
+                          </button>
+                        </div>
+                      )}
 
                       {/* ── عرض السعر + موافقة ── */}
                       {relOrd?.sent_to_customer ? (
@@ -2983,6 +3065,58 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
           onConfirm={approveWithSignature}
           onClose={() => setSigModal({ open:false, orderId:null })}
         />
+      )}
+
+      {bookingAppt && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background:'rgba(0,0,0,0.6)' }} onClick={e=>{ if(e.target===e.currentTarget) setBookingAppt(null); }}>
+          <div className="rounded-2xl w-full max-w-sm p-5 space-y-4" style={{ background:C.card }} dir={isRtl?'rtl':'ltr'}>
+            <div className="flex items-center justify-between">
+              <p className="font-black" style={{ color:C.cardText }}>{isRtl ? 'احجزي معاد استلام السيارة' : 'Book a Car Drop-off Time'}</p>
+              <button onClick={() => setBookingAppt(null)} className="p-1 rounded-lg" style={{ color:C.cardMuted }}><X size={16}/></button>
+            </div>
+            <div>
+              <label className="text-xs font-bold mb-1.5 block" style={{ color:C.cardMuted }}>{isRtl?'التاريخ':'Date'}</label>
+              <input type="date" value={bookDate} min={new Date().toISOString().split('T')[0]}
+                onChange={e => {
+                  const v = e.target.value;
+                  if (v && isFriday(v)) { alert(isRtl ? 'يوم الجمعة إجازة — من فضلك اختر يوماً آخر' : "We're closed on Fridays — please pick another day"); return; }
+                  setBookDate(v); setBookTimeKey('');
+                }}
+                className="w-full px-3 py-2.5 rounded-xl text-sm outline-none" style={{ background:C.input, border:`1px solid ${C.border}`, color:C.cardText }}/>
+            </div>
+            {bookDate && (
+              loadingBookSlots ? (
+                <div className="flex justify-center py-4"><Loader2 size={18} className="animate-spin" style={{ color:C.gold }}/></div>
+              ) : bookBlockedWarning ? (
+                <p className="text-sm font-bold text-center" style={{ color:'#ef4444' }}>{bookBlockedWarning}</p>
+              ) : (
+                <div>
+                  <label className="text-xs font-bold mb-1.5 block" style={{ color:C.cardMuted }}>{isRtl?'الوقت':'Time'}</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {bookTimeSlots.map(slot => {
+                      const booked = bookSlotCounts[slot.slot_key] || 0;
+                      const full = booked >= slot.capacity;
+                      const selected = bookTimeKey === slot.slot_key;
+                      return (
+                        <button key={slot.slot_key} disabled={full} onClick={() => setBookTimeKey(slot.slot_key)}
+                          className="py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:line-through"
+                          style={selected ? { background:C.gold, color:C.btnTxt } : { background:C.input, color:C.cardText, border:`1px solid ${C.border}` }}>
+                          {isRtl ? slot.label_ar : (slot.label_en||slot.label_ar)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )
+            )}
+            <button onClick={confirmBooking} disabled={!bookDate || !bookTimeKey || confirmingBooking}
+              className="w-full py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 disabled:opacity-40"
+              style={{ background:C.gold, color:C.btnTxt }}>
+              {confirmingBooking ? <Loader2 size={14} className="animate-spin"/> : <Check size={14}/>}
+              {isRtl ? 'تأكيد الحجز' : 'Confirm Booking'}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
