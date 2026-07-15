@@ -749,7 +749,7 @@ export default function App() {
   const clearCart = () => setCart([]);
   const [formData, setFormData] = useState({
     name:'', phone:'', carBrandKey:'', carBrandId: null, carCategoryKey:'',
-    carModel:'', carId: null, carPlateNumber:'', carChassisNumber:'', carRegistrationFile: null,
+    carModel:'', carId: null, carPlateNumber:'', carChassisNumber:'', carRegistrationFile: null, carRegistrationFile2: null,
     serviceKey:'', serviceName:'', subServiceKey:'', subServiceName:'', date:'', timeKey:'', notes:'',
     isQuoteOnly: false,
   });
@@ -767,7 +767,7 @@ export default function App() {
 
   const tr    = T[lang];
   const isRtl = lang === 'ar';
-  const resetForm = () => setFormData({ name:'',phone:'',carBrandKey:'',carBrandId:null,carCategoryKey:'',carModel:'',carId:null,carPlateNumber:'',carChassisNumber:'',carRegistrationFile:null,serviceKey:'',serviceName:'',subServiceKey:'',subServiceName:'',date:'',timeKey:'',notes:'',isQuoteOnly:false });
+  const resetForm = () => setFormData({ name:'',phone:'',carBrandKey:'',carBrandId:null,carCategoryKey:'',carModel:'',carId:null,carPlateNumber:'',carChassisNumber:'',carRegistrationFile:null,carRegistrationFile2:null,serviceKey:'',serviceName:'',subServiceKey:'',subServiceName:'',date:'',timeKey:'',notes:'',isQuoteOnly:false });
 
   const fetchProfile = async (userId) => {
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
@@ -3383,12 +3383,14 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
   const [showAddCar, setShowAddCar]         = useState(false);
   const [carForm, setCarForm]               = useState({ car_type:'', car_brand_id:null, car_category:'', production_year:'', plate_number:'', chassis_number:'' });
   const [registrationFile, setRegistrationFile] = useState(null);
+  const [registrationFile2, setRegistrationFile2] = useState(null);
   const [addingCar, setAddingCar]           = useState(false);
 
   // Edit car state
   const [editingCarId, setEditingCarId]       = useState(null);
   const [editCarForm, setEditCarForm]         = useState({});
   const [registrationEditFile, setRegistrationEditFile] = useState(null);
+  const [registrationEditFile2, setRegistrationEditFile2] = useState(null);
   const [savingCar, setSavingCar]             = useState(false);
 
   // Delete car state
@@ -3498,22 +3500,27 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
       return;
     }
     setAddingCar(true);
-    let registration_image_url = null;
-    if (registrationFile) {
-      const ext = registrationFile.name.split('.').pop();
-      // Namespaced under the owner's user id so a customer can't overwrite or
-      // read another customer's registration image by typing their plate
-      // number — the bucket is public, so the path itself is the only gate.
-      const plateKey = sanitizeForPath(carForm.plate_number) || `${Date.now()}`;
-      const path = `${user.id}/${plateKey}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('car-registration').upload(path, registrationFile, { upsert: true });
-      if (upErr) {
-        setAddingCar(false);
-        alert((isRtl ? 'فشل رفع صورة الاستمارة: ' : 'Failed to upload registration image: ') + upErr.message);
-        return;
-      }
+    const plateKey = sanitizeForPath(carForm.plate_number) || `${Date.now()}`;
+    // Namespaced under the owner's user id so a customer can't overwrite or
+    // read another customer's registration image by typing their plate
+    // number — the bucket is public, so the path itself is the only gate.
+    const uploadSide = async (file, suffix) => {
+      if (!file) return null;
+      const ext = file.name.split('.').pop();
+      const path = `${user.id}/${plateKey}${suffix}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('car-registration').upload(path, file, { upsert: true });
+      if (upErr) throw new Error(upErr.message);
       const { data: { publicUrl } } = supabase.storage.from('car-registration').getPublicUrl(path);
-      registration_image_url = publicUrl;
+      return publicUrl;
+    };
+    let registration_image_url, registration_image_url_2;
+    try {
+      registration_image_url = await uploadSide(registrationFile, '');
+      registration_image_url_2 = await uploadSide(registrationFile2, '-back');
+    } catch (err) {
+      setAddingCar(false);
+      alert((isRtl ? 'فشل رفع صورة الاستمارة: ' : 'Failed to upload registration image: ') + err.message);
+      return;
     }
     const { error: insErr } = await supabase.from('cars').insert({
       profile_id: user.id,
@@ -3523,6 +3530,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
       plate_number: carForm.plate_number?.trim() || null,
       chassis_number: carForm.chassis_number?.trim() || null,
       registration_image_url,
+      registration_image_url_2,
     });
     setAddingCar(false);
     if (insErr) {
@@ -3531,6 +3539,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
     }
     setCarForm({ car_type:'', car_brand_id:null, car_category:'', production_year:'', plate_number:'', chassis_number:'' });
     setRegistrationFile(null);
+    setRegistrationFile2(null);
     setShowAddCar(false);
     loadCars();
   };
@@ -3576,8 +3585,10 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
       plate_number: car.plate_number || '',
       chassis_number: car.chassis_number || '',
       registration_image_url: car.registration_image_url || null,
+      registration_image_url_2: car.registration_image_url_2 || null,
     });
     setRegistrationEditFile(null);
+    setRegistrationEditFile2(null);
     setEditingCarId(car.id);
   };
 
@@ -3587,19 +3598,24 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
       return;
     }
     setSavingCar(true);
-    let registration_image_url = editCarForm.registration_image_url;
-    if (registrationEditFile) {
-      const ext = registrationEditFile.name.split('.').pop();
-      const path = `${user.id}/${sanitizeForPath(editCarForm.plate_number)}.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from('car-registration').upload(path, registrationEditFile, { upsert: true });
-      if (upErr) {
-        setSavingCar(false);
-        alert((isRtl ? 'فشل رفع صورة الاستمارة: ' : 'Failed to upload registration image: ') + upErr.message);
-        return;
-      }
+    const uploadSide = async (file, suffix) => {
+      if (!file) return null;
+      const ext = file.name.split('.').pop();
+      const path = `${user.id}/${sanitizeForPath(editCarForm.plate_number)}${suffix}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('car-registration').upload(path, file, { upsert: true });
+      if (upErr) throw new Error(upErr.message);
       const { data: { publicUrl } } = supabase.storage.from('car-registration').getPublicUrl(path);
-      registration_image_url = publicUrl;
+      return publicUrl;
+    };
+    let registration_image_url = editCarForm.registration_image_url;
+    let registration_image_url_2 = editCarForm.registration_image_url_2;
+    try {
+      if (registrationEditFile) registration_image_url = await uploadSide(registrationEditFile, '');
+      if (registrationEditFile2) registration_image_url_2 = await uploadSide(registrationEditFile2, '-back');
+    } catch (err) {
+      setSavingCar(false);
+      alert((isRtl ? 'فشل رفع صورة الاستمارة: ' : 'Failed to upload registration image: ') + err.message);
+      return;
     }
     const { error: updErr } = await supabase.from('cars').update({
       car_type: editCarForm.car_type,
@@ -3608,6 +3624,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
       plate_number: editCarForm.plate_number?.trim() || null,
       chassis_number: editCarForm.chassis_number?.trim() || null,
       registration_image_url,
+      registration_image_url_2,
     }).eq('id', carId).eq('profile_id', user.id);
     setSavingCar(false);
     if (updErr) {
@@ -3884,19 +3901,33 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
             {carField(tr.prof_plate, 'plate_number', 'text', tr.prof_plate_ph)}
             {/* Chassis number */}
             {carField(tr.prof_chassis, 'chassis_number', 'text', tr.prof_chassis_ph)}
-            {/* Registration image upload — required when adding a new car */}
+            {/* Registration image upload — front required, back optional */}
             <div>
               <label className="block text-[10px] font-bold tracking-widest uppercase mb-1" style={{ color:`${C.gold}80` }}>
-                {isRtl ? 'صورة الاستمارة' : 'Registration Card'} <span style={{ color:'#f87171' }}>*</span>
+                {isRtl ? 'صورة الاستمارة — الوجه الأمامي' : 'Registration Card — Front'} <span style={{ color:'#f87171' }}>*</span>
               </label>
               <label className="flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer text-sm transition-all"
                 style={{ background:C.input, border:`1px solid ${registrationFile ? C.gold : C.border}` }}>
                 <Upload size={14} style={{ color: registrationFile ? C.gold : C.muted, flexShrink:0 }}/>
                 <span className="truncate" style={{ color: registrationFile ? C.gold : C.muted }}>
-                  {registrationFile ? registrationFile.name : (isRtl ? 'يرجى رفع صورة الاستمارة من الجهتين' : 'Please upload a photo of both sides of the registration')}
+                  {registrationFile ? registrationFile.name : (isRtl ? 'ارفع صورة الوجه الأمامي' : 'Upload the front side')}
                 </span>
                 <input type="file" accept="image/*,application/pdf" className="hidden"
                   onChange={e => setRegistrationFile(e.target.files[0] || null)}/>
+              </label>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold tracking-widest uppercase mb-1" style={{ color:`${C.gold}80` }}>
+                {isRtl ? 'صورة الاستمارة — الوجه الخلفي' : 'Registration Card — Back'} <span className="normal-case font-normal" style={{ color:C.muted }}>({isRtl?'اختياري':'optional'})</span>
+              </label>
+              <label className="flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer text-sm transition-all"
+                style={{ background:C.input, border:`1px solid ${registrationFile2 ? C.gold : C.border}` }}>
+                <Upload size={14} style={{ color: registrationFile2 ? C.gold : C.muted, flexShrink:0 }}/>
+                <span className="truncate" style={{ color: registrationFile2 ? C.gold : C.muted }}>
+                  {registrationFile2 ? registrationFile2.name : (isRtl ? 'ارفع صورة الوجه الخلفي (اختياري)' : 'Upload the back side (optional)')}
+                </span>
+                <input type="file" accept="image/*,application/pdf" className="hidden"
+                  onChange={e => setRegistrationFile2(e.target.files[0] || null)}/>
               </label>
             </div>
           </div>
@@ -3949,12 +3980,29 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                       </div>
                     </button>
                     {car.registration_image_url && (
-                      <button
-                        onClick={e => { e.stopPropagation(); setViewingRegistration(car.registration_image_url); }}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl flex-shrink-0 text-xs font-bold transition-all"
-                        style={{ background:'rgba(0,0,0,0.10)', color:cc.fg }}>
-                        <Eye size={14}/>{isRtl?'عرض استمارة السيارة':'View Car Registration'}
-                      </button>
+                      car.registration_image_url_2 ? (
+                        <>
+                          <button
+                            onClick={e => { e.stopPropagation(); setViewingRegistration(car.registration_image_url); }}
+                            className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl flex-shrink-0 text-xs font-bold transition-all"
+                            style={{ background:'rgba(0,0,0,0.10)', color:cc.fg }}>
+                            <Eye size={14}/>{isRtl?'أمامي':'Front'}
+                          </button>
+                          <button
+                            onClick={e => { e.stopPropagation(); setViewingRegistration(car.registration_image_url_2); }}
+                            className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl flex-shrink-0 text-xs font-bold transition-all"
+                            style={{ background:'rgba(0,0,0,0.10)', color:cc.fg }}>
+                            <Eye size={14}/>{isRtl?'خلفي':'Back'}
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={e => { e.stopPropagation(); setViewingRegistration(car.registration_image_url); }}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl flex-shrink-0 text-xs font-bold transition-all"
+                          style={{ background:'rgba(0,0,0,0.10)', color:cc.fg }}>
+                          <Eye size={14}/>{isRtl?'عرض استمارة السيارة':'View Car Registration'}
+                        </button>
+                      )
                     )}
                     <button
                       onClick={e => { e.stopPropagation(); if (!isOpen) setExpandedCar(car.id); openEditCar(car); }}
@@ -4025,12 +4073,12 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                                 {editCarForm.chassis_number?.length||0}/17
                               </p>
                             </div>
-                            {/* Registration image */}
+                            {/* Registration image — front */}
                             <label className="flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer text-sm"
                               style={{ background:C.input, border:`1px solid ${registrationEditFile ? C.gold : C.border}` }}>
                               <Upload size={14} style={{ color: registrationEditFile ? C.gold : C.muted, flexShrink:0 }}/>
                               <span className="truncate flex-1" style={{ color: registrationEditFile ? C.gold : C.muted }}>
-                                {registrationEditFile ? registrationEditFile.name : (editCarForm.registration_image_url ? (isRtl?'استمارة محفوظة — اضغط للتغيير':'Saved — tap to replace') : tr.prof_reg_upload)}
+                                {registrationEditFile ? registrationEditFile.name : (editCarForm.registration_image_url ? (isRtl?'الوجه الأمامي محفوظ — اضغط للتغيير':'Front saved — tap to replace') : (isRtl?'الوجه الأمامي':'Front side'))}
                               </span>
                               {editCarForm.registration_image_url && !registrationEditFile && (
                                 <button type="button"
@@ -4042,6 +4090,23 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                               <input type="file" accept="image/*,application/pdf" className="hidden"
                                 onChange={e => setRegistrationEditFile(e.target.files[0] || null)}/>
                             </label>
+                            {/* Registration image — back (optional) */}
+                            <label className="flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer text-sm"
+                              style={{ background:C.input, border:`1px solid ${registrationEditFile2 ? C.gold : C.border}` }}>
+                              <Upload size={14} style={{ color: registrationEditFile2 ? C.gold : C.muted, flexShrink:0 }}/>
+                              <span className="truncate flex-1" style={{ color: registrationEditFile2 ? C.gold : C.muted }}>
+                                {registrationEditFile2 ? registrationEditFile2.name : (editCarForm.registration_image_url_2 ? (isRtl?'الوجه الخلفي محفوظ — اضغط للتغيير':'Back saved — tap to replace') : (isRtl?'الوجه الخلفي (اختياري)':'Back side (optional)'))}
+                              </span>
+                              {editCarForm.registration_image_url_2 && !registrationEditFile2 && (
+                                <button type="button"
+                                  onClick={e=>{ e.stopPropagation(); e.preventDefault(); setViewingRegistration(editCarForm.registration_image_url_2); }}
+                                  className="text-[10px] underline flex-shrink-0" style={{ color:C.gold }}>
+                                  {tr.prof_reg_view}
+                                </button>
+                              )}
+                              <input type="file" accept="image/*,application/pdf" className="hidden"
+                                onChange={e => setRegistrationEditFile2(e.target.files[0] || null)}/>
+                            </label>
                             {/* Actions */}
                             <div className="flex gap-2 pt-1">
                               <button onClick={()=>saveEditCar(car.id)} disabled={savingCar || !editCarForm.car_type}
@@ -4050,7 +4115,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                                 {savingCar ? <Loader2 size={13} className="animate-spin"/> : <Check size={13}/>}
                                 {tr.prof_save_car}
                               </button>
-                              <button onClick={()=>{ setEditingCarId(null); setRegistrationEditFile(null); }}
+                              <button onClick={()=>{ setEditingCarId(null); setRegistrationEditFile(null); setRegistrationEditFile2(null); }}
                                 className="px-4 py-2.5 rounded-xl font-bold text-sm transition-all"
                                 style={{ background:`rgba(255,255,255,0.06)`, color:C.muted }}>
                                 {tr.prof_cancel_edit}
@@ -4067,7 +4132,14 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                             <button
                               onClick={e=>{ e.stopPropagation(); setViewingRegistration(car.registration_image_url); }}
                               className="text-xs font-bold px-3 py-1.5 rounded-lg transition-all" style={{ background:'rgba(255,255,255,0.08)', color:C.muted }}>
-                              {tr.prof_reg_view}
+                              {car.registration_image_url_2 ? (isRtl?'أمامي':'Front') : tr.prof_reg_view}
+                            </button>
+                          )}
+                          {car.registration_image_url_2 && (
+                            <button
+                              onClick={e=>{ e.stopPropagation(); setViewingRegistration(car.registration_image_url_2); }}
+                              className="text-xs font-bold px-3 py-1.5 rounded-lg transition-all" style={{ background:'rgba(255,255,255,0.08)', color:C.muted }}>
+                              {isRtl?'خلفي':'Back'}
                             </button>
                           )}
                           <button onClick={()=>onBook(car)} className="text-xs font-bold px-3 py-1.5 rounded-lg transition-all" style={{ background:`${C.gold}20`, color:C.gold }}>
@@ -4323,7 +4395,7 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
     }));
   };
 
-  const clearSelection = () => setFormData(p => ({ ...p, carId: null, carBrandKey: '', carBrandId: null, carCategoryKey: '', carModel: '', carPlateNumber: '', carChassisNumber: '', carRegistrationFile: null }));
+  const clearSelection = () => setFormData(p => ({ ...p, carId: null, carBrandKey: '', carBrandId: null, carCategoryKey: '', carModel: '', carPlateNumber: '', carChassisNumber: '', carRegistrationFile: null, carRegistrationFile2: null }));
 
   // Filter categories by selected brand (fallback: show all if no linkages defined)
   const linkedCatIds = new Set(
@@ -4377,17 +4449,28 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
           className={C.inputCls} style={{ background: C.input, border: `1px solid ${C.border}`, textAlign: isRtl?'right':'left' }}
           onFocus={e => e.target.style.borderColor = C.borderFocus} onBlur={e => e.target.style.borderColor = C.border}/>
       </Field>
-      <Field label={<>{tr.carRegistration} <span style={{ color:'#f87171' }}>*</span></>}>
+      <Field label={<>{tr.carRegistration} — {isRtl?'الوجه الأمامي':'Front'} <span style={{ color:'#f87171' }}>*</span></>}>
         <label className="flex items-center gap-2 px-4 py-3.5 rounded-xl cursor-pointer text-sm transition-all"
           style={{ background: C.input, border: `1px solid ${formData.carRegistrationFile ? C.gold : C.border}` }}>
           <Upload size={14} style={{ color: formData.carRegistrationFile ? C.gold : C.muted, flexShrink:0 }}/>
           <span className="truncate" style={{ color: formData.carRegistrationFile ? C.gold : C.muted }}>
-            {formData.carRegistrationFile ? formData.carRegistrationFile.name : tr.prof_reg_upload}
+            {formData.carRegistrationFile ? formData.carRegistrationFile.name : (isRtl?'ارفع صورة الوجه الأمامي':'Upload the front side')}
           </span>
           <input type="file" accept="image/*,application/pdf" className="hidden"
             onChange={e => setFormData(p => ({ ...p, carRegistrationFile: e.target.files[0] || null }))}/>
         </label>
         <p className="text-[10px] mt-1.5" style={{ color: C.muted }}>{tr.carRegistrationRequired}</p>
+      </Field>
+      <Field label={<>{tr.carRegistration} — {isRtl?'الوجه الخلفي':'Back'} <span className="normal-case" style={{ color:C.muted }}>({isRtl?'اختياري':'optional'})</span></>}>
+        <label className="flex items-center gap-2 px-4 py-3.5 rounded-xl cursor-pointer text-sm transition-all"
+          style={{ background: C.input, border: `1px solid ${formData.carRegistrationFile2 ? C.gold : C.border}` }}>
+          <Upload size={14} style={{ color: formData.carRegistrationFile2 ? C.gold : C.muted, flexShrink:0 }}/>
+          <span className="truncate" style={{ color: formData.carRegistrationFile2 ? C.gold : C.muted }}>
+            {formData.carRegistrationFile2 ? formData.carRegistrationFile2.name : (isRtl?'ارفع صورة الوجه الخلفي (اختياري)':'Upload the back side (optional)')}
+          </span>
+          <input type="file" accept="image/*,application/pdf" className="hidden"
+            onChange={e => setFormData(p => ({ ...p, carRegistrationFile2: e.target.files[0] || null }))}/>
+        </label>
       </Field>
     </>
   );
@@ -4648,18 +4731,20 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
         : (formData.serviceName || '');
       let carId = formData.carId;
       if (!carId) {
-        let registration_image_url = null;
-        if (formData.carRegistrationFile) {
-          const ext = formData.carRegistrationFile.name.split('.').pop();
-          // Namespaced under the owner's user id, same as the profile's own
-          // add-car upload — the bucket is public, so the path is the gate.
-          const plateKey = sanitizeForPath(formData.carPlateNumber) || `${Date.now()}`;
-          const path = `${user.id}/${plateKey}.${ext}`;
-          const { error: upErr } = await supabase.storage.from('car-registration').upload(path, formData.carRegistrationFile, { upsert: true });
+        // Namespaced under the owner's user id, same as the profile's own
+        // add-car upload — the bucket is public, so the path is the gate.
+        const plateKey = sanitizeForPath(formData.carPlateNumber) || `${Date.now()}`;
+        const uploadSide = async (file, suffix) => {
+          if (!file) return null;
+          const ext = file.name.split('.').pop();
+          const path = `${user.id}/${plateKey}${suffix}.${ext}`;
+          const { error: upErr } = await supabase.storage.from('car-registration').upload(path, file, { upsert: true });
           if (upErr) throw new Error((isRtl ? 'فشل رفع صورة الاستمارة: ' : 'Failed to upload registration image: ') + upErr.message);
           const { data: { publicUrl } } = supabase.storage.from('car-registration').getPublicUrl(path);
-          registration_image_url = publicUrl;
-        }
+          return publicUrl;
+        };
+        const registration_image_url = await uploadSide(formData.carRegistrationFile, '');
+        const registration_image_url_2 = await uploadSide(formData.carRegistrationFile2, '-back');
         const { data: carData, error: carErr } = await supabase.from('cars')
           .insert([{
             profile_id: user.id,
@@ -4669,6 +4754,7 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
             plate_number: formData.carPlateNumber?.trim() || null,
             chassis_number: formData.carChassisNumber?.trim() || null,
             registration_image_url,
+            registration_image_url_2,
           }]).select('id').single();
         if (carErr) throw carErr;
         carId = carData.id;
