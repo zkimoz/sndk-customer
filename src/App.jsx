@@ -2341,7 +2341,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 px-6">
         <Lock size={44} style={{ color:C.gold, opacity:0.4 }}/>
-        <p className="text-base font-semibold text-center" style={{ color:C.muted }}>{tr.ordSignIn}</p>
+        <p className="text-lg font-semibold text-center" style={{ color:C.muted }}>{tr.ordSignIn}</p>
       </div>
     );
   }
@@ -2359,7 +2359,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
           { key:'orders',    label: isRtl ? 'الطلبات'  : 'My Orders',    icon:ClipboardList },
           { key:'cancelled', label: isRtl ? 'المواعيد أو الطلبات الملغية' : 'Cancelled Appointments/Orders', icon:X }].map(item => (
           <button key={item.key} onClick={() => setTab(item.key)}
-            className="flex items-center justify-center gap-2 py-3 text-sm font-bold transition-all"
+            className="flex items-center justify-center gap-2 py-3 text-base font-bold transition-all"
             style={tab===item.key
               ? { background:CARD_BG_CYCLE[0].bg, color:CARD_BG_CYCLE[0].txt }
               : { background:CARD_BG_CYCLE[1].bg, color:CARD_BG_CYCLE[1].txt }}>
@@ -2382,10 +2382,10 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                 {noJcAppts.length === 0 ? (
                   <div className="py-16 text-center space-y-3" style={{ color:C.muted }}>
                     <Calendar size={44} className="mx-auto opacity-25"/>
-                    <p className="text-sm">{isRtl ? 'لا توجد مواعيد بانتظار الاستقبال' : 'No pending appointments'}</p>
+                    <p className="text-base">{isRtl ? 'لا توجد مواعيد بانتظار الاستقبال' : 'No pending appointments'}</p>
                     {appts.filter(a => a.job_cards?.length > 0).length > 0 && (
                       <button onClick={() => setTab('orders')}
-                        className="text-xs font-bold px-4 py-2 rounded-xl border transition-all"
+                        className="text-sm font-bold px-4 py-2 rounded-xl border transition-all"
                         style={{ borderColor:C.gold, color:C.gold, background:`${C.gold}10` }}>
                         {isRtl ? 'عرض الطلبات الجارية ←' : 'View active orders →'}
                       </button>
@@ -2406,27 +2406,27 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             return svcs ? (
                               <div className="flex flex-wrap gap-1.5">
                                 {svcs.map((s, i) => (
-                                  <span key={i} className="text-xs font-semibold px-2.5 py-1 rounded-full"
+                                  <span key={i} className="text-sm font-semibold px-2.5 py-1 rounded-full"
                                     style={{ background:'rgba(0,0,0,0.12)', color:cc.txt, border:`1px solid ${cc.fg}40` }}>
                                     {s.name || s}
                                   </span>
                                 ))}
                               </div>
-                            ) : <p className="font-bold text-sm" style={{ color:cc.txt }}>{a.service_type||'—'}</p>;
+                            ) : <p className="font-bold text-base" style={{ color:cc.txt }}>{a.service_type||'—'}</p>;
                           })()}
                           {car && (
-                            <p className="text-xs mt-1.5" style={{ color:cc.sub }}>
+                            <p className="text-sm mt-1.5" style={{ color:cc.sub }}>
                               {[carTypeLabel(car, carBrandsRef, lang), carCategoryLabel(car, carCatsRef, lang), car.production_year].filter(Boolean).join(' · ')}
                             </p>
                           )}
                         </div>
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
                           {a.is_quote_request && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background:`${C.gold}20`, color:C.gold }}>
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold" style={{ background:`${C.gold}20`, color:C.gold }}>
                               {isRtl ? '🏷️ طلب عرض سعر' : '🏷️ Quote request'}
                             </span>
                           )}
-                          <span className="px-2.5 py-1 rounded-full text-xs font-bold"
+                          <span className="px-2.5 py-1 rounded-full text-sm font-bold"
                             style={{ background:st.bg, color:st.text }}>
                             {st.label}
                           </span>
@@ -2434,18 +2434,18 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                       </div>
                       {/* Date */}
                       {(a.appointment_date || a.appointment_time) && (
-                        <div className="flex items-center gap-2 text-xs" style={{ color:cc.sub }}>
+                        <div className="flex items-center gap-2 text-sm" style={{ color:cc.sub }}>
                           <Calendar size={11}/>
                           <span>{a.appointment_date}</span>
                           {a.appointment_time && <span style={{ color:cc.sub }}>· {a.appointment_time}</span>}
                         </div>
                       )}
-                      {a.customer_notes && <p className="text-xs italic" style={{ color:cc.sub }}>{a.customer_notes}</p>}
+                      {a.customer_notes && <p className="text-sm italic" style={{ color:cc.sub }}>{a.customer_notes}</p>}
                       {/* Cancel button (only if not cancelled and no job card) */}
                       {a.status !== 'cancelled' && a.status !== 'completed' && (
                         <div className="pt-1">
                           <button onClick={() => cancelAppt(a)} disabled={cancellingId === a.id}
-                            className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border transition-all disabled:opacity-50"
+                            className="flex items-center gap-1.5 text-sm font-bold px-3 py-1.5 rounded-xl border transition-all disabled:opacity-50"
                             style={{ borderColor:'rgba(239,68,68,0.4)', color:'#ef4444', background:'rgba(239,68,68,0.12)' }}>
                             {cancellingId === a.id ? <Loader2 size={11} className="animate-spin"/> : <X size={11}/>}
                             {tr.apptCancelBtn}
@@ -2468,7 +2468,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                 {jcAppts.length === 0 ? (
                   <div className="py-16 text-center space-y-2" style={{ color:C.muted }}>
                     <ClipboardList size={44} className="mx-auto opacity-25"/>
-                    <p className="text-sm">{isRtl ? 'لا توجد طلبات حتى الآن' : 'No orders yet'}</p>
+                    <p className="text-base">{isRtl ? 'لا توجد طلبات حتى الآن' : 'No orders yet'}</p>
                   </div>
                 ) : jcAppts.map((a, ai) => {
                   const cc     = CARD_BG_CYCLE[1]; // always maroon
@@ -2491,34 +2491,34 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             return svcs ? (
                               <div className="flex flex-wrap gap-1 mb-1">
                                 {svcs.map((s, i) => (
-                                  <span key={i} className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                                  <span key={i} className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
                                     style={{ background:'rgba(0,0,0,0.10)', color:cc.txt }}>
                                     {s.name || s}
                                   </span>
                                 ))}
                               </div>
-                            ) : <p className="text-sm font-bold mb-0.5" style={{ color:cc.txt }}>{a.service_type||'—'}</p>;
+                            ) : <p className="text-base font-bold mb-0.5" style={{ color:cc.txt }}>{a.service_type||'—'}</p>;
                           })()}
                           {car && (
-                            <p className="text-xs" style={{ color:cc.sub }}>
+                            <p className="text-sm" style={{ color:cc.sub }}>
                               {[carTypeLabel(car, carBrandsRef, lang), carCategoryLabel(car, carCatsRef, lang), car.production_year].filter(Boolean).join(' · ')}
                               {car.plate_number ? ` · ${car.plate_number}` : ''}
                             </p>
                           )}
                           {a.appointment_date && (
-                            <p className="text-[10px] mt-0.5 flex items-center gap-1" style={{ color:cc.sub }}>
+                            <p className="text-[11px] mt-0.5 flex items-center gap-1" style={{ color:cc.sub }}>
                               <Calendar size={9}/>{a.appointment_date}
                             </p>
                           )}
                           {jc.customer_complaints && (
-                            <p className="text-xs italic mt-1.5" style={{ color:cc.sub }}>{jc.customer_complaints}</p>
+                            <p className="text-sm italic mt-1.5" style={{ color:cc.sub }}>{jc.customer_complaints}</p>
                           )}
                         </div>
                         {/* Job status + number */}
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
                           <div className="flex items-center gap-1.5">
                             {relOrd && relOrd.sent_to_customer && PARTS_STATUS_LABEL[relOrd.status] && (
-                              <span className="flex flex-col items-end text-[9px] font-bold px-2 py-1 rounded-full text-white leading-tight text-end"
+                              <span className="flex flex-col items-end text-[10px] font-bold px-2 py-1 rounded-full text-white leading-tight text-end"
                                 style={{ background:PARTS_STATUS_COLOR[relOrd.status] }}>
                                 <span>{isRtl ? PARTS_STATUS_LABEL[relOrd.status].ar : PARTS_STATUS_LABEL[relOrd.status].en}</span>
                                 {relOrd.parts_status_at && (
@@ -2528,11 +2528,11 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                 )}
                               </span>
                             )}
-                            <span className="px-2.5 py-1 rounded-full text-xs font-bold text-white" style={{ background:jcColor }}>
+                            <span className="px-2.5 py-1 rounded-full text-sm font-bold text-white" style={{ background:jcColor }}>
                               {jcLabel}
                             </span>
                           </div>
-                          <span className="text-[10px] font-mono" style={{ color:cc.sub }}>{jc.job_number}</span>
+                          <span className="text-[11px] font-mono" style={{ color:cc.sub }}>{jc.job_number}</span>
                         </div>
                       </div>
 
@@ -2584,11 +2584,11 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             return (
                               <div className="space-y-1.5">
                                 <div className="flex items-center justify-between">
-                                  <p className="text-xs font-bold" style={{ color:cc.sub }}>{isRtl?'الخدمات المطلوبة:':'Requested Services:'}</p>
+                                  <p className="text-sm font-bold" style={{ color:cc.sub }}>{isRtl?'الخدمات المطلوبة:':'Requested Services:'}</p>
                                   {undecidedServices.length > 1 && (
                                     <div className="flex items-center gap-2">
-                                      <button onClick={()=>setAllServiceSelection(relOrd.id, 'approved')} className="text-[10px] font-bold underline" style={{ color:'#22c55e' }}>{isRtl?'الموافقة على الكل':'Approve all'}</button>
-                                      <button onClick={()=>setAllServiceSelection(relOrd.id, 'rejected')} className="text-[10px] font-bold underline" style={{ color:'#ef4444' }}>{isRtl?'رفض الكل':'Reject all'}</button>
+                                      <button onClick={()=>setAllServiceSelection(relOrd.id, 'approved')} className="text-[11px] font-bold underline" style={{ color:'#22c55e' }}>{isRtl?'الموافقة على الكل':'Approve all'}</button>
+                                      <button onClick={()=>setAllServiceSelection(relOrd.id, 'rejected')} className="text-[11px] font-bold underline" style={{ color:'#ef4444' }}>{isRtl?'رفض الكل':'Reject all'}</button>
                                     </div>
                                   )}
                                 </div>
@@ -2607,17 +2607,17 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                       <div className="flex items-center gap-2 px-3 py-2">
                                         <div className="min-w-0 flex-1">
                                           {(s.category_ar || s.category_en) && (
-                                            <p className="text-[9px] font-bold uppercase tracking-wider truncate" style={{ color:cc.sub }}>{isRtl?(s.category_ar||s.category_en):(s.category_en||s.category_ar)}</p>
+                                            <p className="text-[10px] font-bold uppercase tracking-wider truncate" style={{ color:cc.sub }}>{isRtl?(s.category_ar||s.category_en):(s.category_en||s.category_ar)}</p>
                                           )}
-                                          <span className="text-xs font-semibold" style={{ color:cc.txt }}>{isRtl?(s.name_ar||s.name_en):(s.name_en||s.name_ar)}</span>
-                                          {s.notes && <p className="text-[10px] mt-0.5 italic" style={{ color:cc.sub }}>{s.notes}</p>}
+                                          <span className="text-sm font-semibold" style={{ color:cc.txt }}>{isRtl?(s.name_ar||s.name_en):(s.name_en||s.name_ar)}</span>
+                                          {s.notes && <p className="text-[11px] mt-0.5 italic" style={{ color:cc.sub }}>{s.notes}</p>}
                                         </div>
                                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background:PRIORITY_STYLE[s.priority].bg, color:PRIORITY_STYLE[s.priority].text }}>
+                                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background:PRIORITY_STYLE[s.priority].bg, color:PRIORITY_STYLE[s.priority].text }}>
                                             {PRIORITY_STYLE[s.priority].label}
                                           </span>
                                           {decision && (
-                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={decision==='approved' ? { background:'rgba(34,197,94,0.15)', color:'#22c55e' } : { background:'rgba(239,68,68,0.15)', color:'#ef4444' }}>
+                                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={decision==='approved' ? { background:'rgba(34,197,94,0.15)', color:'#22c55e' } : { background:'rgba(239,68,68,0.15)', color:'#ef4444' }}>
                                               {decision==='approved' ? (isRtl?'تمت الموافقة':'Approved') : (isRtl?'تم الرفض':'Rejected')}
                                             </span>
                                           )}
@@ -2626,14 +2626,14 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                       {!decision && (
                                         <div className="flex items-center gap-2 px-3 pb-2">
                                           <button onClick={()=>setServiceDecision(relOrd.id, s.key, 'approved')}
-                                            className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold transition-all active:scale-95"
+                                            className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-sm font-bold transition-all active:scale-95"
                                             style={liveDecision==='approved'
                                               ? { background:'#16a34a', color:'#fff' }
                                               : { background:'transparent', color:'#16a34a', border:'1.5px solid #16a34a60' }}>
                                             <Check size={12}/>{isRtl?'موافق':'Approve'}
                                           </button>
                                           <button onClick={()=>setServiceDecision(relOrd.id, s.key, 'rejected')}
-                                            className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold transition-all active:scale-95"
+                                            className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-sm font-bold transition-all active:scale-95"
                                             style={liveDecision==='rejected'
                                               ? { background:'#ef4444', color:'#fff' }
                                               : { background:'transparent', color:'#ef4444', border:'1.5px solid #ef444460' }}>
@@ -2646,7 +2646,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                           {partItems.map((it,i) => {
                                             const hasDiscount = Number(it.discount_pct||0) > 0;
                                             return (
-                                            <div key={`p-${i}`} className="flex items-center justify-between gap-2 text-[11px]">
+                                            <div key={`p-${i}`} className="flex items-center justify-between gap-2 text-xs">
                                               <span style={{ color:cc.sub }}>
                                                 <span className="opacity-70">{isRtl?'قطعة —':'Part —'}</span> {isRtl?(it.item_name?.ar||it.item_name?.en):(it.item_name?.en||it.item_name?.ar)}
                                               </span>
@@ -2660,7 +2660,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                           {laborItems.map((it,i) => {
                                             const hasDiscount = Number(it.discount_pct||0) > 0;
                                             return (
-                                            <div key={`l-${i}`} className="flex items-center justify-between gap-2 text-[11px]">
+                                            <div key={`l-${i}`} className="flex items-center justify-between gap-2 text-xs">
                                               <span style={{ color:cc.sub }}>
                                                 <span className="opacity-70">{isRtl?'عمالة —':'Labor —'}</span> {isRtl?(it.item_name?.ar||it.item_name?.en):(it.item_name?.en||it.item_name?.ar)}
                                               </span>
@@ -2671,10 +2671,10 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                             </div>
                                             );
                                           })}
-                                          <div className="flex items-center justify-between gap-2 text-[11px] pt-1 mt-1" style={{ borderTop:'1px dashed rgba(255,255,255,0.15)' }}>
+                                          <div className="flex items-center justify-between gap-2 text-xs pt-1 mt-1" style={{ borderTop:'1px dashed rgba(255,255,255,0.15)' }}>
                                             <span className="font-bold" style={{ color:cc.sub }}>{isRtl?'إجمالي الخدمة':'Service total'}</span>
                                             <span className="flex-shrink-0 flex items-center gap-1.5">
-                                              {groupHasDiscount && <span className="line-through opacity-50 text-[10px]" style={{ color:cc.sub }}>{lineItems.reduce((s,it)=>s+originalLineTotal(it),0).toFixed(3)}</span>}
+                                              {groupHasDiscount && <span className="line-through opacity-50 text-[11px]" style={{ color:cc.sub }}>{lineItems.reduce((s,it)=>s+originalLineTotal(it),0).toFixed(3)}</span>}
                                               <span className="font-black" style={{ color: groupHasDiscount ? '#22c55e' : cc.fg }}>{lineItems.reduce((s,it)=>s+lineTotal(it),0).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
                                             </span>
                                           </div>
@@ -2688,7 +2688,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           })()}
                           {/* PDF */}
                           <button onClick={() => openQuotationPDF(relOrd, a, profile, jc)}
-                            className="flex items-center justify-center gap-2 w-full px-3 py-3 rounded-xl font-black text-sm shadow-md hover:shadow-lg active:scale-95 transition-all"
+                            className="flex items-center justify-center gap-2 w-full px-3 py-3 rounded-xl font-black text-base shadow-md hover:shadow-lg active:scale-95 transition-all"
                             style={{ background:cc.fg, color:'#111111' }}>
                             <FileImage size={16}/>{isRtl ? 'فتح أمر الشغل PDF' : 'Open Job Card PDF'}
                           </button>
@@ -2698,8 +2698,8 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                               and must still show, instead of looking like the quotation never sent. */}
                           {(relOrd.order_items?.length > 0) && (
                             <div className="flex items-center justify-between px-1">
-                              <span className="text-xs" style={{ color:cc.sub }}>{isRtl ? 'إجمالي عرض السعر:' : 'Quotation Total:'}</span>
-                              <span className="text-base font-black" style={{ color:cc.fg }}>{selectedQuotationTotal(relOrd).toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
+                              <span className="text-sm" style={{ color:cc.sub }}>{isRtl ? 'إجمالي عرض السعر:' : 'Quotation Total:'}</span>
+                              <span className="text-lg font-black" style={{ color:cc.fg }}>{selectedQuotationTotal(relOrd).toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
                             </div>
                           )}
                           {/* Paid / Remaining */}
@@ -2720,17 +2720,17 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             return (
                               <div className="rounded-xl px-3 py-2 space-y-1" style={{ background:'rgba(0,0,0,0.08)' }}>
                                 <div className="flex items-center justify-between">
-                                  <span className="text-xs" style={{ color:cc.sub }}>{isRtl ? 'المدفوع:' : 'Paid:'}</span>
-                                  <span className="text-sm font-bold" style={{ color:'#22c55e' }}>{paid.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
+                                  <span className="text-sm" style={{ color:cc.sub }}>{isRtl ? 'المدفوع:' : 'Paid:'}</span>
+                                  <span className="text-base font-bold" style={{ color:'#22c55e' }}>{paid.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                  <span className="text-xs" style={{ color:cc.sub }}>{isRtl ? 'المتبقي:' : 'Remaining:'}</span>
-                                  <span className="text-sm font-bold" style={{ color: remaining < -0.001 ? '#ef4444' : remaining > 0.001 ? cc.fg : '#22c55e' }}>{remaining.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
+                                  <span className="text-sm" style={{ color:cc.sub }}>{isRtl ? 'المتبقي:' : 'Remaining:'}</span>
+                                  <span className="text-base font-bold" style={{ color: remaining < -0.001 ? '#ef4444' : remaining > 0.001 ? cc.fg : '#22c55e' }}>{remaining.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
                                 </div>
                                 {pendingExcess > 0.001 && (
                                   <div className="flex items-center justify-between pt-1 mt-1" style={{ borderTop:`1px dashed ${cc.sub}40` }}>
-                                    <span className="text-[11px] font-bold" style={{ color:C.gold }}>{isRtl ? 'الزيادة:' : 'Overpaid:'}</span>
-                                    <span className="text-sm font-bold" style={{ color:C.gold }}>+{pendingExcess.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
+                                    <span className="text-xs font-bold" style={{ color:C.gold }}>{isRtl ? 'الزيادة:' : 'Overpaid:'}</span>
+                                    <span className="text-base font-bold" style={{ color:C.gold }}>+{pendingExcess.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
                                   </div>
                                 )}
                               </div>
@@ -2743,7 +2743,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             if (remaining > 0.001) return null;
                             return (
                               <button onClick={() => printCustomerInvoice(jc, a, relOrd, profile, carBrandsRef, carCatsRef)}
-                                className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
+                                className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl font-bold text-base transition-all active:scale-95"
                                 style={{ background:'rgba(34,197,94,0.15)', border:'1px solid rgba(34,197,94,0.35)', color:'#16a34a' }}>
                                 <FileImage size={14}/>{isRtl ? 'عرض الفاتورة' : 'View Invoice'}
                               </button>
@@ -2763,12 +2763,12 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             return (
                               <div>
                                 <button onClick={() => canConfirm && setSigModal({ open:true, orderId:relOrd.id })} disabled={!canConfirm}
-                                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-black transition-all active:scale-95 disabled:active:scale-100 disabled:cursor-not-allowed"
+                                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-base font-black transition-all active:scale-95 disabled:active:scale-100 disabled:cursor-not-allowed"
                                   style={canConfirm ? { background:'#16a34a', color:'#fff' } : { background:'rgba(148,163,184,0.25)', color:cc.sub }}>
                                   <Check size={15}/>{isRtl ? 'تأكيد القرار والتوقيع' : 'Confirm Decision & Sign'}
                                 </button>
                                 {!canConfirm && (
-                                  <p className="text-[10px] text-center mt-1.5" style={{ color:cc.sub }}>
+                                  <p className="text-[11px] text-center mt-1.5" style={{ color:cc.sub }}>
                                     {isRtl ? 'حدد "موافق" أو "رفض" لكل خدمة قبل التأكيد' : 'Approve or reject every service before confirming'}
                                   </p>
                                 )}
@@ -2786,7 +2786,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                 <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
                                   style={{ background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.2)' }}>
                                   <CheckCircle2 size={14} style={{ color:'#22c55e' }}/>
-                                  <span className="text-sm font-bold" style={{ color:'#22c55e' }}>
+                                  <span className="text-base font-bold" style={{ color:'#22c55e' }}>
                                     {allApproved
                                       ? (isRtl ? 'تمت الموافقة على كل الخدمات ✅' : 'All services approved ✅')
                                       : (isRtl ? `تمت الموافقة على ${approvedN} من ${total} خدمات، وتم رفض الباقي` : `Approved ${approvedN} of ${total} services, rest rejected`)}
@@ -2794,14 +2794,14 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                 </div>
                                 {relOrd.signature_data && (
                                   <div className="px-2 py-2 rounded-xl" style={{ background:`${C.gold}08`, border:`1px solid ${C.gold}20` }}>
-                                    <p className="text-[10px] font-bold mb-1.5" style={{ color:C.dim }}>{isRtl ? 'توقيعك:' : 'Your signature:'}</p>
+                                    <p className="text-[11px] font-bold mb-1.5" style={{ color:C.dim }}>{isRtl ? 'توقيعك:' : 'Your signature:'}</p>
                                     <img src={relOrd.signature_data} alt="sig"
                                       style={{ maxWidth:180, height:'auto', background:'#fff', padding:3, borderRadius:8, border:`1px solid ${C.border}`, display:'block' }}/>
                                   </div>
                                 )}
                                 {relOrd.signed_by && !relOrd.signature_data && (
                                   <div className="px-3 py-2 rounded-xl" style={{ background:`${C.gold}08`, border:`1px solid ${C.gold}20` }}>
-                                    <p className="text-[10px] font-bold mb-1" style={{ color:C.dim }}>{isRtl ? 'توقيعك:' : 'Your signature:'}</p>
+                                    <p className="text-[11px] font-bold mb-1" style={{ color:C.dim }}>{isRtl ? 'توقيعك:' : 'Your signature:'}</p>
                                     <p style={{ fontFamily:'Georgia,serif', fontStyle:'italic', fontSize:20, color:C.text }}>{relOrd.signed_by}</p>
                                   </div>
                                 )}
@@ -2813,7 +2813,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
                               style={{ background:'rgba(239,68,68,0.07)', border:'1px solid rgba(239,68,68,0.2)' }}>
                               <X size={14} style={{ color:'#ef4444' }}/>
-                              <span className="text-xs font-bold" style={{ color:'#ef4444' }}>{isRtl ? 'تم رفض كل الخدمات — بانتظار مراجعة الفريق' : 'All services rejected — awaiting review'}</span>
+                              <span className="text-sm font-bold" style={{ color:'#ef4444' }}>{isRtl ? 'تم رفض كل الخدمات — بانتظار مراجعة الفريق' : 'All services rejected — awaiting review'}</span>
                             </div>
                           )}
                         </div>
@@ -2876,7 +2876,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                       {!relOrd?.sent_to_customer && (
                         <div className="px-4 py-3 flex items-center gap-2" style={{ color:C.gold }}>
                           <Loader2 size={12} className="animate-spin"/>
-                          <span className="text-xs font-bold">{isRtl ? 'جاري إعداد عرض السعر...' : 'Preparing quotation...'}</span>
+                          <span className="text-sm font-bold">{isRtl ? 'جاري إعداد عرض السعر...' : 'Preparing quotation...'}</span>
                         </div>
                       )}
                     </div>
@@ -2894,7 +2894,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                 {cancelledAppts.length === 0 ? (
                   <div className="py-16 text-center space-y-2" style={{ color:C.muted }}>
                     <X size={44} className="mx-auto opacity-25"/>
-                    <p className="text-sm">{isRtl ? 'لا توجد طلبات ملغية' : 'No cancelled orders'}</p>
+                    <p className="text-base">{isRtl ? 'لا توجد طلبات ملغية' : 'No cancelled orders'}</p>
                   </div>
                 ) : cancelledAppts.map((a, ai) => {
                   const cc  = CARD_BG_CYCLE[ai % 2];
@@ -2913,36 +2913,36 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             return svcs ? (
                               <div className="flex flex-wrap gap-1.5">
                                 {svcs.map((s, i) => (
-                                  <span key={i} className="text-xs font-semibold px-2.5 py-1 rounded-full"
+                                  <span key={i} className="text-sm font-semibold px-2.5 py-1 rounded-full"
                                     style={{ background:'rgba(0,0,0,0.12)', color:cc.txt, border:`1px solid ${cc.fg}40` }}>
                                     {s.name || s}
                                   </span>
                                 ))}
                               </div>
-                            ) : <p className="font-bold text-sm" style={{ color:cc.txt }}>{a.service_type||'—'}</p>;
+                            ) : <p className="font-bold text-base" style={{ color:cc.txt }}>{a.service_type||'—'}</p>;
                           })()}
                           {car && (
-                            <p className="text-xs mt-1.5" style={{ color:cc.sub }}>
+                            <p className="text-sm mt-1.5" style={{ color:cc.sub }}>
                               {[carTypeLabel(car, carBrandsRef, lang), carCategoryLabel(car, carCatsRef, lang), car.production_year].filter(Boolean).join(' · ')}
                             </p>
                           )}
                           {jc?.job_number && (
-                            <p className="text-[10px] mt-0.5 font-mono" style={{ color:cc.sub }}>{jc.job_number}</p>
+                            <p className="text-[11px] mt-0.5 font-mono" style={{ color:cc.sub }}>{jc.job_number}</p>
                           )}
                         </div>
-                        <span className="px-2.5 py-1 rounded-full text-xs font-bold flex-shrink-0"
+                        <span className="px-2.5 py-1 rounded-full text-sm font-bold flex-shrink-0"
                           style={{ background:'rgba(239,68,68,0.15)', color:'#ef4444' }}>
                           {APPT_ST.cancelled.label}
                         </span>
                       </div>
                       {(a.appointment_date || a.appointment_time) && (
-                        <div className="flex items-center gap-2 text-xs" style={{ color:cc.sub }}>
+                        <div className="flex items-center gap-2 text-sm" style={{ color:cc.sub }}>
                           <Calendar size={11}/>
                           <span>{a.appointment_date}</span>
                           {a.appointment_time && <span style={{ color:cc.sub }}>· {a.appointment_time}</span>}
                         </div>
                       )}
-                      <div className="flex items-center gap-2 text-xs font-semibold" style={{ color:'#ef4444' }}>
+                      <div className="flex items-center gap-2 text-sm font-semibold" style={{ color:'#ef4444' }}>
                         <X size={11}/>
                         <span>{cancelledByLabel}</span>
                         {a.cancelled_at && <span style={{ color:cc.sub, fontWeight:600 }}>· {new Date(a.cancelled_at).toLocaleDateString(isRtl?'ar-EG':'en-GB')}</span>}
