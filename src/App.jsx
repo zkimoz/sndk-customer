@@ -3901,16 +3901,16 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
             {carField(tr.prof_plate, 'plate_number', 'text', tr.prof_plate_ph)}
             {/* Chassis number */}
             {carField(tr.prof_chassis, 'chassis_number', 'text', tr.prof_chassis_ph)}
-            {/* Registration image upload — front required, back optional */}
+            {/* Registration image upload — first required, second optional */}
             <div>
               <label className="block text-[10px] font-bold tracking-widest uppercase mb-1" style={{ color:`${C.gold}80` }}>
-                {isRtl ? 'صورة الاستمارة — الوجه الأمامي' : 'Registration Card — Front'} <span style={{ color:'#f87171' }}>*</span>
+                {isRtl ? 'صورة الاستمارة' : 'Registration Card'} <span style={{ color:'#f87171' }}>*</span>
               </label>
               <label className="flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer text-sm transition-all"
                 style={{ background:C.input, border:`1px solid ${registrationFile ? C.gold : C.border}` }}>
                 <Upload size={14} style={{ color: registrationFile ? C.gold : C.muted, flexShrink:0 }}/>
                 <span className="truncate" style={{ color: registrationFile ? C.gold : C.muted }}>
-                  {registrationFile ? registrationFile.name : (isRtl ? 'ارفع صورة الوجه الأمامي' : 'Upload the front side')}
+                  {registrationFile ? registrationFile.name : (isRtl ? 'يرجى رفع صورة الاستمارة للجهتين' : 'Please upload a photo of the registration (both sides)')}
                 </span>
                 <input type="file" accept="image/*,application/pdf" className="hidden"
                   onChange={e => setRegistrationFile(e.target.files[0] || null)}/>
@@ -3918,13 +3918,13 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
             </div>
             <div>
               <label className="block text-[10px] font-bold tracking-widest uppercase mb-1" style={{ color:`${C.gold}80` }}>
-                {isRtl ? 'صورة الاستمارة — الوجه الخلفي' : 'Registration Card — Back'} <span className="normal-case font-normal" style={{ color:C.muted }}>({isRtl?'اختياري':'optional'})</span>
+                {isRtl ? 'صورة إضافية للاستمارة' : 'Additional Registration Photo'} <span className="normal-case font-normal" style={{ color:C.muted }}>({isRtl?'اختياري':'optional'})</span>
               </label>
               <label className="flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer text-sm transition-all"
                 style={{ background:C.input, border:`1px solid ${registrationFile2 ? C.gold : C.border}` }}>
                 <Upload size={14} style={{ color: registrationFile2 ? C.gold : C.muted, flexShrink:0 }}/>
                 <span className="truncate" style={{ color: registrationFile2 ? C.gold : C.muted }}>
-                  {registrationFile2 ? registrationFile2.name : (isRtl ? 'ارفع صورة الوجه الخلفي (اختياري)' : 'Upload the back side (optional)')}
+                  {registrationFile2 ? registrationFile2.name : (isRtl ? 'صورة إضافية (اختياري)' : 'Additional photo (optional)')}
                 </span>
                 <input type="file" accept="image/*,application/pdf" className="hidden"
                   onChange={e => setRegistrationFile2(e.target.files[0] || null)}/>
@@ -3986,13 +3986,13 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                             onClick={e => { e.stopPropagation(); setViewingRegistration(car.registration_image_url); }}
                             className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl flex-shrink-0 text-xs font-bold transition-all"
                             style={{ background:'rgba(0,0,0,0.10)', color:cc.fg }}>
-                            <Eye size={14}/>{isRtl?'أمامي':'Front'}
+                            <Eye size={14}/>{isRtl?'صورة ١':'Photo 1'}
                           </button>
                           <button
                             onClick={e => { e.stopPropagation(); setViewingRegistration(car.registration_image_url_2); }}
                             className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl flex-shrink-0 text-xs font-bold transition-all"
                             style={{ background:'rgba(0,0,0,0.10)', color:cc.fg }}>
-                            <Eye size={14}/>{isRtl?'خلفي':'Back'}
+                            <Eye size={14}/>{isRtl?'صورة ٢':'Photo 2'}
                           </button>
                         </>
                       ) : (
@@ -4078,7 +4078,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                               style={{ background:C.input, border:`1px solid ${registrationEditFile ? C.gold : C.border}` }}>
                               <Upload size={14} style={{ color: registrationEditFile ? C.gold : C.muted, flexShrink:0 }}/>
                               <span className="truncate flex-1" style={{ color: registrationEditFile ? C.gold : C.muted }}>
-                                {registrationEditFile ? registrationEditFile.name : (editCarForm.registration_image_url ? (isRtl?'الوجه الأمامي محفوظ — اضغط للتغيير':'Front saved — tap to replace') : (isRtl?'الوجه الأمامي':'Front side'))}
+                                {registrationEditFile ? registrationEditFile.name : (editCarForm.registration_image_url ? (isRtl?'صورة محفوظة — اضغط للتغيير':'Saved — tap to replace') : (isRtl?'يرجى رفع صورة الاستمارة للجهتين':'Please upload a photo of the registration (both sides)'))}
                               </span>
                               {editCarForm.registration_image_url && !registrationEditFile && (
                                 <button type="button"
@@ -4095,7 +4095,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                               style={{ background:C.input, border:`1px solid ${registrationEditFile2 ? C.gold : C.border}` }}>
                               <Upload size={14} style={{ color: registrationEditFile2 ? C.gold : C.muted, flexShrink:0 }}/>
                               <span className="truncate flex-1" style={{ color: registrationEditFile2 ? C.gold : C.muted }}>
-                                {registrationEditFile2 ? registrationEditFile2.name : (editCarForm.registration_image_url_2 ? (isRtl?'الوجه الخلفي محفوظ — اضغط للتغيير':'Back saved — tap to replace') : (isRtl?'الوجه الخلفي (اختياري)':'Back side (optional)'))}
+                                {registrationEditFile2 ? registrationEditFile2.name : (editCarForm.registration_image_url_2 ? (isRtl?'صورة محفوظة — اضغط للتغيير':'Saved — tap to replace') : (isRtl?'صورة إضافية (اختياري)':'Additional photo (optional)'))}
                               </span>
                               {editCarForm.registration_image_url_2 && !registrationEditFile2 && (
                                 <button type="button"
@@ -4132,14 +4132,14 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                             <button
                               onClick={e=>{ e.stopPropagation(); setViewingRegistration(car.registration_image_url); }}
                               className="text-xs font-bold px-3 py-1.5 rounded-lg transition-all" style={{ background:'rgba(255,255,255,0.08)', color:C.muted }}>
-                              {car.registration_image_url_2 ? (isRtl?'أمامي':'Front') : tr.prof_reg_view}
+                              {car.registration_image_url_2 ? (isRtl?'صورة ١':'Photo 1') : tr.prof_reg_view}
                             </button>
                           )}
                           {car.registration_image_url_2 && (
                             <button
                               onClick={e=>{ e.stopPropagation(); setViewingRegistration(car.registration_image_url_2); }}
                               className="text-xs font-bold px-3 py-1.5 rounded-lg transition-all" style={{ background:'rgba(255,255,255,0.08)', color:C.muted }}>
-                              {isRtl?'خلفي':'Back'}
+                              {isRtl?'صورة ٢':'Photo 2'}
                             </button>
                           )}
                           <button onClick={()=>onBook(car)} className="text-xs font-bold px-3 py-1.5 rounded-lg transition-all" style={{ background:`${C.gold}20`, color:C.gold }}>
@@ -4449,24 +4449,24 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
           className={C.inputCls} style={{ background: C.input, border: `1px solid ${C.border}`, textAlign: isRtl?'right':'left' }}
           onFocus={e => e.target.style.borderColor = C.borderFocus} onBlur={e => e.target.style.borderColor = C.border}/>
       </Field>
-      <Field label={<>{tr.carRegistration} — {isRtl?'الوجه الأمامي':'Front'} <span style={{ color:'#f87171' }}>*</span></>}>
+      <Field label={<>{tr.carRegistration} <span style={{ color:'#f87171' }}>*</span></>}>
         <label className="flex items-center gap-2 px-4 py-3.5 rounded-xl cursor-pointer text-sm transition-all"
           style={{ background: C.input, border: `1px solid ${formData.carRegistrationFile ? C.gold : C.border}` }}>
           <Upload size={14} style={{ color: formData.carRegistrationFile ? C.gold : C.muted, flexShrink:0 }}/>
           <span className="truncate" style={{ color: formData.carRegistrationFile ? C.gold : C.muted }}>
-            {formData.carRegistrationFile ? formData.carRegistrationFile.name : (isRtl?'ارفع صورة الوجه الأمامي':'Upload the front side')}
+            {formData.carRegistrationFile ? formData.carRegistrationFile.name : (isRtl?'يرجى رفع صورة الاستمارة للجهتين':'Please upload a photo of the registration (both sides)')}
           </span>
           <input type="file" accept="image/*,application/pdf" className="hidden"
             onChange={e => setFormData(p => ({ ...p, carRegistrationFile: e.target.files[0] || null }))}/>
         </label>
         <p className="text-[10px] mt-1.5" style={{ color: C.muted }}>{tr.carRegistrationRequired}</p>
       </Field>
-      <Field label={<>{tr.carRegistration} — {isRtl?'الوجه الخلفي':'Back'} <span className="normal-case" style={{ color:C.muted }}>({isRtl?'اختياري':'optional'})</span></>}>
+      <Field label={<>{isRtl?'صورة إضافية للاستمارة':'Additional Registration Photo'} <span className="normal-case" style={{ color:C.muted }}>({isRtl?'اختياري':'optional'})</span></>}>
         <label className="flex items-center gap-2 px-4 py-3.5 rounded-xl cursor-pointer text-sm transition-all"
           style={{ background: C.input, border: `1px solid ${formData.carRegistrationFile2 ? C.gold : C.border}` }}>
           <Upload size={14} style={{ color: formData.carRegistrationFile2 ? C.gold : C.muted, flexShrink:0 }}/>
           <span className="truncate" style={{ color: formData.carRegistrationFile2 ? C.gold : C.muted }}>
-            {formData.carRegistrationFile2 ? formData.carRegistrationFile2.name : (isRtl?'ارفع صورة الوجه الخلفي (اختياري)':'Upload the back side (optional)')}
+            {formData.carRegistrationFile2 ? formData.carRegistrationFile2.name : (isRtl?'صورة إضافية (اختياري)':'Additional photo (optional)')}
           </span>
           <input type="file" accept="image/*,application/pdf" className="hidden"
             onChange={e => setFormData(p => ({ ...p, carRegistrationFile2: e.target.files[0] || null }))}/>
