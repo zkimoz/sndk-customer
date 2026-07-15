@@ -609,6 +609,7 @@ const publishedJobCard = (jc) => {
     reception_videos: snap.reception_videos || '[]',
     reception_video_url: snap.reception_video_url || null,
     workshop_notes_videos: snap.workshop_notes_videos || '[]',
+    computer_scan_urls: snap.computer_scan_urls || '[]',
     customer_complaints: snap.customer_complaints || null,
   };
 };
@@ -2094,7 +2095,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   const loadData = async () => {
     if (!user) { setLoading(false); return; }
     const { data: apptData } = await supabase.from('appointments')
-      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, customer_snapshot)')
+      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot)')
       .eq('profile_id', user.id)
       .order('appointment_date', { ascending: false });
     setAppts(apptData || []);
@@ -2551,6 +2552,24 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           );
                         })()}
                       </div>
+
+                      {/* ── فحص الكمبيوتر ── */}
+                      {(() => {
+                        let computerScans = [];
+                        try { computerScans = JSON.parse(jc.computer_scan_urls || '[]'); } catch {}
+                        if (!computerScans.length) return null;
+                        return (
+                          <div className="px-4 pb-1 space-y-1.5">
+                            {computerScans.map((url, idx) => (
+                              <a key={idx} href={url} target="_blank" rel="noreferrer"
+                                className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold transition-all"
+                                style={{ background:'rgba(0,0,0,0.10)', color:cc.txt }}>
+                                🖥️ {isRtl ? `فحص الكمبيوتر ${computerScans.length > 1 ? idx + 1 : ''}` : `Computer Scan ${computerScans.length > 1 ? idx + 1 : ''}`}
+                              </a>
+                            ))}
+                          </div>
+                        );
+                      })()}
 
                       {/* ── عرض السعر + موافقة ── */}
                       {relOrd?.sent_to_customer ? (
@@ -3448,7 +3467,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
     if (history[carId]) return;
     const { data } = await supabase
       .from('appointments')
-      .select('*, orders(*, order_items(*), payments(*)), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, customer_snapshot)')
+      .select('*, orders(*, order_items(*), payments(*)), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot)')
       .eq('car_id', carId)
       .order('appointment_date', { ascending: false });
     setHistory(p => ({ ...p, [carId]: data || [] }));
