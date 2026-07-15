@@ -2644,7 +2644,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                       {a.is_quote_request && !a.appointment_date && relOrd?.customer_approved && (
                         <div className="mx-4 mb-3 p-3 rounded-xl flex items-center justify-between gap-3 flex-wrap" style={{ background:`${C.gold}18`, border:`1px solid ${C.gold}50` }}>
                           <span className="text-sm font-bold" style={{ color:C.gold }}>
-                            {isRtl ? 'وافقت على عرض السعر — احجزي معاد استلام السيارة الآن' : "You've approved the quotation — book a car drop-off time now"}
+                            {isRtl ? 'تمت الموافقة على عرض السعر — احجز موعد استلام السيارة الآن' : "You've approved the quotation — book a car drop-off time now"}
                           </span>
                           <button onClick={() => { setBookingAppt(a); setBookDate(''); setBookTimeKey(''); }}
                             className="px-4 py-2 rounded-xl font-black text-sm flex-shrink-0" style={{ background:C.gold, color:C.btnTxt }}>
@@ -3071,7 +3071,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background:'rgba(0,0,0,0.6)' }} onClick={e=>{ if(e.target===e.currentTarget) setBookingAppt(null); }}>
           <div className="rounded-2xl w-full max-w-sm p-5 space-y-4" style={{ background:C.card }} dir={isRtl?'rtl':'ltr'}>
             <div className="flex items-center justify-between">
-              <p className="font-black" style={{ color:C.cardText }}>{isRtl ? 'احجزي معاد استلام السيارة' : 'Book a Car Drop-off Time'}</p>
+              <p className="font-black" style={{ color:C.cardText }}>{isRtl ? 'احجز موعد استلام السيارة' : 'Book a Car Drop-off Time'}</p>
               <button onClick={() => setBookingAppt(null)} className="p-1 rounded-lg" style={{ color:C.cardMuted }}><X size={16}/></button>
             </div>
             <div>
@@ -3860,7 +3860,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
               <p className="text-xl font-black" style={{ color:C.gold }}>{walletBalance.toFixed(3)} {isRtl?'ر.ق':'QAR'}</p>
               {pendingOverpaymentTotal > 0.001 && (
                 <p className="text-[10px] font-bold mt-0.5" style={{ color:C.gold, opacity:0.75 }}>
-                  {isRtl ? `+ ${pendingOverpaymentTotal.toFixed(3)} ر.ق زيادة دفع هتضاف بعد إغلاق أمر الشغل` : `+ ${pendingOverpaymentTotal.toFixed(3)} QAR overpayment, added when the job card closes`}
+                  {isRtl ? `+ ${pendingOverpaymentTotal.toFixed(3)} ر.ق زيادة الدفع ستُضاف بعد إغلاق أمر الشغل` : `+ ${pendingOverpaymentTotal.toFixed(3)} QAR overpayment, added when the job card closes`}
                 </p>
               )}
             </div>
