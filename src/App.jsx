@@ -1351,6 +1351,10 @@ function SignatureModal({ isRtl, theme, hasParts, onConfirm, onClose }) {
   const lastPos = useRef({ x:0, y:0 });
 
   useEffect(() => {
+    // Runs once — the canvas now stays mounted across mode switches (see
+    // render below), so re-running this on every mode change would wipe out
+    // whatever the customer already drew each time they just glance at the
+    // "type name" option and come back.
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -1359,7 +1363,7 @@ function SignatureModal({ isRtl, theme, hasParts, onConfirm, onClose }) {
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }, [mode]);
+  }, []);
 
   const getPos = (e) => {
     const canvas = canvasRef.current;
@@ -1462,33 +1466,34 @@ function SignatureModal({ isRtl, theme, hasParts, onConfirm, onClose }) {
           ))}
         </div>
         <div className="p-5 space-y-3">
-          {mode === 'draw' ? (
-            <div>
-              <canvas ref={canvasRef} className="w-full rounded-xl touch-none block"
-                style={{ height:150, border:'2px dashed rgba(138,21,56,0.50)', cursor:'crosshair', background:'#fff' }}
-                onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
-                onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw}
-              />
-              <div className="flex items-center justify-between mt-2">
-                <p className="text-xs" style={{ color:C.muted }}>{isRtl ? '↑ وقّع بإصبعك على الشاشة أو بالماوس' : '↑ Sign with finger or mouse above'}</p>
-                <button onClick={clearCanvas} className="text-xs font-bold px-2 py-1 rounded-lg" style={{ color:'#ef4444', background:'rgba(239,68,68,0.1)' }}>
-                  {isRtl ? 'مسح' : 'Clear'}
-                </button>
-              </div>
+          {/* Both stay mounted (just hidden) instead of one replacing the other in
+              the tree — switching to "type" and back used to wipe out whatever
+              the customer had already drawn, since unmounting/remounting the
+              canvas element resets its bitmap. */}
+          <div style={{ display: mode === 'draw' ? 'block' : 'none' }}>
+            <canvas ref={canvasRef} className="w-full rounded-xl touch-none block"
+              style={{ height:150, border:'2px dashed rgba(138,21,56,0.50)', cursor:'crosshair', background:'#fff' }}
+              onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
+              onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw}
+            />
+            <div className="flex items-center justify-between mt-2">
+              <p className="text-xs" style={{ color:C.muted }}>{isRtl ? '↑ وقّع بإصبعك على الشاشة أو بالماوس' : '↑ Sign with finger or mouse above'}</p>
+              <button onClick={clearCanvas} className="text-xs font-bold px-2 py-1 rounded-lg" style={{ color:'#ef4444', background:'rgba(239,68,68,0.1)' }}>
+                {isRtl ? 'مسح' : 'Clear'}
+              </button>
             </div>
-          ) : (
-            <div>
-              <input value={typedName} onChange={e => setTypedName(e.target.value)}
-                placeholder={isRtl ? 'أدخل اسمك الكامل...' : 'Enter your full name...'}
-                className={`w-full px-4 py-3.5 rounded-xl ${C.selectCls} outline-none`}
-                style={{ background:C.input, border:'1px solid rgba(138,21,56,0.45)', fontSize:20, fontFamily:'Georgia, serif', fontStyle:'italic' }}
-                dir="rtl"
-              />
-              <p className="text-xs mt-2" style={{ color:C.muted }}>
-                {isRtl ? 'سيظهر اسمك كتوقيع على وثيقة الموافقة' : 'Your name will appear as signature on the approval document'}
-              </p>
-            </div>
-          )}
+          </div>
+          <div style={{ display: mode === 'draw' ? 'none' : 'block' }}>
+            <input value={typedName} onChange={e => setTypedName(e.target.value)}
+              placeholder={isRtl ? 'أدخل اسمك الكامل...' : 'Enter your full name...'}
+              className={`w-full px-4 py-3.5 rounded-xl ${C.selectCls} outline-none`}
+              style={{ background:C.input, border:'1px solid rgba(138,21,56,0.45)', fontSize:20, fontFamily:'Georgia, serif', fontStyle:'italic' }}
+              dir="rtl"
+            />
+            <p className="text-xs mt-2" style={{ color:C.muted }}>
+              {isRtl ? 'سيظهر اسمك كتوقيع على وثيقة الموافقة' : 'Your name will appear as signature on the approval document'}
+            </p>
+          </div>
           <button onClick={confirm} disabled={saving} className="w-full py-3.5 rounded-xl font-black text-sm transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60" style={{ background:'#8A1538', color:'#fff' }}>
             {saving
               ? <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"/>{isRtl ? 'جاري الحفظ...' : 'Saving...'}</>
@@ -2385,6 +2390,24 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   const confirmBooking = async () => {
     if (!bookingAppt || !bookDate || !bookTimeKey) return;
     setConfirmingBooking(true);
+    // Re-check right before writing — bookSlotCounts/bookBlockedWarning were
+    // only fetched once when the date was picked, which could've been
+    // minutes ago (same race the main booking flow's ReviewStep.submit()
+    // already guards against).
+    const { data: blocked } = await supabase.from('blocked_dates').select('id').eq('blocked_date', bookDate).maybeSingle();
+    if (blocked) {
+      alert(isRtl ? 'هذا اليوم لم يعد متاحًا للحجز — من فضلك اختر يوماً آخر' : 'This day is no longer available for booking — please pick another day');
+      setConfirmingBooking(false);
+      return;
+    }
+    const slotDef = bookTimeSlots.find(s => s.slot_key === bookTimeKey);
+    const { data: counts } = await supabase.rpc('get_slot_availability', { p_date: bookDate });
+    const bookedCount = Number((counts||[]).find(c => c.appointment_time === bookTimeKey)?.booked_count) || 0;
+    if (slotDef && bookedCount >= slotDef.capacity) {
+      alert(isRtl ? 'هذا الموعد امتلأ للتو — من فضلك اختر موعداً آخر' : 'This time slot just filled up — please pick another time');
+      setConfirmingBooking(false);
+      return;
+    }
     const nowIso = new Date().toISOString();
     const { error: apptErr } = await supabase.from('appointments').update({
       appointment_date: bookDate, appointment_time: bookTimeKey, is_quote_request: false,
@@ -2398,9 +2421,15 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     if (jc && jc.job_status === 'waiting') {
       const nextHistory = [...(Array.isArray(jc.status_history) ? jc.status_history : []), { status:'confirmed', at: nowIso }];
       const snapshot = { ...(jc.customer_snapshot || {}), job_status:'confirmed', status_history: nextHistory, published_at: nowIso };
-      await supabase.from('job_cards').update({
+      const { error: jcErr } = await supabase.from('job_cards').update({
         job_status: 'confirmed', status_history: nextHistory, customer_snapshot: snapshot, updated_at: nowIso,
       }).eq('id', jc.id).eq('profile_id', user.id);
+      if (jcErr) {
+        // The appointment date/time is already saved at this point — don't leave
+        // the customer stuck with no explanation just because the status flip
+        // (a smaller, recoverable detail) failed.
+        alert(isRtl ? 'تم حجز الموعد، لكن تعذّر تحديث حالة أمر الشغل تلقائيًا — سيتولى فريقنا تأكيدها' : 'Your appointment is booked, but the job card status could not update automatically — our team will confirm it shortly');
+      }
     }
     setBookingAppt(null); setBookDate(''); setBookTimeKey('');
     setConfirmingBooking(false);
@@ -2547,7 +2576,6 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                   const relOrd = orderByApptId[a.id];
                   const jcColor = JC_STATUS_COLOR[jc.job_status] || '#94a3b8';
                   const jcLabel = tr[`jc_${jc.job_status}`] || jc.job_status;
-                  const gt      = relOrd ? (Number(relOrd.total_parts_price)||0)+(Number(relOrd.total_labor_price)||0) : 0;
                   return (
                     <div key={a.id} className="rounded-2xl overflow-hidden"
                       style={{ background:cc.bg, border:`1px solid ${cc.fg}30` }}>
@@ -2840,7 +2868,11 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           {/* Invoice — only once staff has issued it AND the balance is fully settled */}
                           {jc.invoice_ready && (() => {
                             const paid = (relOrd.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
-                            const remaining = gt - paid;
+                            // Same live, decision-aware total as the "Remaining" figure shown
+                            // above — using the persisted gt here let this gate and that display
+                            // silently disagree whenever a later quotation round changed pricing
+                            // before the customer decided on it.
+                            const remaining = selectedQuotationTotal(relOrd) - paid;
                             if (remaining > 0.001) return null;
                             return (
                               <button onClick={() => printCustomerInvoice(jc, a, relOrd, profile, carBrandsRef, carCatsRef)}
@@ -5073,7 +5105,12 @@ function MobNavItem({ icon:Icon, label, active, onClick, badge }) {
 // ── AUTH MODAL ─────────────────────────────────────────────────────────
 function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
   const [email, setEmail]         = useState(() => localStorage.getItem('sndk_saved_email') || '');
-  const [password, setPassword]   = useState(() => localStorage.getItem('sndk_saved_pw') || '');
+  // "Remember me" only remembers the email (a low-risk convenience) — the
+  // password never gets persisted in plaintext client-side; Supabase's own
+  // session/refresh-token storage is what actually keeps the customer
+  // signed in across visits, this is purely for pre-filling the form again
+  // after a sign-out.
+  const [password, setPassword]   = useState('');
   const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem('sndk_saved_email'));
   const [fullName, setFullName]   = useState('');
   const [phone, setPhone]         = useState('');
@@ -5155,11 +5192,11 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
         if (signInErr) throw signInErr;
         if (rememberMe) {
           localStorage.setItem('sndk_saved_email', email);
-          localStorage.setItem('sndk_saved_pw', password);
         } else {
           localStorage.removeItem('sndk_saved_email');
-          localStorage.removeItem('sndk_saved_pw');
         }
+        // Clean up a password that may have been saved before this was fixed.
+        localStorage.removeItem('sndk_saved_pw');
         onSuccess();
       }
     } catch(err) {
