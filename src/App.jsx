@@ -2629,14 +2629,14 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                             className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold transition-all active:scale-95"
                                             style={liveDecision==='approved'
                                               ? { background:'#16a34a', color:'#fff' }
-                                              : { background:'transparent', color:cc.sub, border:`1.5px solid ${cc.sub}60` }}>
+                                              : { background:'transparent', color:'#16a34a', border:'1.5px solid #16a34a60' }}>
                                             <Check size={12}/>{isRtl?'موافق':'Approve'}
                                           </button>
                                           <button onClick={()=>setServiceDecision(relOrd.id, s.key, 'rejected')}
                                             className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold transition-all active:scale-95"
                                             style={liveDecision==='rejected'
                                               ? { background:'#ef4444', color:'#fff' }
-                                              : { background:'transparent', color:cc.sub, border:`1.5px solid ${cc.sub}60` }}>
+                                              : { background:'transparent', color:'#ef4444', border:'1.5px solid #ef444460' }}>
                                             <X size={12}/>{isRtl?'رفض':'Reject'}
                                           </button>
                                         </div>
