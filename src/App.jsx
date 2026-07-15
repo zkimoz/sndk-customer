@@ -342,6 +342,8 @@ const getStatusTimes = (history, statusKey) => {
 // Read-only status timeline shown to the customer — mirrors the staff view,
 // including when each stage started/ended so the customer can see exactly
 // when they placed the request, not just where things stand right now.
+const isImageUrl = (url) => /\.(jpe?g|png|gif|webp|heic|heif)(\?|$)/i.test(url || '');
+
 const JobStatusVideoBlock = ({ videos, isRtl, jcId, videoKeyPrefix, openVideoId, setOpenVideoId, fg, txt }) => {
   if (!videos.length) return null;
   return (
@@ -349,23 +351,26 @@ const JobStatusVideoBlock = ({ videos, isRtl, jcId, videoKeyPrefix, openVideoId,
       {videos.map((url, idx) => {
         const videoId = `${jcId}-${videoKeyPrefix}-${idx}`;
         const isOpen = openVideoId === videoId;
+        const isImg = isImageUrl(url);
         const label = videoKeyPrefix === 'reception'
-          ? (isRtl ? `فيديو الاستلام ${idx + 1}` : `Reception Video ${idx + 1}`)
-          : (isRtl ? `فيديو ملاحظات في السيارة ${idx + 1}` : `Car Notes Video ${idx + 1}`);
+          ? (isImg ? (isRtl ? `صورة الاستلام ${idx + 1}` : `Reception Photo ${idx + 1}`) : (isRtl ? `فيديو الاستلام ${idx + 1}` : `Reception Video ${idx + 1}`))
+          : (isImg ? (isRtl ? `صورة ملاحظات الورشة ${idx + 1}` : `Workshop Notes Photo ${idx + 1}`) : (isRtl ? `فيديو ملاحظات في السيارة ${idx + 1}` : `Car Notes Video ${idx + 1}`));
         return (
           <div key={idx}>
             <div className="flex items-center gap-2 w-full px-3 py-2 rounded-xl" style={{ background:'rgba(0,0,0,0.10)', border:`1px solid ${fg}50` }}>
-              <span className="flex-1 min-w-0 text-xs font-bold truncate" style={{ color:txt }}>🎥 {label}</span>
+              <span className="flex-1 min-w-0 text-xs font-bold truncate" style={{ color:txt }}>{isImg ? '🖼️' : '🎥'} {label}</span>
               <button onClick={() => setOpenVideoId(id => id === videoId ? null : videoId)}
                 className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] font-black flex-shrink-0 transition-all active:scale-95"
                 style={{ background:fg, color:'#111111' }}>
-                <PlayCircle size={13}/>
-                <span className="hidden sm:inline">{isRtl ? 'اضغط لمشاهدة الفيديو' : 'Click to watch video'}</span>
-                <span className="sm:hidden">{isRtl ? 'مشاهدة' : 'Watch'}</span>
+                {isImg ? <FileImage size={13}/> : <PlayCircle size={13}/>}
+                <span className="hidden sm:inline">{isImg ? (isRtl?'اضغط لمشاهدة الصورة':'Click to view photo') : (isRtl ? 'اضغط لمشاهدة الفيديو' : 'Click to watch video')}</span>
+                <span className="sm:hidden">{isImg ? (isRtl?'مشاهدة':'View') : (isRtl ? 'مشاهدة' : 'Watch')}</span>
               </button>
             </div>
             {isOpen && (
-              <video src={url} controls autoPlay className="w-full rounded-xl mt-1" style={{ maxHeight:220 }}/>
+              isImg
+                ? <img src={url} alt="" className="w-full rounded-xl mt-1" style={{ maxHeight:300, objectFit:'contain' }}/>
+                : <video src={url} controls autoPlay className="w-full rounded-xl mt-1" style={{ maxHeight:220 }}/>
             )}
           </div>
         );
