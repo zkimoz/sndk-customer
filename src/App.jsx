@@ -358,9 +358,9 @@ const JobStatusVideoBlock = ({ videos, isRtl, jcId, videoKeyPrefix, openVideoId,
         return (
           <div key={idx}>
             <div className="flex items-center gap-2 w-full px-3 py-2 rounded-xl" style={{ background:'rgba(0,0,0,0.10)', border:`1px solid ${fg}50` }}>
-              <span className="flex-1 min-w-0 text-xs font-bold truncate" style={{ color:txt }}>{isImg ? '🖼️' : '🎥'} {label}</span>
+              <span className="flex-1 min-w-0 text-sm font-bold truncate" style={{ color:txt }}>{isImg ? '🖼️' : '🎥'} {label}</span>
               <button onClick={() => setOpenVideoId(id => id === videoId ? null : videoId)}
-                className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] font-black flex-shrink-0 transition-all active:scale-95"
+                className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black flex-shrink-0 transition-all active:scale-95"
                 style={{ background:fg, color:'#111111' }}>
                 {isImg ? <FileImage size={13}/> : <PlayCircle size={13}/>}
                 <span className="hidden sm:inline">{isImg ? (isRtl?'اضغط لمشاهدة الصورة':'Click to view photo') : (isRtl ? 'اضغط لمشاهدة الفيديو' : 'Click to watch video')}</span>
@@ -397,9 +397,9 @@ const JobStatusTimeline = ({ jobCard, isRtl, tr, textColor, mutedColor, fg, rece
                 {isDone && <Check size={9} color="#fff"/>}
               </span>
               <span className="flex-1 min-w-0">
-                <span className="block text-xs font-bold" style={{ color: isCurrent?color:textColor }}>{tr[`jc_${key}`]||key}</span>
+                <span className="block text-sm font-bold" style={{ color: isCurrent?color:textColor }}>{tr[`jc_${key}`]||key}</span>
                 {times && (
-                  <span className="block text-[10px] mt-0.5" style={{ color:mutedColor }}>
+                  <span className="block text-[11px] mt-0.5" style={{ color:mutedColor }}>
                     {fmtDT(times.start)}{times.end ? ` → ${fmtDT(times.end)}` : ` — ${isRtl?'الحالة الحالية':'current'}`}
                   </span>
                 )}
