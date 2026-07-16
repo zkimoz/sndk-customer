@@ -137,6 +137,8 @@ const T = {
     pmPayRemaining:'ادفع المتبقي',
     pmModalTitle:'اختر طريقة الدفع', pmModalSub:'اختر الطريقة التي تفضّل الدفع بها',
     pmModalEmpty:'لا توجد طرق دفع متاحة حاليًا', pmModalConfirm:'تأكيد',
+    rfAlreadyFixedTitle:'هل قمت بإصلاح هذه الخدمة بالفعل؟', rfAddQuoteTitle:'هل تريد إضافة عرض سعر لهذه الخدمة إلى طلبك الجديد؟',
+    rfYes:'نعم', rfNo:'لا',
     pmReceiptUpload:'ارفع صورة أو ملف PDF لإيصال التحويل', pmReceiptHint:'مطلوب رفع إيصال التحويل قبل التأكيد',
     ordPayPending:'بانتظار التأكيد ⏳',
     ordPaid:'تم الدفع ✓',
@@ -290,6 +292,8 @@ const T = {
     pmPayRemaining:'Pay Remaining',
     pmModalTitle:'Choose a Payment Method', pmModalSub:'Pick how you\'d like to pay',
     pmModalEmpty:'No payment methods available right now', pmModalConfirm:'Confirm',
+    rfAlreadyFixedTitle:'Did you already get this service fixed?', rfAddQuoteTitle:'Add a quotation for this service to your new request?',
+    rfYes:'Yes', rfNo:'No',
     pmReceiptUpload:'Upload a photo or PDF of the transfer receipt', pmReceiptHint:'The transfer receipt is required before confirming',
     ordPayPending:'Awaiting Confirmation ⏳',
     ordPaid:'Paid ✓',
@@ -4726,10 +4730,85 @@ function ServiceCard({ service, lang, span, onClick }) {
 }
 
 // ── STEP 2 · DETAILS ──────────────────────────────────────────────────
-function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user, carBrands, carCategories, brandCategories, isRtl }) {
+// Looks up this car's most recently CLOSED job card that had a rejected
+// service the customer was never asked about — so a brand-new request for
+// the same car can offer to add it back in. Only the single most recent
+// unresolved rejection is ever surfaced (see RejectedServiceFollowupModal,
+// which marks it asked regardless of the answer so it's never repeated).
+async function findRejectedServiceFollowup(carId) {
+  const { data } = await supabase.from('appointments')
+    .select('id, orders(*, order_items(*)), job_cards(is_closed, closed_at)')
+    .eq('car_id', carId)
+    .order('appointment_date', { ascending: false });
+  const groupKeyOf = it => it.service_name?.ar || it.service_name?.en || null;
+  for (const appt of (data || [])) {
+    const jc = appt.job_cards?.[0];
+    const order = appt.orders?.[0];
+    if (!jc?.is_closed || !order || order.rejection_followup_asked) continue;
+    const decisions = order.service_decisions || {};
+    const rejected = (order.order_items || []).find(it => {
+      const k = groupKeyOf(it);
+      return k && decisions[k] === 'rejected';
+    });
+    if (rejected) return { orderId: order.id, service: rejected.service_name };
+  }
+  return null;
+}
+
+function RejectedServiceFollowupModal({ service, isRtl, tr, onClose, onAdd }) {
+  const [step, setStep] = useState('fixed'); // 'fixed' | 'addit'
+  const name = isRtl ? service.ar : service.en;
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      {(() => {
+        const mc = CARD_BG_CYCLE[0]; // always gold
+        return (
+      <div className="rounded-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}
+        style={{ background:mc.bg, border:'1px solid rgba(138,21,56,0.45)', boxShadow:'0 25px 60px rgba(0,0,0,0.6)' }}>
+        <div className="px-5 py-4 border-b" style={{ borderColor:mc.div }}>
+          <h3 className="font-black text-base" style={{ color:mc.txt }}>
+            {step === 'fixed' ? tr.rfAlreadyFixedTitle : tr.rfAddQuoteTitle}
+          </h3>
+          <p className="text-sm mt-1" style={{ color:mc.sub }}>{name}</p>
+        </div>
+        <div className="p-5 grid grid-cols-2 gap-2.5">
+          {step === 'fixed' ? (
+            <>
+              <button onClick={onClose}
+                className="py-3 rounded-xl text-sm font-bold transition-all active:scale-95" style={{ background:'#16a34a', color:'#fff' }}>
+                {tr.rfYes}
+              </button>
+              <button onClick={() => setStep('addit')}
+                className="py-3 rounded-xl text-sm font-bold transition-all active:scale-95" style={{ background:'rgba(0,0,0,0.12)', color:mc.sub }}>
+                {tr.rfNo}
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={onAdd}
+                className="py-3 rounded-xl text-sm font-bold transition-all active:scale-95" style={{ background:'#16a34a', color:'#fff' }}>
+                {tr.rfYes}
+              </button>
+              <button onClick={onClose}
+                className="py-3 rounded-xl text-sm font-bold transition-all active:scale-95" style={{ background:'rgba(0,0,0,0.12)', color:mc.sub }}>
+                {tr.rfNo}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user, carBrands, carCategories, brandCategories, isRtl, addToCart }) {
   const [userCars, setUserCars]       = useState([]);
   const [carsLoading, setCarsLoading] = useState(false);
   const [addingNew, setAddingNew]     = useState(false);
+  const [rejectedFollowup, setRejectedFollowup] = useState(null); // { orderId, service } | null
 
   useEffect(() => {
     if (!user) return;
@@ -4756,6 +4835,30 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
       carCategoryKey: car.car_category || '',
       carModel: car.production_year?.toString() || '',
     }));
+    findRejectedServiceFollowup(car.id).then(setRejectedFollowup);
+  };
+
+  // Marks the rejection as followed-up regardless of which of the three
+  // answers the customer gave, so this same historical rejection is never
+  // surfaced again on a future request.
+  const markRejectionFollowupAsked = async (orderId) => {
+    // orders has no profile_id of its own — re-verify ownership through the
+    // linked appointment as a defense-in-depth check independent of RLS,
+    // same pattern used in approveWithSignature.
+    const { data: ord } = await supabase.from('orders').select('appointment_id').eq('id', orderId).single();
+    const { data: apptCheck } = await supabase.from('appointments').select('id').eq('id', ord?.appointment_id).eq('profile_id', user.id).maybeSingle();
+    if (!apptCheck) return;
+    await supabase.from('orders').update({ rejection_followup_asked: true }).eq('id', orderId);
+  };
+  const closeRejectedFollowup = () => {
+    if (rejectedFollowup) markRejectionFollowupAsked(rejectedFollowup.orderId);
+    setRejectedFollowup(null);
+  };
+  const addRejectedFollowupToCart = () => {
+    const svc = rejectedFollowup.service;
+    addToCart('carried-forward', `carried-${Date.now()}`, isRtl ? svc.ar : svc.en, isRtl ? svc.category_ar : svc.category_en);
+    markRejectionFollowupAsked(rejectedFollowup.orderId);
+    setRejectedFollowup(null);
   };
 
   const clearSelection = () => setFormData(p => ({ ...p, carId: null, carBrandKey: '', carBrandId: null, carCategoryKey: '', carModel: '', carPlateNumber: '', carChassisNumber: '', carRegistrationFile: null, carRegistrationFile2: null }));
@@ -4844,6 +4947,7 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
   if (!user) return null;
   const canGo = formData.carId !== null || (addingNew && !!formData.carBrandKey && !!formData.carCategoryKey && formData.carModel.length === 4 && !!formData.carRegistrationFile);
   return (
+    <>
     <FormShell title={tr.yourCar}>
         {/* Selected car chip */}
         {formData.carId && !addingNew && (
@@ -4905,6 +5009,11 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
         )}
         <NavBtns tr={tr} onBack={prevStep} onNext={() => setStep(formData.isQuoteOnly ? 4 : 3)} canNext={canGo}/>
       </FormShell>
+    {rejectedFollowup && (
+      <RejectedServiceFollowupModal service={rejectedFollowup.service} isRtl={isRtl} tr={tr}
+        onClose={closeRejectedFollowup} onAdd={addRejectedFollowupToCart}/>
+    )}
+    </>
   );
 }
 
