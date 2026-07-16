@@ -1098,12 +1098,12 @@ export default function App() {
           </main>
 
           {/* Mobile Bottom Nav */}
-          <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 flex items-center justify-around px-2 py-2"
-            style={{ background:`${C.panel}F5`, backdropFilter:'blur(16px)', borderTop:`1px solid ${C.border}` }}>
+          <nav className="bottom-nav-glass md:hidden fixed bottom-0 inset-x-0 z-40 flex items-center justify-around px-2 py-2"
+            style={{ background:`${C.panel}B3`, backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)', borderTop:`1px solid ${C.border}`, boxShadow:'inset 0 1px 0 rgba(255,255,255,0.08)' }}>
             <MobNavItem icon={Home}         label={tr.navHome}    active={page==='home'}    onClick={goHome}/>
             <MobNavItem icon={Sparkles}    label={tr.navServices} active={page==='services'} onClick={goServices}/>
             <button onClick={()=>handleBookNow()}
-              className="relative -top-5 w-14 h-14 rounded-full flex items-center justify-center transition-all active:scale-95"
+              className="fab-glass relative -top-5 w-14 h-14 rounded-full flex items-center justify-center transition-all active:scale-95"
               style={{ background:C.gold, boxShadow:`0 0 24px ${C.gold}90` }}>
               <Plus size={24} color={C.bg} strokeWidth={2.5}/>
             </button>
