@@ -918,9 +918,9 @@ export default function App() {
       <div className="md:flex md:h-screen md:overflow-hidden">
 
         {/* ══ DESKTOP SIDEBAR ══ */}
-        <aside className="hidden md:flex md:flex-col md:w-60 md:flex-shrink-0 md:h-full"
+        <aside className="hidden md:flex md:flex-col md:w-72 md:flex-shrink-0 md:h-full"
           style={{ background:C.panel, borderInlineEnd:`1px solid ${C.border}` }}>
-          <div className="flex items-center justify-center p-1" style={{ borderBottom:`1px solid ${C.border}` }}>
+          <div className="flex items-center justify-center px-2 py-1" style={{ borderBottom:`1px solid ${C.border}` }}>
             <img src="/logo-animated.gif" alt="SNDK" style={{ width:'100%', height:'auto' }}/>
           </div>
           <nav className="flex-1 px-3 py-5 space-y-1">
