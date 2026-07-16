@@ -137,6 +137,7 @@ const T = {
     pmPayRemaining:'ادفع المتبقي',
     pmModalTitle:'اختر طريقة الدفع', pmModalSub:'اختر الطريقة التي تفضّل الدفع بها',
     pmModalEmpty:'لا توجد طرق دفع متاحة حاليًا', pmModalConfirm:'تأكيد',
+    pmReceiptUpload:'ارفع صورة أو ملف PDF لإيصال التحويل', pmReceiptHint:'مطلوب رفع إيصال التحويل قبل التأكيد',
     ordPayPending:'بانتظار التأكيد ⏳',
     ordPaid:'تم الدفع ✓',
     ordPartsLabel:'قطع الغيار',
@@ -289,6 +290,7 @@ const T = {
     pmPayRemaining:'Pay Remaining',
     pmModalTitle:'Choose a Payment Method', pmModalSub:'Pick how you\'d like to pay',
     pmModalEmpty:'No payment methods available right now', pmModalConfirm:'Confirm',
+    pmReceiptUpload:'Upload a photo or PDF of the transfer receipt', pmReceiptHint:'The transfer receipt is required before confirming',
     ordPayPending:'Awaiting Confirmation ⏳',
     ordPaid:'Paid ✓',
     ordPartsLabel:'Parts',
@@ -1524,7 +1526,10 @@ function PaymentMethodModal({ orderId, types, user, isRtl, tr, onClose, onDone }
   const [methods, setMethods] = useState([]);
   const [loadingMethods, setLoadingMethods] = useState(true);
   const [chosenKey, setChosenKey] = useState(null);
+  const [receiptFile, setReceiptFile] = useState(null);
   const [saving, setSaving] = useState(false);
+  const receiptFileRef = useRef(null);
+  const needsReceipt = chosenKey === 'instant_transfer';
 
   useEffect(() => {
     supabase.from('payment_methods').select('*').eq('is_active', true).order('sort_order')
@@ -1533,6 +1538,7 @@ function PaymentMethodModal({ orderId, types, user, isRtl, tr, onClose, onDone }
 
   const confirm = async () => {
     if (!chosenKey || saving) return;
+    if (needsReceipt && !receiptFile) return;
     setSaving(true);
     try {
       const order = (await supabase.from('orders').select('appointment_id').eq('id', orderId).single()).data;
@@ -1545,12 +1551,24 @@ function PaymentMethodModal({ orderId, types, user, isRtl, tr, onClose, onDone }
         setSaving(false);
         return;
       }
+      let receiptUrl = null;
+      if (needsReceipt) {
+        const ext = receiptFile.name.split('.').pop() || (receiptFile.type === 'application/pdf' ? 'pdf' : 'jpg');
+        const path = `${orderId}-${types.join('-')}-${Date.now()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from('transfer-receipts').upload(path, receiptFile, { contentType: receiptFile.type });
+        if (upErr) { alert('خطأ: ' + upErr.message); setSaving(false); return; }
+        const { data: urlData } = supabase.storage.from('transfer-receipts').getPublicUrl(path);
+        receiptUrl = urlData.publicUrl;
+      }
       for (const type of types) {
         const { error: rpcErr } = await supabase.rpc('request_payment', { p_order_id: orderId, p_type: type });
         if (rpcErr) { alert('خطأ: ' + rpcErr.message); setSaving(false); return; }
       }
       const updatePayload = {};
-      types.forEach(type => { updatePayload[`${type}_payment_method`] = chosenKey; });
+      types.forEach(type => {
+        updatePayload[`${type}_payment_method`] = chosenKey;
+        if (receiptUrl) updatePayload[`${type}_payment_receipt_url`] = receiptUrl;
+      });
       const { error: updErr } = await supabase.from('orders').update(updatePayload).eq('id', orderId);
       if (updErr) { alert('خطأ: ' + updErr.message); setSaving(false); return; }
       onDone(types);
@@ -1592,9 +1610,21 @@ function PaymentMethodModal({ orderId, types, user, isRtl, tr, onClose, onDone }
               </button>
             ))
           )}
+          {needsReceipt && (
+            <div className="pt-1">
+              <input ref={receiptFileRef} type="file" accept="image/*,application/pdf" className="hidden"
+                onChange={e => setReceiptFile(e.target.files?.[0] || null)}/>
+              <button onClick={()=>receiptFileRef.current?.click()}
+                className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold border transition-all"
+                style={{ borderColor:'rgba(138,21,56,0.35)', color:mc.txt, background:'rgba(0,0,0,0.06)' }}>
+                📎 {receiptFile ? receiptFile.name : tr.pmReceiptUpload}
+              </button>
+              <p className="text-[11px] mt-1.5" style={{ color:mc.sub }}>{tr.pmReceiptHint}</p>
+            </div>
+          )}
         </div>
         <div className="p-5 pt-0">
-          <button onClick={confirm} disabled={!chosenKey || saving}
+          <button onClick={confirm} disabled={!chosenKey || saving || (needsReceipt && !receiptFile)}
             className="w-full py-3.5 rounded-xl font-black text-sm transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60"
             style={{ background:'#8A1538', color:'#fff' }}>
             {saving
