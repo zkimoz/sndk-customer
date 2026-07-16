@@ -42,6 +42,12 @@ button:not(:disabled) {
   border: 1px solid rgba(255,255,255,0.22);
   box-shadow: 0 3px 0 rgba(0,0,0,0.22), 0 4px 8px rgba(0,0,0,0.14) !important;
   transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.08s ease, background-color 0.15s ease;
+  /* Safari/WebKit bug: backdrop-filter on a rounded element often ignores the
+     border-radius and paints square corners. A uniformly-opaque mask (no
+     visual effect on its own — every pixel stays 100% visible) forces
+     WebKit to re-clip the backdrop-filter layer to the element's actual
+     rounded shape. */
+  -webkit-mask-image: -webkit-linear-gradient(#fff, #fff);
 }
 /* Glass sheen highlight, sat behind the button's real content (z-index:-1
    inside the isolated stacking context above) but above its background. */
