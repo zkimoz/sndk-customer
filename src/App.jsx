@@ -2966,19 +2966,22 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           )}
                           {/* Paid / Remaining */}
                           {(relOrd.order_items?.length > 0) && (() => {
-                            const paid = (relOrd.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
+                            const paidFromPayments = (relOrd.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
+                            // A payment taken before all services were added (so it looked like
+                            // "excess" at the time) is held as a pending wallet credit against
+                            // this order — it's still genuinely money the customer already paid,
+                            // so it must count here too, or Paid/Remaining stay stuck showing the
+                            // quotation as unpaid even after the customer already covered it.
+                            const pendingExcessRaw = (relOrd.wallet_transactions || [])
+                              .filter(w => w.type === 'overpayment_credit' && w.status === 'pending')
+                              .reduce((s,w) => s + Number(w.amount || 0), 0);
+                            const paid = paidFromPayments + pendingExcessRaw;
                             // Same live, decision-aware total as "Quotation Total" above —
                             // otherwise this stays pinned to the persisted order total and
                             // doesn't move as the customer approves/rejects services before
                             // confirming.
                             const remaining = selectedQuotationTotal(relOrd) - paid;
-                            // Any payment beyond this order's own total never lands in `paid`
-                            // above (staff-side capping keeps it there) — it's held as a
-                            // pending wallet credit against this specific order instead, so
-                            // show it here too, not just in the Wallet tab.
-                            const pendingExcess = (relOrd.wallet_transactions || [])
-                              .filter(w => w.type === 'overpayment_credit' && w.status === 'pending')
-                              .reduce((s,w) => s + Number(w.amount || 0), 0);
+                            const pendingExcess = remaining < -0.001 ? -remaining : 0;
                             return (
                               <div className="rounded-xl px-3 py-2 space-y-1" style={{ background:'rgba(0,0,0,0.08)' }}>
                                 <div className="flex items-center justify-between">
@@ -2987,7 +2990,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                 </div>
                                 <div className="flex items-center justify-between">
                                   <span className="text-sm" style={{ color:cc.sub }}>{isRtl ? 'المتبقي:' : 'Remaining:'}</span>
-                                  <span className="text-base font-bold" style={{ color: remaining < -0.001 ? '#ef4444' : remaining > 0.001 ? cc.fg : '#22c55e' }}>{remaining.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
+                                  <span className="text-base font-bold" style={{ color: pendingExcess > 0.001 ? '#ef4444' : remaining > 0.001 ? cc.fg : '#22c55e' }}>{Math.max(remaining,0).toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
                                 </div>
                                 {pendingExcess > 0.001 && (
                                   <div className="flex items-center justify-between pt-1 mt-1" style={{ borderTop:`1px dashed ${cc.sub}40` }}>
@@ -3000,7 +3003,10 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           })()}
                           {/* Invoice — only once staff has issued it AND the balance is fully settled */}
                           {jc.invoice_ready && (() => {
-                            const paid = (relOrd.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
+                            const pendingExcessRaw = (relOrd.wallet_transactions || [])
+                              .filter(w => w.type === 'overpayment_credit' && w.status === 'pending')
+                              .reduce((s,w) => s + Number(w.amount || 0), 0);
+                            const paid = (relOrd.payments || []).reduce((s,p)=>s+Number(p.amount||0),0) + pendingExcessRaw;
                             // Same live, decision-aware total as the "Remaining" figure shown
                             // above — using the persisted gt here let this gate and that display
                             // silently disagree whenever a later quotation round changed pricing
