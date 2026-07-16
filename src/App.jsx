@@ -4737,7 +4737,7 @@ function ServiceCard({ service, lang, span, onClick }) {
 // which marks it asked regardless of the answer so it's never repeated).
 async function findRejectedServiceFollowup(carId) {
   const { data } = await supabase.from('appointments')
-    .select('id, orders(*, order_items(*)), job_cards(is_closed, closed_at)')
+    .select('id, orders(*, order_items(*)), job_cards(is_closed, closed_at, job_number)')
     .eq('car_id', carId)
     .order('appointment_date', { ascending: false });
   const groupKeyOf = it => it.service_name?.ar || it.service_name?.en || null;
@@ -4746,11 +4746,16 @@ async function findRejectedServiceFollowup(carId) {
     const order = appt.orders?.[0];
     if (!jc?.is_closed || !order || order.rejection_followup_asked) continue;
     const decisions = order.service_decisions || {};
-    const rejected = (order.order_items || []).find(it => {
+    const items = order.order_items || [];
+    const rejected = items.find(it => {
       const k = groupKeyOf(it);
       return k && decisions[k] === 'rejected';
     });
-    if (rejected) return { orderId: order.id, service: rejected.service_name };
+    if (rejected) {
+      const key = groupKeyOf(rejected);
+      const groupItems = items.filter(it => groupKeyOf(it) === key);
+      return { orderId: order.id, sourceJobNumber: jc.job_number, service: rejected.service_name, items: groupItems };
+    }
   }
   return null;
 }
@@ -4857,6 +4862,16 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
   const addRejectedFollowupToCart = () => {
     const svc = rejectedFollowup.service;
     addToCart('carried-forward', `carried-${Date.now()}`, isRtl ? svc.ar : svc.en, isRtl ? svc.category_ar : svc.category_en);
+    // Carries the full parts/labor breakdown (not just the name above, which
+    // is only for the customer's own cart chip) through to submission, so
+    // staff's job card opens pre-filled instead of rebuilt from scratch —
+    // see ReviewStep.submit() and, admin-side, JobCardModal's order-load effect.
+    setFormData(p => ({ ...p, carriedForwardService: {
+      sourceOrderId: rejectedFollowup.orderId,
+      sourceJobNumber: rejectedFollowup.sourceJobNumber,
+      service: rejectedFollowup.service,
+      items: rejectedFollowup.items,
+    }}));
     markRejectionFollowupAsked(rejectedFollowup.orderId);
     setRejectedFollowup(null);
   };
@@ -5238,6 +5253,7 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
         is_quote_request: formData.isQuoteOnly,
         service_type: serviceType,
         customer_notes: formData.notes, status: 'pending',
+        carried_forward_service: formData.carriedForwardService || null,
       }]);
       if (apptErr) throw apptErr;
       const serviceLabel = cart.length > 0 ? cart.map(s => s.name).join(' · ') : (formData.serviceName || '');
