@@ -134,6 +134,9 @@ const T = {
     cartEmpty:'اختر خدمة للبدء',
     cartServices:'خدمة مختارة',
     ordPayReq:'ادفع الآن',
+    pmPayRemaining:'ادفع المتبقي',
+    pmModalTitle:'اختر طريقة الدفع', pmModalSub:'اختر الطريقة التي تفضّل الدفع بها',
+    pmModalEmpty:'لا توجد طرق دفع متاحة حاليًا', pmModalConfirm:'تأكيد',
     ordPayPending:'بانتظار التأكيد ⏳',
     ordPaid:'تم الدفع ✓',
     ordPartsLabel:'قطع الغيار',
@@ -283,6 +286,9 @@ const T = {
     cartEmpty:'Choose a service to start',
     cartServices:'selected',
     ordPayReq:'Pay Now',
+    pmPayRemaining:'Pay Remaining',
+    pmModalTitle:'Choose a Payment Method', pmModalSub:'Pick how you\'d like to pay',
+    pmModalEmpty:'No payment methods available right now', pmModalConfirm:'Confirm',
     ordPayPending:'Awaiting Confirmation ⏳',
     ordPaid:'Paid ✓',
     ordPartsLabel:'Parts',
@@ -1508,6 +1514,102 @@ function SignatureModal({ isRtl, theme, hasParts, onConfirm, onClose }) {
   );
 }
 
+// Lets the customer pick how they want to pay (parts, labor, or both at once
+// for the "pay what's left" case) — payment methods come from the admin's
+// طرق الدفع control panel. Doesn't process anything itself: for now every
+// active method is "manual" (cash on pickup / instant transfer), so picking
+// one just records the choice and flags staff via the existing
+// request_payment mechanism, same as before this modal existed.
+function PaymentMethodModal({ orderId, types, user, isRtl, tr, onClose, onDone }) {
+  const [methods, setMethods] = useState([]);
+  const [loadingMethods, setLoadingMethods] = useState(true);
+  const [chosenKey, setChosenKey] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    supabase.from('payment_methods').select('*').eq('is_active', true).order('sort_order')
+      .then(({ data }) => { setMethods(data || []); setLoadingMethods(false); });
+  }, []);
+
+  const confirm = async () => {
+    if (!chosenKey || saving) return;
+    setSaving(true);
+    try {
+      const order = (await supabase.from('orders').select('appointment_id').eq('id', orderId).single()).data;
+      // orders has no profile_id of its own — re-verify ownership through the
+      // linked appointment as a defense-in-depth check independent of RLS,
+      // same pattern used in approveWithSignature.
+      const { data: apptCheck } = await supabase.from('appointments').select('id').eq('id', order?.appointment_id).eq('profile_id', user.id).maybeSingle();
+      if (!apptCheck) {
+        alert(isRtl ? 'حدث خطأ — لا يمكن التحقق من ملكية هذا الطلب' : 'Something went wrong — could not verify ownership of this order');
+        setSaving(false);
+        return;
+      }
+      for (const type of types) {
+        const { error: rpcErr } = await supabase.rpc('request_payment', { p_order_id: orderId, p_type: type });
+        if (rpcErr) { alert('خطأ: ' + rpcErr.message); setSaving(false); return; }
+      }
+      const updatePayload = {};
+      types.forEach(type => { updatePayload[`${type}_payment_method`] = chosenKey; });
+      const { error: updErr } = await supabase.from('orders').update(updatePayload).eq('id', orderId);
+      if (updErr) { alert('خطأ: ' + updErr.message); setSaving(false); return; }
+      onDone(types);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      {(() => {
+        const mc = CARD_BG_CYCLE[0]; // always gold
+        return (
+      <div className="rounded-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}
+        style={{ background:mc.bg, border:'1px solid rgba(138,21,56,0.45)', boxShadow:'0 25px 60px rgba(0,0,0,0.6)' }}>
+        <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor:mc.div }}>
+          <div>
+            <h3 className="font-black text-base" style={{ color:mc.txt }}>{tr.pmModalTitle}</h3>
+            <p className="text-xs mt-0.5" style={{ color:mc.sub }}>{tr.pmModalSub}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg transition-all" style={{ color:mc.sub }}>
+            <X size={18}/>
+          </button>
+        </div>
+        <div className="p-5 space-y-2.5">
+          {loadingMethods ? (
+            <div className="flex justify-center py-6"><Loader2 size={22} className="animate-spin" style={{ color:mc.fg }}/></div>
+          ) : methods.length === 0 ? (
+            <p className="text-sm text-center py-4" style={{ color:mc.sub }}>{tr.pmModalEmpty}</p>
+          ) : (
+            methods.map(m => (
+              <button key={m.id} onClick={()=>setChosenKey(m.key)}
+                className="w-full text-start p-3.5 rounded-xl transition-all active:scale-[0.98]"
+                style={chosenKey===m.key ? { background:'#8A1538', color:'#fff' } : { background:'rgba(0,0,0,0.12)', color:mc.txt }}>
+                <p className="font-bold text-sm">{isRtl ? m.display_name_ar : m.display_name_en}</p>
+                {m.method_type === 'manual' && m.notes && (
+                  <p className="text-xs mt-0.5 opacity-80">{m.notes}</p>
+                )}
+              </button>
+            ))
+          )}
+        </div>
+        <div className="p-5 pt-0">
+          <button onClick={confirm} disabled={!chosenKey || saving}
+            className="w-full py-3.5 rounded-xl font-black text-sm transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60"
+            style={{ background:'#8A1538', color:'#fff' }}>
+            {saving
+              ? <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"/>{isRtl ? 'جاري الإرسال...' : 'Sending...'}</>
+              : tr.pmModalConfirm
+            }
+          </button>
+        </div>
+      </div>
+        );
+      })()}
+    </div>
+  );
+}
+
 function openQuotationPDF(order, linked, profile, jobCard) {
   const isApproved = !!order.customer_approved;
   const approvalDate = order.approved_at
@@ -2074,6 +2176,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   // changing page) would otherwise call fewer hooks on that re-render than
   // the previous one, which crashes the whole app to a blank screen.
   const [sigModal, setSigModal] = useState({ open:false, orderId:null });
+  const [payMethodModal, setPayMethodModal] = useState(null); // { orderId, types } | null
   const [serviceSelections, setServiceSelections] = useState({}); // { [orderId]: { [serviceKey]: boolean } }
   // Booking a date/time for a quote-only request the customer just approved —
   // the service decisions and quotation are already locked in, this only
@@ -2978,6 +3081,21 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                         const laborDisplayAmount = laborIsPartial ? laborRemaining : laborTotal;
                         const laborEffectiveStatus = laborCoveredByPayments ? 'paid' : (relOrd.labor_payment_status || 'unpaid');
                         const partsSettled = partsCoveredByPayments || relOrd.parts_payment_status === 'paid';
+                        // "Pay Remaining" — once every approved service is marked "تمت" by
+                        // staff (order_items.is_done, saved via their existing Save All —
+                        // already embedded in relOrd.order_items, nothing new to load), the
+                        // customer can pay off whatever of parts/labor is still outstanding
+                        // in one go, reusing the exact same request_payment mechanism.
+                        const decisions = relOrd.service_decisions || {};
+                        const approvedItems = (relOrd.order_items || []).filter(it => {
+                          const k = it.service_name?.ar || it.service_name?.en || null;
+                          return !k || decisions[k] !== 'rejected';
+                        });
+                        const allServicesDone = approvedItems.length > 0 && approvedItems.every(it => it.is_done);
+                        const outstandingTypes = [
+                          ...(partsSettled ? [] : ['parts']),
+                          ...(laborCoveredByPayments ? [] : ['labor']),
+                        ];
                         return (
                         <div style={{ borderTop:`1px solid ${C.border}` }}>
                           {partsTotal > 0 && (
@@ -2986,7 +3104,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                               amount={partsDisplayAmount}
                               status={partsEffectiveStatus}
                               canPay={relOrd.customer_approved && relOrd.status !== 'draft' && !partsCoveredByPayments}
-                              onPay={() => requestPayment(relOrd.id, 'parts')}
+                              onPay={() => setPayMethodModal({ orderId: relOrd.id, types: ['parts'] })}
                               tr={tr} isRtl={isRtl} cc={cc}
                             />
                           )}
@@ -2997,9 +3115,18 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                               status={laborEffectiveStatus}
                               canPay={['ready','delivered','completed'].includes(relOrd.status) && partsSettled && !laborCoveredByPayments}
                               disabledHint={isRtl ? 'متاح بعد انتهاء الإصلاح ودفع القطع' : 'Available after repair & parts paid'}
-                              onPay={() => requestPayment(relOrd.id, 'labor')}
+                              onPay={() => setPayMethodModal({ orderId: relOrd.id, types: ['labor'] })}
                               tr={tr} isRtl={isRtl} cc={cc}
                             />
+                          )}
+                          {allServicesDone && outstandingTypes.length > 0 && (
+                            <div className="px-4 py-3" style={{ borderTop:`1px solid ${cc?cc.div:C.border}` }}>
+                              <button onClick={() => setPayMethodModal({ orderId: relOrd.id, types: outstandingTypes })}
+                                className="w-full py-2.5 rounded-xl text-sm font-black transition-all active:scale-95 hover:brightness-110"
+                                style={{ background: cc?cc.fg:C.gold, color: cc?cc.bg:C.btnTxt }}>
+                                {tr.pmPayRemaining}
+                              </button>
+                            </div>
                           )}
                         </div>
                         );
@@ -3096,6 +3223,21 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
           hasParts={(orders.find(o => o.id === sigModal.orderId)?.order_items || []).some(i => i.item_type === 'part')}
           onConfirm={approveWithSignature}
           onClose={() => setSigModal({ open:false, orderId:null })}
+        />
+      )}
+
+      {payMethodModal && (
+        <PaymentMethodModal
+          orderId={payMethodModal.orderId}
+          types={payMethodModal.types}
+          user={user}
+          isRtl={isRtl}
+          tr={tr}
+          onClose={() => setPayMethodModal(null)}
+          onDone={() => {
+            setPayMethodModal(null);
+            alert(isRtl ? 'تم إرسال طلبك — سيتواصل معك فريقنا لإتمام الدفع' : "Your request has been sent — our team will contact you to complete the payment");
+          }}
         />
       )}
 
