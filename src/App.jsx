@@ -1699,8 +1699,8 @@ function PaymentMethodModal({ orderId, types, user, isRtl, tr, onClose, onDone }
                 className="w-full text-start p-3.5 rounded-xl transition-all active:scale-[0.98]"
                 style={chosenKey===m.key ? { background:'#8A1538', color:'#fff' } : { background:'rgba(0,0,0,0.12)', color:mc.txt }}>
                 <p className="font-bold text-sm">{isRtl ? m.display_name_ar : m.display_name_en}</p>
-                {m.method_type === 'manual' && m.notes && (
-                  <p className="text-xs mt-0.5 opacity-80">{m.notes}</p>
+                {m.method_type === 'manual' && (isRtl ? m.notes_ar : (m.notes_en || m.notes_ar)) && (
+                  <p className="text-xs mt-0.5 opacity-80">{isRtl ? m.notes_ar : (m.notes_en || m.notes_ar)}</p>
                 )}
               </button>
             ))
