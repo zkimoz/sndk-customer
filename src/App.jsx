@@ -1539,6 +1539,15 @@ function PaymentMethodModal({ orderId, types, user, isRtl, tr, onClose, onDone }
   const chosenMethod = methods.find(m => m.key === chosenKey);
   const isGateway = chosenMethod?.method_type === 'gateway';
 
+  // orderId/types/isRtl/onDone are read from this ref inside the PayPal
+  // button callbacks below instead of the effect's dependency array — types
+  // is a fresh array reference and onDone a fresh function on every parent
+  // re-render, and depending on them was tearing down and recreating the
+  // PayPal Buttons widget mid-checkout, breaking the popup's connection to
+  // its opener (PayPal's "re-launch the window" recovery screen flickering).
+  const latestRef = useRef({ orderId, types, isRtl, onDone });
+  useEffect(() => { latestRef.current = { orderId, types, isRtl, onDone }; });
+
   useEffect(() => {
     supabase.from('payment_methods').select('*').eq('is_active', true).order('sort_order')
       .then(({ data }) => { setMethods(data || []); setLoadingMethods(false); });
@@ -1572,27 +1581,29 @@ function PaymentMethodModal({ orderId, types, user, isRtl, tr, onClose, onDone }
 
       buttons = window.paypal.Buttons({
         createOrder: async () => {
-          const { data, error } = await supabase.functions.invoke('paypal-payment', { body: { action: 'create', orderId, types } });
+          const { orderId: oid, types: t, isRtl: rtl } = latestRef.current;
+          const { data, error } = await supabase.functions.invoke('paypal-payment', { body: { action: 'create', orderId: oid, types: t } });
           if (error || !data?.id) {
-            const msg = await extractInvokeError(data, error, isRtl ? 'تعذر بدء الدفع' : 'Could not start payment');
-            alert((isRtl ? 'خطأ: ' : 'Error: ') + msg);
+            const msg = await extractInvokeError(data, error, rtl ? 'تعذر بدء الدفع' : 'Could not start payment');
+            alert((rtl ? 'خطأ: ' : 'Error: ') + msg);
             throw new Error('create failed');
           }
           return data.id;
         },
         onApprove: async (data) => {
+          const { orderId: oid, types: t, isRtl: rtl, onDone: done } = latestRef.current;
           setSaving(true);
-          const { data: capRes, error } = await supabase.functions.invoke('paypal-payment', { body: { action: 'capture', orderId, types, paypalOrderId: data.orderID } });
+          const { data: capRes, error } = await supabase.functions.invoke('paypal-payment', { body: { action: 'capture', orderId: oid, types: t, paypalOrderId: data.orderID } });
           setSaving(false);
           if (error || !capRes?.success) {
-            const msg = await extractInvokeError(capRes, error, isRtl ? 'تعذر إتمام الدفع' : 'Could not complete payment');
-            alert((isRtl ? 'خطأ: ' : 'Error: ') + msg);
+            const msg = await extractInvokeError(capRes, error, rtl ? 'تعذر إتمام الدفع' : 'Could not complete payment');
+            alert((rtl ? 'خطأ: ' : 'Error: ') + msg);
             return;
           }
-          alert(isRtl ? 'تم الدفع بنجاح' : 'Payment successful');
-          onDone(types);
+          alert(rtl ? 'تم الدفع بنجاح' : 'Payment successful');
+          done(t);
         },
-        onError: () => { alert(isRtl ? 'حدث خطأ أثناء الدفع عبر PayPal' : 'An error occurred during PayPal payment'); },
+        onError: () => { alert(latestRef.current.isRtl ? 'حدث خطأ أثناء الدفع عبر PayPal' : 'An error occurred during PayPal payment'); },
       });
       buttons.render(paypalContainerRef.current);
     };
@@ -1613,7 +1624,12 @@ function PaymentMethodModal({ orderId, types, user, isRtl, tr, onClose, onDone }
     }
 
     return () => { cancelled = true; if (buttons?.close) buttons.close(); };
-  }, [isGateway, chosenMethod?.client_id, orderId, types, isRtl, onDone]);
+    // orderId/types/isRtl/onDone are intentionally excluded — read live via
+    // latestRef inside the callbacks above instead, so this effect (and the
+    // PayPal Buttons widget it creates) only re-runs when the chosen method
+    // actually changes, not on every unrelated parent re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGateway, chosenMethod?.client_id]);
 
   const confirm = async () => {
     if (!chosenKey || saving) return;
