@@ -1522,10 +1522,11 @@ function SignatureModal({ isRtl, theme, hasParts, onConfirm, onClose }) {
 
 // Lets the customer pick how they want to pay (parts, labor, or both at once
 // for the "pay what's left" case) — payment methods come from the admin's
-// طرق الدفع control panel. Doesn't process anything itself: for now every
-// active method is "manual" (cash on pickup / instant transfer), so picking
-// one just records the choice and flags staff via the existing
-// request_payment mechanism, same as before this modal existed.
+// طرق الدفع control panel. "Manual" methods (cash on pickup / instant
+// transfer) just record the choice and flag staff via the existing
+// request_payment mechanism. "Gateway" methods (PayPal) run a real checkout
+// via the paypal-payment Edge Function and insert a payments row themselves
+// the moment PayPal confirms the charge — no staff step needed.
 function PaymentMethodModal({ orderId, types, user, isRtl, tr, onClose, onDone }) {
   const [methods, setMethods] = useState([]);
   const [loadingMethods, setLoadingMethods] = useState(true);
@@ -1533,12 +1534,65 @@ function PaymentMethodModal({ orderId, types, user, isRtl, tr, onClose, onDone }
   const [receiptFile, setReceiptFile] = useState(null);
   const [saving, setSaving] = useState(false);
   const receiptFileRef = useRef(null);
+  const paypalContainerRef = useRef(null);
   const needsReceipt = chosenKey === 'instant_transfer';
+  const chosenMethod = methods.find(m => m.key === chosenKey);
+  const isGateway = chosenMethod?.method_type === 'gateway';
 
   useEffect(() => {
     supabase.from('payment_methods').select('*').eq('is_active', true).order('sort_order')
       .then(({ data }) => { setMethods(data || []); setLoadingMethods(false); });
   }, []);
+
+  // Loads the PayPal JS SDK once and renders its Smart Buttons into
+  // paypalContainerRef whenever a gateway method with a client_id is chosen.
+  // createOrder/onApprove call the paypal-payment Edge Function, which
+  // recomputes the amount server-side and inserts the payments row itself —
+  // this modal never touches money directly.
+  useEffect(() => {
+    if (!isGateway || !chosenMethod?.client_id) return;
+    let cancelled = false;
+    let buttons = null;
+
+    const renderButtons = () => {
+      if (cancelled || !window.paypal || !paypalContainerRef.current) return;
+      paypalContainerRef.current.innerHTML = '';
+      buttons = window.paypal.Buttons({
+        createOrder: async () => {
+          const { data, error } = await supabase.functions.invoke('paypal-payment', { body: { action: 'create', orderId, types } });
+          if (error || !data?.id) { alert((isRtl ? 'خطأ: ' : 'Error: ') + (data?.error || error?.message || (isRtl ? 'تعذر بدء الدفع' : 'Could not start payment'))); throw new Error('create failed'); }
+          return data.id;
+        },
+        onApprove: async (data) => {
+          setSaving(true);
+          const { data: capRes, error } = await supabase.functions.invoke('paypal-payment', { body: { action: 'capture', orderId, types, paypalOrderId: data.orderID } });
+          setSaving(false);
+          if (error || !capRes?.success) { alert((isRtl ? 'خطأ: ' : 'Error: ') + (capRes?.error || error?.message || (isRtl ? 'تعذر إتمام الدفع' : 'Could not complete payment'))); return; }
+          alert(isRtl ? 'تم الدفع بنجاح' : 'Payment successful');
+          onDone(types);
+        },
+        onError: () => { alert(isRtl ? 'حدث خطأ أثناء الدفع عبر PayPal' : 'An error occurred during PayPal payment'); },
+      });
+      buttons.render(paypalContainerRef.current);
+    };
+
+    if (window.paypal) {
+      renderButtons();
+    } else {
+      const existing = document.getElementById('paypal-sdk-script');
+      if (existing) {
+        existing.addEventListener('load', renderButtons, { once: true });
+      } else {
+        const script = document.createElement('script');
+        script.id = 'paypal-sdk-script';
+        script.src = `https://www.paypal.com/sdk/js?client-id=${chosenMethod.client_id}&currency=USD&intent=capture`;
+        script.onload = renderButtons;
+        document.body.appendChild(script);
+      }
+    }
+
+    return () => { cancelled = true; if (buttons?.close) buttons.close(); };
+  }, [isGateway, chosenMethod?.client_id, orderId, types, isRtl, onDone]);
 
   const confirm = async () => {
     if (!chosenKey || saving) return;
@@ -1627,16 +1681,28 @@ function PaymentMethodModal({ orderId, types, user, isRtl, tr, onClose, onDone }
             </div>
           )}
         </div>
-        <div className="p-5 pt-0">
-          <button onClick={confirm} disabled={!chosenKey || saving || (needsReceipt && !receiptFile)}
-            className="w-full py-3.5 rounded-xl font-black text-sm transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60"
-            style={{ background:'#8A1538', color:'#fff' }}>
-            {saving
-              ? <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"/>{isRtl ? 'جاري الإرسال...' : 'Sending...'}</>
-              : tr.pmModalConfirm
-            }
-          </button>
-        </div>
+        {isGateway ? (
+          <div className="p-5 pt-0 space-y-2">
+            <div ref={paypalContainerRef}/>
+            {saving && (
+              <div className="flex justify-center py-1"><Loader2 size={18} className="animate-spin" style={{ color:mc.fg }}/></div>
+            )}
+            <p className="text-[11px] text-center" style={{ color:mc.sub }}>
+              {isRtl ? 'سيتم تحويل المبلغ تلقائيًا لدولار أمريكي بسعر الصرف الثابت (٣.٦٤ ر.ق = ١$)' : 'The amount is automatically converted to US Dollars at the fixed exchange rate (3.64 QAR = $1)'}
+            </p>
+          </div>
+        ) : (
+          <div className="p-5 pt-0">
+            <button onClick={confirm} disabled={!chosenKey || saving || (needsReceipt && !receiptFile)}
+              className="w-full py-3.5 rounded-xl font-black text-sm transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60"
+              style={{ background:'#8A1538', color:'#fff' }}>
+              {saving
+                ? <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"/>{isRtl ? 'جاري الإرسال...' : 'Sending...'}</>
+                : tr.pmModalConfirm
+              }
+            </button>
+          </div>
+        )}
       </div>
         );
       })()}
