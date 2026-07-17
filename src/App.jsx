@@ -1557,17 +1557,38 @@ function PaymentMethodModal({ orderId, types, user, isRtl, tr, onClose, onDone }
     const renderButtons = () => {
       if (cancelled || !window.paypal || !paypalContainerRef.current) return;
       paypalContainerRef.current.innerHTML = '';
+      // supabase-js's functions.invoke() nulls out `data` and only gives a
+      // generic "non-2xx status code" message on `error` when the function
+      // returns an error status — the actual { error: "..." } JSON body we
+      // return from paypal-payment lives on error.context (the raw
+      // Response), so it has to be read explicitly to show anything useful.
+      const extractInvokeError = async (data, error, fallback) => {
+        if (data?.error) return data.error;
+        if (error?.context?.json) {
+          try { const body = await error.context.json(); if (body?.error) return body.error; } catch { /* not JSON */ }
+        }
+        return error?.message || fallback;
+      };
+
       buttons = window.paypal.Buttons({
         createOrder: async () => {
           const { data, error } = await supabase.functions.invoke('paypal-payment', { body: { action: 'create', orderId, types } });
-          if (error || !data?.id) { alert((isRtl ? 'خطأ: ' : 'Error: ') + (data?.error || error?.message || (isRtl ? 'تعذر بدء الدفع' : 'Could not start payment'))); throw new Error('create failed'); }
+          if (error || !data?.id) {
+            const msg = await extractInvokeError(data, error, isRtl ? 'تعذر بدء الدفع' : 'Could not start payment');
+            alert((isRtl ? 'خطأ: ' : 'Error: ') + msg);
+            throw new Error('create failed');
+          }
           return data.id;
         },
         onApprove: async (data) => {
           setSaving(true);
           const { data: capRes, error } = await supabase.functions.invoke('paypal-payment', { body: { action: 'capture', orderId, types, paypalOrderId: data.orderID } });
           setSaving(false);
-          if (error || !capRes?.success) { alert((isRtl ? 'خطأ: ' : 'Error: ') + (capRes?.error || error?.message || (isRtl ? 'تعذر إتمام الدفع' : 'Could not complete payment'))); return; }
+          if (error || !capRes?.success) {
+            const msg = await extractInvokeError(capRes, error, isRtl ? 'تعذر إتمام الدفع' : 'Could not complete payment');
+            alert((isRtl ? 'خطأ: ' : 'Error: ') + msg);
+            return;
+          }
           alert(isRtl ? 'تم الدفع بنجاح' : 'Payment successful');
           onDone(types);
         },
