@@ -52,7 +52,7 @@ function computeAmountDueQAR(order: any, types: string[]): number {
       .reduce((sum, it) => {
         const lt = Number(it.sell_price || 0) * Number(it.quantity || 1) *
           (1 - Math.min(Number(it.discount_pct || 0), 100) / 100);
-        const key = it.service_name?.ar || it.service_name?.en;
+        const key = it.service_name?.group_id || it.service_name?.ar || it.service_name?.en;
         if (!key) return sum + lt;
         return decisions[key] === "approved" ? sum + lt : sum;
       }, 0);

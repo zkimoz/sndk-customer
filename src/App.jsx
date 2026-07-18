@@ -1772,7 +1772,7 @@ function openQuotationPDF(order, linked, profile, jobCard) {
     ? new Date(order.approved_at).toLocaleString('en-QA', { dateStyle:'long', timeStyle:'short' }) : '';
   const decided = isApproved || !!order.customer_rejected;
   const decisions = order.service_decisions || {};
-  const groupKeyOf = it => it.service_name?.ar || it.service_name?.en || null;
+  const groupKeyOf = it => it.service_name?.group_id || it.service_name?.ar || it.service_name?.en || null;
   const lineTotal = it => Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
   const car = linked?.cars || {};
   const items = order.order_items || [];
@@ -2038,7 +2038,7 @@ function printCustomerInvoice(jobCard, appt, order, profile, brandsData = [], ca
   const allItems = order?.order_items || [];
   const decided  = !!order?.customer_approved || !!order?.customer_rejected;
   const decisions = order?.service_decisions || {};
-  const groupKeyOf = it => it.service_name?.ar || it.service_name?.en || null;
+  const groupKeyOf = it => it.service_name?.group_id || it.service_name?.ar || it.service_name?.en || null;
   const items    = decided ? allItems.filter(it => { const k = groupKeyOf(it); return !k || decisions[k] !== 'rejected'; }) : allItems;
   const rejectedItems = decided ? allItems.filter(it => { const k = groupKeyOf(it); return k && decisions[k] === 'rejected'; }) : [];
   const rejectedNames = [];
@@ -2447,7 +2447,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     const seen = new Set();
     const keys = [];
     (order?.order_items || []).forEach(i => {
-      const key = i.service_name?.ar || i.service_name?.en;
+      const key = i.service_name?.group_id || i.service_name?.ar || i.service_name?.en;
       if (key && !seen.has(key)) { seen.add(key); keys.push(key); }
     });
     return keys;
@@ -2463,7 +2463,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
       .filter(it => !itemType || it.item_type === itemType)
       .reduce((sum, it) => {
         const lt = Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
-        const key = it.service_name?.ar || it.service_name?.en;
+        const key = it.service_name?.group_id || it.service_name?.ar || it.service_name?.en;
         if (!key) return sum + lt;
         // A service already decided in a previous round (staff sent an
         // additional quotation later) uses its locked-in decision; a new,
@@ -2537,7 +2537,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     // reads these columns directly.
     const lineTotal = it => Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
     const approvedItems = (order.order_items || []).filter(it => {
-      const key = it.service_name?.ar || it.service_name?.en;
+      const key = it.service_name?.group_id || it.service_name?.ar || it.service_name?.en;
       return !key || decisions[key] === 'approved';
     });
     const newPartsTotal = approvedItems.filter(it => it.item_type === 'part').reduce((s,it) => s + lineTotal(it), 0);
@@ -2951,7 +2951,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             const seen = new Set();
                             const services = [];
                             (relOrd.order_items || []).forEach(i => {
-                              const key = i.service_name?.ar || i.service_name?.en;
+                              const key = i.service_name?.group_id || i.service_name?.ar || i.service_name?.en;
                               if (key && !seen.has(key)) {
                                 seen.add(key);
                                 services.push({
@@ -2963,6 +2963,16 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             if (services.length === 0) return null;
                             const order = { high:0, medium:1, low:2 };
                             services.sort((a,b)=>order[a.priority]-order[b.priority]);
+                            // Same-named services (now allowed as separate instances) get a
+                            // "(2)", "(3)"... suffix so the customer can tell them apart —
+                            // purely cosmetic, matches the admin side's numbering.
+                            const nameSeenCount = {};
+                            const displaySuffixOf = {};
+                            services.forEach(s => {
+                              const nm = s.name_ar || s.name_en;
+                              nameSeenCount[nm] = (nameSeenCount[nm] || 0) + 1;
+                              displaySuffixOf[s.key] = nameSeenCount[nm] > 1 ? ` (${nameSeenCount[nm]})` : '';
+                            });
                             // Per-service, not per-order — a service already decided in an
                             // earlier round (staff sent an additional quotation later) must
                             // stay locked and not be re-offered for decision.
@@ -2982,7 +2992,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                   const liveDecision = getServiceDecision(relOrd.id, s.key); // undefined | 'approved' | 'rejected' — before signing
                                   const decision = relOrd.service_decisions?.[s.key]; // locked-in decision — after signing
                                   const lineItems = (relOrd.order_items || []).filter(i =>
-                                    (i.service_name?.ar || i.service_name?.en) === s.key);
+                                    (i.service_name?.group_id || i.service_name?.ar || i.service_name?.en) === s.key);
                                   const originalLineTotal = it => Number(it.sell_price||0) * Number(it.quantity||1);
                                   const lineTotal = it => originalLineTotal(it) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
                                   const laborItems = lineItems.filter(i => i.item_type === 'labor');
@@ -2995,7 +3005,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                           {(s.category_ar || s.category_en) && (
                                             <p className="text-[10px] font-bold uppercase tracking-wider truncate" style={{ color:cc.sub }}>{isRtl?(s.category_ar||s.category_en):(s.category_en||s.category_ar)}</p>
                                           )}
-                                          <span className="text-sm font-semibold" style={{ color:cc.txt }}>{isRtl?(s.name_ar||s.name_en):(s.name_en||s.name_ar)}</span>
+                                          <span className="text-sm font-semibold" style={{ color:cc.txt }}>{isRtl?(s.name_ar||s.name_en):(s.name_en||s.name_ar)}{displaySuffixOf[s.key]}</span>
                                           {s.notes && <p className="text-[11px] mt-0.5 italic" style={{ color:cc.sub }}>{s.notes}</p>}
                                         </div>
                                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
@@ -3248,7 +3258,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                         // in one go, reusing the exact same request_payment mechanism.
                         const decisions = relOrd.service_decisions || {};
                         const approvedItems = (relOrd.order_items || []).filter(it => {
-                          const k = it.service_name?.ar || it.service_name?.en || null;
+                          const k = it.service_name?.group_id || it.service_name?.ar || it.service_name?.en || null;
                           return !k || decisions[k] !== 'rejected';
                         });
                         const allServicesDone = approvedItems.length > 0 && approvedItems.every(it => it.is_done);
@@ -3778,7 +3788,7 @@ function HistoryOrderDetail({ jobCard, order, car, appt, profile, isRtl, tr, ope
   let workshopVideos = [];
   try { workshopVideos = JSON.parse(jobCard.workshop_notes_videos || '[]'); } catch {}
 
-  const groupKeyOf = it => it.service_name?.ar || it.service_name?.en || null;
+  const groupKeyOf = it => it.service_name?.group_id || it.service_name?.ar || it.service_name?.en || null;
   const lineTotal = it => Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
   const items = order?.order_items || [];
   const decided = !!order?.customer_approved || !!order?.customer_rejected;
@@ -4866,7 +4876,7 @@ async function findRejectedServiceFollowup(carId) {
     .select('id, orders(*, order_items(*)), job_cards(is_closed, closed_at, job_number)')
     .eq('car_id', carId)
     .order('appointment_date', { ascending: false });
-  const groupKeyOf = it => it.service_name?.ar || it.service_name?.en || null;
+  const groupKeyOf = it => it.service_name?.group_id || it.service_name?.ar || it.service_name?.en || null;
   for (const appt of (data || [])) {
     const jc = appt.job_cards?.[0];
     const order = appt.orders?.[0];
