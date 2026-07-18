@@ -1719,6 +1719,11 @@ function PaymentMethodModal({ orderId, types, amount, user, customerName, isRtl,
           )}
           {needsReceipt && (
             <div className="pt-1">
+              {(isRtl ? chosenMethod?.notes_ar : (chosenMethod?.notes_en || chosenMethod?.notes_ar)) && (
+                <p className="text-xs font-bold mb-2 p-2.5 rounded-lg" style={{ color:mc.txt, background:'rgba(0,0,0,0.08)' }}>
+                  {isRtl ? chosenMethod.notes_ar : (chosenMethod.notes_en || chosenMethod.notes_ar)}
+                </p>
+              )}
               <input ref={receiptFileRef} type="file" accept="image/*,application/pdf" className="hidden"
                 onChange={e => setReceiptFile(e.target.files?.[0] || null)}/>
               <button onClick={()=>receiptFileRef.current?.click()}
