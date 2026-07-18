@@ -103,14 +103,27 @@ async function loadOwnedOrder(userClient: any, orderId: string) {
 
   const { data: appt } = await adminClient
     .from("appointments")
-    .select("profile_id")
+    .select("profile_id, job_cards(job_number)")
     .eq("id", order.appointment_id)
     .maybeSingle();
   if (!appt || appt.profile_id !== user.id) {
     return { error: jsonResponse({ error: "Not authorized for this order" }, 403) };
   }
 
-  return { order };
+  return { order, profileId: appt.profile_id, jobNumber: appt.job_cards?.job_number };
+}
+
+// Best-effort — a notification failure must never fail the payment response
+// itself (the money has already moved by the time this is called).
+function notifyPaymentReceived(profileId: string, jobNumber: string | undefined, amountQAR: number) {
+  adminClient.functions.invoke("clever-endpoint", {
+    body: { event: "payment_receipt", customerId: profileId, jobNumber, amountQAR, methodAr: "باي بال", methodEn: "PayPal" },
+  }).catch(() => {});
+  adminClient.from("profiles").select("full_name").eq("id", profileId).maybeSingle().then(({ data }) => {
+    adminClient.functions.invoke("clever-endpoint", {
+      body: { event: "payment_received", jobNumber, customerName: data?.full_name, amountQAR, methodAr: "باي بال", methodEn: "PayPal" },
+    }).catch(() => {});
+  });
 }
 
 async function loadPaypalConfig() {
@@ -139,7 +152,7 @@ serve(async (req) => {
       return jsonResponse({ error: "Missing orderId/types" }, 400);
     }
 
-    const { order, error: ownErr } = await loadOwnedOrder(userClient, orderId);
+    const { order, profileId, jobNumber, error: ownErr } = await loadOwnedOrder(userClient, orderId);
     if (ownErr) return ownErr;
 
     const { clientId, base, error: cfgErr } = await loadPaypalConfig();
@@ -196,6 +209,7 @@ serve(async (req) => {
       });
       if (insErr) return jsonResponse({ error: `Payment captured but failed to record: ${insErr.message}` }, 500);
 
+      notifyPaymentReceived(profileId!, jobNumber, amountQAR);
       return jsonResponse({ success: true, amountQAR });
     }
 

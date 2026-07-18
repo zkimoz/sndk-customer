@@ -1527,7 +1527,7 @@ function SignatureModal({ isRtl, theme, hasParts, onConfirm, onClose }) {
 // request_payment mechanism. "Gateway" methods (PayPal) run a real checkout
 // via the paypal-payment Edge Function and insert a payments row themselves
 // the moment PayPal confirms the charge — no staff step needed.
-function PaymentMethodModal({ orderId, types, user, isRtl, tr, onClose, onDone }) {
+function PaymentMethodModal({ orderId, types, amount, user, customerName, isRtl, tr, onClose, onDone }) {
   const [methods, setMethods] = useState([]);
   const [loadingMethods, setLoadingMethods] = useState(true);
   const [chosenKey, setChosenKey] = useState(null);
@@ -1601,7 +1601,7 @@ function PaymentMethodModal({ orderId, types, user, isRtl, tr, onClose, onDone }
             return;
           }
           alert(rtl ? 'تم الدفع بنجاح' : 'Payment successful');
-          done(t);
+          done(t, { gateway: true });
         },
         onError: () => { alert(latestRef.current.isRtl ? 'حدث خطأ أثناء الدفع عبر PayPal' : 'An error occurred during PayPal payment'); },
       });
@@ -1639,8 +1639,9 @@ function PaymentMethodModal({ orderId, types, user, isRtl, tr, onClose, onDone }
       const order = (await supabase.from('orders').select('appointment_id').eq('id', orderId).single()).data;
       // orders has no profile_id of its own — re-verify ownership through the
       // linked appointment as a defense-in-depth check independent of RLS,
-      // same pattern used in approveWithSignature.
-      const { data: apptCheck } = await supabase.from('appointments').select('id').eq('id', order?.appointment_id).eq('profile_id', user.id).maybeSingle();
+      // same pattern used in approveWithSignature. Also grabs job_number for
+      // the staff notification fired below once the method is recorded.
+      const { data: apptCheck } = await supabase.from('appointments').select('id, job_cards(job_number)').eq('id', order?.appointment_id).eq('profile_id', user.id).maybeSingle();
       if (!apptCheck) {
         alert(isRtl ? 'حدث خطأ — لا يمكن التحقق من ملكية هذا الطلب' : 'Something went wrong — could not verify ownership of this order');
         setSaving(false);
@@ -1666,6 +1667,17 @@ function PaymentMethodModal({ orderId, types, user, isRtl, tr, onClose, onDone }
       });
       const { error: updErr } = await supabase.from('orders').update(updatePayload).eq('id', orderId);
       if (updErr) { alert('خطأ: ' + updErr.message); setSaving(false); return; }
+      supabase.functions.invoke('clever-endpoint', {
+        body: {
+          event: 'payment_method_chosen',
+          jobNumber: apptCheck.job_cards?.job_number,
+          customerName,
+          amountQAR: amount,
+          methodAr: chosenMethod?.display_name_ar,
+          methodEn: chosenMethod?.display_name_en,
+          receiptUrl,
+        },
+      }).catch(() => {});
       onDone(types);
     } finally {
       setSaving(false);
@@ -3247,7 +3259,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                               amount={partsDisplayAmount}
                               status={partsEffectiveStatus}
                               canPay={relOrd.customer_approved && relOrd.status !== 'draft' && !partsCoveredByPayments}
-                              onPay={() => setPayMethodModal({ orderId: relOrd.id, types: ['parts'] })}
+                              onPay={() => setPayMethodModal({ orderId: relOrd.id, types: ['parts'], amount: partsDisplayAmount })}
                               tr={tr} isRtl={isRtl} cc={cc}
                             />
                           )}
@@ -3258,13 +3270,13 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                               status={laborEffectiveStatus}
                               canPay={['ready','delivered','completed'].includes(relOrd.status) && partsSettled && !laborCoveredByPayments}
                               disabledHint={isRtl ? 'متاح بعد انتهاء الإصلاح ودفع القطع' : 'Available after repair & parts paid'}
-                              onPay={() => setPayMethodModal({ orderId: relOrd.id, types: ['labor'] })}
+                              onPay={() => setPayMethodModal({ orderId: relOrd.id, types: ['labor'], amount: laborDisplayAmount })}
                               tr={tr} isRtl={isRtl} cc={cc}
                             />
                           )}
                           {allServicesDone && outstandingTypes.length > 0 && (
                             <div className="px-4 py-3" style={{ borderTop:`1px solid ${cc?cc.div:C.border}` }}>
-                              <button onClick={() => setPayMethodModal({ orderId: relOrd.id, types: outstandingTypes })}
+                              <button onClick={() => setPayMethodModal({ orderId: relOrd.id, types: outstandingTypes, amount: (outstandingTypes.includes('parts')?partsDisplayAmount:0) + (outstandingTypes.includes('labor')?laborDisplayAmount:0) })}
                                 className="w-full py-2.5 rounded-xl text-sm font-black transition-all active:scale-95 hover:brightness-110"
                                 style={{ background: cc?cc.fg:C.gold, color: cc?cc.bg:C.btnTxt }}>
                                 {tr.pmPayRemaining}
@@ -3373,12 +3385,18 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
         <PaymentMethodModal
           orderId={payMethodModal.orderId}
           types={payMethodModal.types}
+          amount={payMethodModal.amount}
           user={user}
+          customerName={profile?.full_name}
           isRtl={isRtl}
           tr={tr}
           onClose={() => setPayMethodModal(null)}
-          onDone={() => {
+          onDone={(types, opts) => {
             setPayMethodModal(null);
+            // A gateway payment already showed its own "تم الدفع بنجاح" alert
+            // inside the modal — this generic message is only for the
+            // manual-method (cash/transfer) request flow.
+            if (opts?.gateway) return;
             alert(isRtl ? 'تم إرسال طلبك — سيتواصل معك فريقنا لإتمام الدفع' : "Your request has been sent — our team will contact you to complete the payment");
           }}
         />

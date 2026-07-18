@@ -10,8 +10,8 @@ const CUSTOMER_FROM_EMAIL = Deno.env.get("CUSTOMER_FROM_EMAIL") || "SNDK <norepl
 // Always-notified department inboxes, in addition to any staff member who has
 // opted in individually via notify_email in الموظفين.
 const DEPARTMENT_EMAILS = ["info@sndkqa.com", "workshop@sndkqa.com", "customerservice@sndkqa.com"];
-const STAFF_EVENTS = new Set(["quotation_approved", "new_booking"]);
-const CUSTOMER_EVENTS = new Set(["status_changed", "quotation_sent", "invoice_ready", "job_closed", "resignature_requested", "details_updated"]);
+const STAFF_EVENTS = new Set(["quotation_approved", "new_booking", "payment_received", "payment_method_chosen"]);
+const CUSTOMER_EVENTS = new Set(["status_changed", "quotation_sent", "invoice_ready", "job_closed", "resignature_requested", "details_updated", "payment_receipt"]);
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -65,6 +65,7 @@ serve(async (req) => {
     const {
       event, jobNumber, customerName, serviceLabel, carLabel, appointmentDate, appointmentTime,
       customerId, statusLabelAr, statusLabelEn, invoicePdfBase64, invoiceFilename,
+      amountQAR, methodAr, methodEn, receiptUrl,
     } = await req.json();
 
     let recipients: string[] = [];
@@ -124,6 +125,17 @@ serve(async (req) => {
           [bi("العميل", "Customer"), name],
           [bi("رقم أمر الشغل", "Job Number"), jobNumber],
         ]);
+      } else if (event === "payment_receipt") {
+        // This email body IS the receipt — no PDF, the Edge Function has no
+        // PDF capability (jsPDF/html2canvas only exist client-side).
+        subject = bi(`✅ تم استلام دفعتك — ${jobNumber || ""}`, `Payment received — ${jobNumber || ""}`);
+        html = wrap(bi("تم استلام دفعتك بنجاح", "Your payment was received"), [
+          [bi("العميل", "Customer"), name],
+          [bi("رقم أمر الشغل", "Job Number"), jobNumber],
+          [bi("المبلغ المدفوع", "Amount Paid"), amountQAR != null ? `${amountQAR} ر.ق / QAR` : ""],
+          [bi("طريقة الدفع", "Payment Method"), bi(methodAr || "", methodEn || "")],
+          [bi("التاريخ", "Date"), new Date().toLocaleString("en-GB", { timeZone: "Asia/Qatar" })],
+        ], bi("شكراً لثقتكم بنا — هذا البريد بمثابة إيصال إلكتروني بالدفعة.", "Thank you for your trust — this email serves as your electronic payment receipt."));
       }
     } else if (STAFF_EVENTS.has(event)) {
       const { data: staffList } = await supabase
@@ -148,6 +160,25 @@ serve(async (req) => {
           [bi("التاريخ", "Date"), appointmentDate],
           [bi("الوقت", "Time"), appointmentTime],
         ]);
+      } else if (event === "payment_received") {
+        subject = bi(`💰 دفعة جديدة — ${jobNumber || ""}`, `New payment received — ${jobNumber || ""}`);
+        html = wrap(bi("العميل دفع مبلغ عبر بوابة إلكترونية", "Customer paid via online gateway"), [
+          [bi("العميل", "Customer"), customerName],
+          [bi("رقم أمر الشغل", "Job Number"), jobNumber],
+          [bi("المبلغ", "Amount"), amountQAR != null ? `${amountQAR} ر.ق / QAR` : ""],
+          [bi("طريقة الدفع", "Payment Method"), bi(methodAr || "", methodEn || "")],
+        ]);
+      } else if (event === "payment_method_chosen") {
+        subject = bi(`🧾 العميل اختار طريقة دفع — ${jobNumber || ""}`, `Customer chose a payment method — ${jobNumber || ""}`);
+        const receiptNote = receiptUrl
+          ? `<a href="${receiptUrl}" target="_blank" style="color:#8A1538;font-weight:700">${bi("عرض إيصال التحويل", "View transfer receipt")}</a>`
+          : undefined;
+        html = wrap(bi("العميل اختار طريقة دفع — بانتظار التحصيل", "Customer chose a payment method — awaiting collection"), [
+          [bi("العميل", "Customer"), customerName],
+          [bi("رقم أمر الشغل", "Job Number"), jobNumber],
+          [bi("المبلغ المتوقع", "Amount Expected"), amountQAR != null ? `${amountQAR} ر.ق / QAR` : ""],
+          [bi("طريقة الدفع المختارة", "Method Chosen"), bi(methodAr || "", methodEn || "")],
+        ], receiptNote);
       }
     } else {
       return new Response(JSON.stringify({ error: "unknown event" }), {
