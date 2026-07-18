@@ -3082,6 +3082,27 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                               </div>
                             );
                           })()}
+                          {/* General items (no service group) — always included in the total
+                              below but previously invisible here entirely, so the customer
+                              had no way to see what they were, only that they were being
+                              charged for something. Just a list, no approve/reject — there's
+                              no service group to decide on. */}
+                          {(() => {
+                            const generalItems = (relOrd.order_items || []).filter(i => !(i.service_name?.group_id || i.service_name?.ar || i.service_name?.en));
+                            if (generalItems.length === 0) return null;
+                            const lineTotal = it => Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
+                            return (
+                              <div className="rounded-lg overflow-hidden p-3 space-y-1.5" style={{ background:'rgba(0,0,0,0.08)' }}>
+                                <p className="text-sm font-bold" style={{ color:cc.sub }}>{isRtl?'بنود عامة':'General Items'}</p>
+                                {generalItems.map(it => (
+                                  <div key={it.id} className="flex items-center justify-between text-sm">
+                                    <span style={{ color:cc.txt }}>{it.item_name?.[isRtl?'ar':'en'] || it.item_name?.ar || '—'}{Number(it.quantity||1) > 1 ? ` × ${it.quantity}` : ''}</span>
+                                    <span className="font-bold" dir="ltr" style={{ color:cc.fg }}>{lineTotal(it).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
                           {/* PDF */}
                           <button onClick={() => openQuotationPDF(relOrd, a, profile, jc)}
                             className="flex items-center justify-center gap-2 w-full px-3 py-3 rounded-xl font-black text-base shadow-md hover:shadow-lg active:scale-95 transition-all"
