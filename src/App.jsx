@@ -1659,17 +1659,20 @@ function PaymentMethodModal({ orderId, types, amount, user, customerName, isRtl,
         const { data: urlData } = supabase.storage.from('transfer-receipts').getPublicUrl(path);
         receiptUrl = urlData.publicUrl;
       }
-      // request_payment is an untracked Postgres RPC whose accepted p_type
-      // values are unknown outside 'parts'/'labor' — skipped for 'towing' to
-      // avoid assuming it, staff still finds out via the notification below.
-      for (const type of types.filter(t => t !== 'towing')) {
-        const { error: rpcErr } = await supabase.rpc('request_payment', { p_order_id: orderId, p_type: type });
-        if (rpcErr) { alert('خطأ: ' + rpcErr.message); setSaving(false); return; }
-      }
+      // request_payment doesn't actually exist in the DB — confirmed directly
+      // (PGRST202, "no matches were found in the schema cache") — so every
+      // manual payment request has always failed right here, before ever
+      // reaching the update below. Its only known effect (mirrored from the
+      // now-dead client-side requestPayment() above) was flipping
+      // parts/labor_payment_status to 'pending', which is also what feeds
+      // staff's "pending payment" badge in the admin app — so that's set
+      // directly instead of going through the missing RPC.
       const updatePayload = {};
       types.forEach(type => {
         updatePayload[`${type}_payment_method`] = chosenKey;
         if (receiptUrl) updatePayload[`${type}_payment_receipt_url`] = receiptUrl;
+        if (type === 'parts') updatePayload.parts_payment_status = 'pending';
+        if (type === 'labor') updatePayload.labor_payment_status = 'pending';
       });
       const { error: updErr } = await supabase.from('orders').update(updatePayload).eq('id', orderId);
       if (updErr) { alert('خطأ: ' + updErr.message); setSaving(false); return; }
@@ -2455,13 +2458,6 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     }, 20000);
     return () => clearInterval(id);
   }, [user, isRtl]);
-
-  const requestPayment = async (orderId, type) => {
-    const { error } = await supabase.rpc('request_payment', { p_order_id: orderId, p_type: type });
-    if (error) { alert('خطأ: ' + error.message); return; }
-    const field = type === 'parts' ? 'parts_payment_status' : 'labor_payment_status';
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, [field]: 'pending' } : o));
-  };
 
   const serviceKeysOf = (order) => {
     const seen = new Set();
