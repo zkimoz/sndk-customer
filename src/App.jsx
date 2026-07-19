@@ -2897,7 +2897,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             </p>
                           )}
                           {jc.customer_complaints && (
-                            <p className="text-sm italic mt-1.5" style={{ color:cc.sub }}>{jc.customer_complaints}</p>
+                            <p className="text-base font-bold mt-1.5" style={{ color:cc.txt }}>{jc.customer_complaints}</p>
                           )}
                         </div>
                         {/* Job status + number */}
