@@ -3303,19 +3303,31 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                               </>
                             ) : relOrd.pickup_method === 'team' ? (
                               <p className="text-sm" style={{ color:cc?cc.txt:C.text }}>{isRtl ? '✅ سيتم استلام سيارتك بواسطة أحد أفراد فريقنا.' : '✅ Your car will be picked up by one of our team members.'}</p>
-                            ) : flatbedPrice <= 0 ? (
-                              <p className="text-sm" style={{ color:cc?cc.txt:C.text }}>{isRtl ? 'سيتم التواصل معك من أحد أفراد فريقنا لتحديد الموقع والتكلفة.' : 'One of our team members will contact you to determine the location and cost.'}</p>
-                            ) : towingCoveredByPayments ? (
-                              <p className="text-sm font-bold" style={{ color:'#16a34a' }}>{isRtl ? '✅ تم دفع تكلفة الساطحة.' : '✅ Flatbed fee paid.'}</p>
                             ) : (
-                              <PaymentRow
-                                label={isRtl ? 'تكلفة الساطحة' : 'Flatbed Fee'}
-                                amount={flatbedPrice - towingPaidSoFar}
-                                status="unpaid"
-                                canPay={true}
-                                onPay={() => setPayMethodModal({ orderId: relOrd.id, types: ['towing'], amount: flatbedPrice - towingPaidSoFar })}
-                                tr={tr} isRtl={isRtl} cc={cc}
-                              />
+                              <>
+                                {/* Once staff confirms pickup, this shows regardless of payment —
+                                    an unpaid flatbed fee no longer blocks anything below, it just
+                                    stays here as an outstanding amount like any other. */}
+                                {relOrd.towing_completed && (
+                                  <p className="text-sm font-bold" style={{ color:'#16a34a' }}>{isRtl ? '✅ تم نقل السيارة.' : '✅ Car has been picked up.'}</p>
+                                )}
+                                {flatbedPrice <= 0 ? (
+                                  !relOrd.towing_completed && (
+                                    <p className="text-sm" style={{ color:cc?cc.txt:C.text }}>{isRtl ? 'سيتم التواصل معك من أحد أفراد فريقنا لتحديد الموقع والتكلفة.' : 'One of our team members will contact you to determine the location and cost.'}</p>
+                                  )
+                                ) : towingCoveredByPayments ? (
+                                  <p className="text-sm font-bold" style={{ color:'#16a34a' }}>{isRtl ? '✅ تم دفع تكلفة الساطحة.' : '✅ Flatbed fee paid.'}</p>
+                                ) : (
+                                  <PaymentRow
+                                    label={isRtl ? 'تكلفة الساطحة' : 'Flatbed Fee'}
+                                    amount={flatbedPrice - towingPaidSoFar}
+                                    status="unpaid"
+                                    canPay={true}
+                                    onPay={() => setPayMethodModal({ orderId: relOrd.id, types: ['towing'], amount: flatbedPrice - towingPaidSoFar })}
+                                    tr={tr} isRtl={isRtl} cc={cc}
+                                  />
+                                )}
+                              </>
                             )}
                           </div>
                         );
@@ -3327,8 +3339,12 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                         const laborTotal = selectedQuotationTotal(relOrd, 'labor');
                         // Vehicle pickup (if this job card needs a paid flatbed tow) must be
                         // settled before parts/labor become payable — see the towing block above.
+                        // Once staff confirms the car was actually picked up (towing_completed),
+                        // this stops blocking even if unpaid — the fee just stays outstanding
+                        // like any other balance instead of being a hard prerequisite.
                         const towingPending = relOrd.towing_required && relOrd.pickup_method === 'flatbed' && Number(relOrd.flatbed_price||0) > 0 &&
-                          (relOrd.payments || []).filter(p=>p.purpose==='towing').reduce((s,p)=>s+Number(p.amount||0),0) < Number(relOrd.flatbed_price||0) - 0.001;
+                          (relOrd.payments || []).filter(p=>p.purpose==='towing').reduce((s,p)=>s+Number(p.amount||0),0) < Number(relOrd.flatbed_price||0) - 0.001 &&
+                          !relOrd.towing_completed;
                         // Payments aren't split by type in the DB, but the flow always collects parts first —
                         // so if what's already been paid covers the parts total, parts are settled even if
                         // parts_payment_status wasn't flipped to 'paid' (e.g. a manually recorded payment).
