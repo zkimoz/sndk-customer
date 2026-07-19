@@ -43,6 +43,15 @@ function jsonResponse(body: unknown, status = 200) {
 // pick anything this session (there's no live client selection state to
 // consult server-side).
 function computeAmountDueQAR(order: any, types: string[]): number {
+  const payments: any[] = order.payments || [];
+
+  if (types.includes("towing")) {
+    const towingPaidSoFar = payments
+      .filter((p) => p.purpose === "towing")
+      .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+    return Math.max(Number(order.flatbed_price || 0) - towingPaidSoFar, 0);
+  }
+
   const items: any[] = order.order_items || [];
   const decisions = order.service_decisions || {};
 
@@ -59,7 +68,11 @@ function computeAmountDueQAR(order: any, types: string[]): number {
 
   const partsTotal = totalFor("part");
   const laborTotal = totalFor("labor");
-  const paidSoFar = (order.payments || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+  // Towing payments are tracked separately (purpose:'towing') and must never
+  // be mistaken for parts/labor progress in this waterfall.
+  const paidSoFar = payments
+    .filter((p) => p.purpose !== "towing")
+    .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
 
   const partsRemaining = Math.max(partsTotal - paidSoFar, 0);
   const paidTowardLabor = Math.max(paidSoFar - partsTotal, 0);
@@ -96,7 +109,7 @@ async function loadOwnedOrder(userClient: any, orderId: string) {
 
   const { data: order } = await adminClient
     .from("orders")
-    .select("id, appointment_id, service_decisions, order_items(item_type, sell_price, quantity, discount_pct, service_name), payments(amount)")
+    .select("id, appointment_id, service_decisions, flatbed_price, pickup_method, order_items(item_type, sell_price, quantity, discount_pct, service_name), payments(amount, purpose)")
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return { error: jsonResponse({ error: "Order not found" }, 404) };
@@ -115,13 +128,15 @@ async function loadOwnedOrder(userClient: any, orderId: string) {
 
 // Best-effort — a notification failure must never fail the payment response
 // itself (the money has already moved by the time this is called).
-function notifyPaymentReceived(profileId: string, jobNumber: string | undefined, amountQAR: number) {
+function notifyPaymentReceived(profileId: string, jobNumber: string | undefined, amountQAR: number, isTowing: boolean) {
+  const methodAr = isTowing ? "رسوم الساطحة (باي بال)" : "باي بال";
+  const methodEn = isTowing ? "Flatbed Fee (PayPal)" : "PayPal";
   adminClient.functions.invoke("clever-endpoint", {
-    body: { event: "payment_receipt", customerId: profileId, jobNumber, amountQAR, methodAr: "باي بال", methodEn: "PayPal" },
+    body: { event: "payment_receipt", customerId: profileId, jobNumber, amountQAR, methodAr, methodEn },
   }).catch(() => {});
   adminClient.from("profiles").select("full_name").eq("id", profileId).maybeSingle().then(({ data }) => {
     adminClient.functions.invoke("clever-endpoint", {
-      body: { event: "payment_received", jobNumber, customerName: data?.full_name, amountQAR, methodAr: "باي بال", methodEn: "PayPal" },
+      body: { event: "payment_received", jobNumber, customerName: data?.full_name, amountQAR, methodAr, methodEn },
     }).catch(() => {});
   });
 }
@@ -200,16 +215,18 @@ serve(async (req) => {
       }
       const capturedUSD = Number(capture.amount?.value || 0);
       const amountQAR = Math.round(capturedUSD * QAR_PER_USD * 1000) / 1000;
+      const isTowing = types.includes("towing");
 
       const { error: insErr } = await adminClient.from("payments").insert({
         order_id: orderId,
         amount: amountQAR,
         method: "paypal",
         recorded_by: null,
+        purpose: isTowing ? "towing" : "service",
       });
       if (insErr) return jsonResponse({ error: `Payment captured but failed to record: ${insErr.message}` }, 500);
 
-      notifyPaymentReceived(profileId!, jobNumber, amountQAR);
+      notifyPaymentReceived(profileId!, jobNumber, amountQAR, isTowing);
       return jsonResponse({ success: true, amountQAR });
     }
 

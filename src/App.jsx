@@ -1656,7 +1656,10 @@ function PaymentMethodModal({ orderId, types, amount, user, customerName, isRtl,
         const { data: urlData } = supabase.storage.from('transfer-receipts').getPublicUrl(path);
         receiptUrl = urlData.publicUrl;
       }
-      for (const type of types) {
+      // request_payment is an untracked Postgres RPC whose accepted p_type
+      // values are unknown outside 'parts'/'labor' — skipped for 'towing' to
+      // avoid assuming it, staff still finds out via the notification below.
+      for (const type of types.filter(t => t !== 'towing')) {
         const { error: rpcErr } = await supabase.rpc('request_payment', { p_order_id: orderId, p_type: type });
         if (rpcErr) { alert('خطأ: ' + rpcErr.message); setSaving(false); return; }
       }
@@ -2295,6 +2298,12 @@ function printCustomerInvoice(jobCard, appt, order, profile, brandsData = [], ca
       <div class="f-ar">هذه فاتورة ضريبية رسمية صادرة عن سندك — قطر</div>
       <div class="f-en">This is an official tax invoice issued by SNDK — Qatar</div>
       <div style="margin-top:6px;font-size:10px;color:#cbd5e1">شكراً لثقتكم بنا · Thank you for your trust</div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;line-height:1.8">
+        <div style="font-weight:700;color:#64748b">سندك للتجارة الإلكترونية · SNDK E-Commerce Trading</div>
+        <div>منطقة ٩١، شارع ١٢٠٠، مبنى ١٢٠، الوكير، قطر · Zone 91, Street 1200, Building 120, Al Wukair, Qatar</div>
+        <div dir="ltr">📞 66284656 &nbsp;·&nbsp; ✉️ info@sndkqa.com</div>
+        <div style="margin-top:2px">س.ت: 244788 &nbsp;·&nbsp; رقم قيد المنشأة: 17-3166-21</div>
+      </div>
     </div>
   </div>
   <script>window.onload=()=>window.print();</script>
@@ -2499,6 +2508,25 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     const undecided = undecidedServiceKeys(orderId);
     if (undecided.length === 0) return true;
     return undecided.every(k => getServiceDecision(orderId, k) !== undefined);
+  };
+
+  const [choosingPickup, setChoosingPickup] = useState(null); // orderId currently saving
+  // 'team' is free and final the moment it's picked; 'flatbed' just records
+  // intent — staff still has to set flatbed_price before there's anything
+  // to pay. Written straight onto the order, same defense-in-depth ownership
+  // check every other direct customer write in this view already does.
+  const choosePickupMethod = async (order, method) => {
+    setChoosingPickup(order.id);
+    const { data: apptCheck } = await supabase.from('appointments').select('id').eq('id', order.appointment_id).eq('profile_id', user.id).maybeSingle();
+    if (!apptCheck) {
+      alert(isRtl ? 'حدث خطأ — لا يمكن التحقق من ملكية هذا الطلب' : 'Something went wrong — could not verify ownership of this order');
+      setChoosingPickup(null);
+      return;
+    }
+    const { error } = await supabase.from('orders').update({ pickup_method: method }).eq('id', order.id);
+    setChoosingPickup(null);
+    if (error) { alert((isRtl?'خطأ: ':'Error: ') + error.message); return; }
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, pickup_method: method } : o));
   };
 
   const approveWithSignature = async (sigData, sigName, wantsOldParts) => {
@@ -3246,14 +3274,63 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                         </div>
                       ) : null}
 
+                      {/* ── نقل السيارة بالساطحة — يجب حسمها ودفعها (لو مطلوب دفع) قبل أي شيء تاني ── */}
+                      {relOrd && relOrd.towing_required && (() => {
+                        const towingPaidSoFar = (relOrd.payments || []).filter(p=>p.purpose==='towing').reduce((s,p)=>s+Number(p.amount||0),0);
+                        const flatbedPrice = Number(relOrd.flatbed_price || 0);
+                        const towingCoveredByPayments = flatbedPrice > 0 && towingPaidSoFar >= flatbedPrice - 0.001;
+                        return (
+                          <div className="px-4 py-3 space-y-2" style={{ borderTop:`1px solid ${C.border}`, background: cc ? `${cc.fg}0d` : undefined }}>
+                            <p className="text-sm font-black" style={{ color: cc?cc.fg:C.gold }}>{isRtl ? '🚛 نقل السيارة' : '🚛 Vehicle Pickup'}</p>
+                            {!relOrd.pickup_method ? (
+                              <>
+                                <p className="text-sm" style={{ color:cc?cc.txt:C.text }}>{isRtl ? 'كيف تحب استلام سيارتك؟' : 'How would you like your car picked up?'}</p>
+                                <div className="flex gap-2">
+                                  <button disabled={choosingPickup===relOrd.id} onClick={()=>choosePickupMethod(relOrd,'team')}
+                                    className="flex-1 py-2.5 rounded-xl text-sm font-black transition-all active:scale-95 disabled:opacity-50"
+                                    style={{ background: cc?cc.fg:C.gold, color: cc?cc.bg:C.btnTxt }}>
+                                    {isRtl ? 'أحد أفراد فريقنا (مجانًا)' : 'Our Team (Free)'}
+                                  </button>
+                                  <button disabled={choosingPickup===relOrd.id} onClick={()=>choosePickupMethod(relOrd,'flatbed')}
+                                    className="flex-1 py-2.5 rounded-xl text-sm font-black border transition-all active:scale-95 disabled:opacity-50"
+                                    style={{ borderColor: cc?cc.fg:C.gold, color: cc?cc.txt:C.text }}>
+                                    {isRtl ? 'ساطحة' : 'Flatbed Tow'}
+                                  </button>
+                                </div>
+                              </>
+                            ) : relOrd.pickup_method === 'team' ? (
+                              <p className="text-sm" style={{ color:cc?cc.txt:C.text }}>{isRtl ? '✅ سيتم استلام سيارتك بواسطة أحد أفراد فريقنا.' : '✅ Your car will be picked up by one of our team members.'}</p>
+                            ) : flatbedPrice <= 0 ? (
+                              <p className="text-sm" style={{ color:cc?cc.txt:C.text }}>{isRtl ? 'سيتم التواصل معك من أحد أفراد فريقنا لتحديد الموقع والتكلفة.' : 'One of our team members will contact you to determine the location and cost.'}</p>
+                            ) : towingCoveredByPayments ? (
+                              <p className="text-sm font-bold" style={{ color:'#16a34a' }}>{isRtl ? '✅ تم دفع تكلفة الساطحة.' : '✅ Flatbed fee paid.'}</p>
+                            ) : (
+                              <PaymentRow
+                                label={isRtl ? 'تكلفة الساطحة' : 'Flatbed Fee'}
+                                amount={flatbedPrice - towingPaidSoFar}
+                                status="unpaid"
+                                canPay={true}
+                                onPay={() => setPayMethodModal({ orderId: relOrd.id, types: ['towing'], amount: flatbedPrice - towingPaidSoFar })}
+                                tr={tr} isRtl={isRtl} cc={cc}
+                              />
+                            )}
+                          </div>
+                        );
+                      })()}
+
                       {/* ── الدفع (قطع أولاً ثم شغل اليد) — يعكس الخدمات المختارة/الموافق عليها فقط ── */}
                       {relOrd && (() => {
                         const partsTotal = selectedQuotationTotal(relOrd, 'part');
                         const laborTotal = selectedQuotationTotal(relOrd, 'labor');
+                        // Vehicle pickup (if this job card needs a paid flatbed tow) must be
+                        // settled before parts/labor become payable — see the towing block above.
+                        const towingPending = relOrd.towing_required && relOrd.pickup_method === 'flatbed' && Number(relOrd.flatbed_price||0) > 0 &&
+                          (relOrd.payments || []).filter(p=>p.purpose==='towing').reduce((s,p)=>s+Number(p.amount||0),0) < Number(relOrd.flatbed_price||0) - 0.001;
                         // Payments aren't split by type in the DB, but the flow always collects parts first —
                         // so if what's already been paid covers the parts total, parts are settled even if
                         // parts_payment_status wasn't flipped to 'paid' (e.g. a manually recorded payment).
-                        const paidSoFar = (relOrd.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
+                        // Towing payments are excluded — they're a separate bucket, never counted toward parts/labor.
+                        const paidSoFar = (relOrd.payments || []).filter(p=>p.purpose!=='towing').reduce((s,p)=>s+Number(p.amount||0),0);
                         const partsCoveredByPayments = paidSoFar >= partsTotal - 0.001;
                         const partsRemaining = Math.max(partsTotal - paidSoFar, 0);
                         const partsIsPartial = paidSoFar > 0.001 && !partsCoveredByPayments;
@@ -3294,7 +3371,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                               label={(isRtl ? 'قطع الغيار' : 'Parts') + (partsIsPartial ? (isRtl ? ' (المتبقي)' : ' (Remaining)') : '')}
                               amount={partsDisplayAmount}
                               status={partsEffectiveStatus}
-                              canPay={relOrd.customer_approved && relOrd.status !== 'draft' && !partsCoveredByPayments}
+                              canPay={relOrd.customer_approved && relOrd.status !== 'draft' && !partsCoveredByPayments && !towingPending}
                               onPay={() => setPayMethodModal({ orderId: relOrd.id, types: ['parts'], amount: partsDisplayAmount })}
                               tr={tr} isRtl={isRtl} cc={cc}
                             />
@@ -3304,13 +3381,13 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                               label={(isRtl ? 'شغل اليد' : 'Labor') + (laborIsPartial ? (isRtl ? ' (المتبقي)' : ' (Remaining)') : '')}
                               amount={laborDisplayAmount}
                               status={laborEffectiveStatus}
-                              canPay={['ready','delivered','completed'].includes(relOrd.status) && partsSettled && !laborCoveredByPayments}
-                              disabledHint={isRtl ? 'متاح بعد انتهاء الإصلاح ودفع القطع' : 'Available after repair & parts paid'}
+                              canPay={['ready','delivered','completed'].includes(relOrd.status) && partsSettled && !laborCoveredByPayments && !towingPending}
+                              disabledHint={towingPending ? (isRtl ? 'ادفعي تكلفة الساطحة أولاً' : 'Pay the flatbed fee first') : (isRtl ? 'متاح بعد انتهاء الإصلاح ودفع القطع' : 'Available after repair & parts paid')}
                               onPay={() => setPayMethodModal({ orderId: relOrd.id, types: ['labor'], amount: laborDisplayAmount })}
                               tr={tr} isRtl={isRtl} cc={cc}
                             />
                           )}
-                          {allServicesDone && outstandingTypes.length > 0 && (
+                          {allServicesDone && outstandingTypes.length > 0 && !towingPending && (
                             <div className="px-4 py-3" style={{ borderTop:`1px solid ${cc?cc.div:C.border}` }}>
                               <button onClick={() => setPayMethodModal({ orderId: relOrd.id, types: outstandingTypes, amount: (outstandingTypes.includes('parts')?partsDisplayAmount:0) + (outstandingTypes.includes('labor')?laborDisplayAmount:0) })}
                                 className="w-full py-2.5 rounded-xl text-sm font-black transition-all active:scale-95 hover:brightness-110"
