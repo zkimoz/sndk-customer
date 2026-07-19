@@ -1788,7 +1788,8 @@ function openQuotationPDF(order, linked, profile, jobCard) {
   const laborItems = approvedItems.filter(i => i.item_type === 'labor');
   const totalParts = partItems.reduce((s,i)=>s+lineTotal(i),0);
   const totalLabor = laborItems.reduce((s,i)=>s+lineTotal(i),0);
-  const grandTotal = totalParts + totalLabor;
+  const towingAmount = (order.towing_required && order.pickup_method === 'flatbed') ? Number(order.flatbed_price || 0) : 0;
+  const grandTotal = totalParts + totalLabor + towingAmount;
   const totalPaid = (order.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
   const remainingDue = grandTotal - totalPaid;
   const rejectedNames = [];
@@ -1912,9 +1913,10 @@ ${jobCard?.work_done ? `
   <div class="textarea-field">${escapeHtml(jobCard.work_done)}</div>
 </div>` : ''}
 
-${(partItems.length > 0 || laborItems.length > 0) ? `
+${(partItems.length > 0 || laborItems.length > 0 || towingAmount > 0) ? `
 <div class="section">
   <div class="section-title">${decided ? 'عرض السعر المعتمد / Approved Quotation' : 'عرض السعر / Quotation'}</div>
+  ${(partItems.length > 0 || laborItems.length > 0) ? `
   <table>
     <thead><tr>
       <th style="width:30px">#</th>
@@ -1942,10 +1944,11 @@ ${(partItems.length > 0 || laborItems.length > 0) ? `
         </tr>`;
       }).join('')}
     </tbody>
-  </table>
+  </table>` : ''}
   <div class="totals">
     ${totalParts > 0 ? `<div class="totals-row"><span>قطع الغيار / Parts</span><span dir="ltr">${totalParts.toFixed(3)} ر.ق</span></div>` : ''}
     ${totalLabor > 0 ? `<div class="totals-row"><span>مصنعيات / Labor</span><span dir="ltr">${totalLabor.toFixed(3)} ر.ق</span></div>` : ''}
+    ${towingAmount > 0 ? `<div class="totals-row"><span>🚛 نقل السيارة بالساطحة / Flatbed Pickup</span><span dir="ltr">${towingAmount.toFixed(3)} ر.ق</span></div>` : ''}
     <div class="totals-row totals-grand"><span>الإجمالي / Total</span><span dir="ltr">${grandTotal.toFixed(3)} QAR</span></div>
   </div>
 </div>` : ''}
@@ -2070,7 +2073,8 @@ function printCustomerInvoice(jobCard, appt, order, profile, brandsData = [], ca
   const dateEn = closedDate.toLocaleDateString('en-QA', { year:'numeric', month:'long', day:'numeric' });
   const totalParts  = Number(order?.total_parts_price||0);
   const totalLabor  = Number(order?.total_labor_price||0);
-  const grandTotal  = totalParts + totalLabor;
+  const towingAmount = (order?.towing_required && order?.pickup_method === 'flatbed') ? Number(order?.flatbed_price || 0) : 0;
+  const grandTotal  = totalParts + totalLabor + towingAmount;
 
   const invLineTotal = item => {
     const unitPrice = Number(item.sell_price||0);
@@ -2276,6 +2280,10 @@ function printCustomerInvoice(jobCard, appt, order, profile, brandsData = [], ca
         <div class="tot-lbl"><div class="ar">إجمالي أجور العمالة</div><div class="en">Labor Subtotal</div></div>
         <div class="tot-amt">${totalLabor.toFixed(3)} QAR</div>
       </div>`:''}
+      ${towingAmount>0?`<div class="tot-row">
+        <div class="tot-lbl"><div class="ar">🚛 نقل السيارة بالساطحة</div><div class="en">Flatbed Vehicle Pickup</div></div>
+        <div class="tot-amt">${towingAmount.toFixed(3)} QAR</div>
+      </div>`:''}
       <div class="grand-row">
         <div class="grand-lbl">
           <div class="ar">الإجمالي الكلي</div>
@@ -2471,7 +2479,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   // checkbox for them to opt out with. Pass itemType ('part'|'labor') to
   // narrow it to just that column's payment row.
   const selectedQuotationTotal = (order, itemType = null) => {
-    return (order?.order_items || [])
+    const itemsTotal = (order?.order_items || [])
       .filter(it => !itemType || it.item_type === itemType)
       .reduce((sum, it) => {
         const lt = Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
@@ -2484,6 +2492,12 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
         const included = locked ? order.service_decisions[key] === 'approved' : isServiceSelected(order.id, key);
         return included ? sum + lt : sum;
       }, 0);
+    // The flatbed fee (if any) folds into the overall total — but only the
+    // grand total, never the per-type ('part'/'labor') breakdown it's asked
+    // for elsewhere, since towing is neither.
+    if (itemType) return itemsTotal;
+    const towingAmount = (order?.towing_required && order?.pickup_method === 'flatbed') ? Number(order?.flatbed_price || 0) : 0;
+    return itemsTotal + towingAmount;
   };
 
   // Each service needs an explicit 'approved' or 'rejected' decision — no
@@ -3134,6 +3148,18 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                               </div>
                             );
                           })()}
+                          {/* Flatbed fee — shown here too (not just in its own block above) so
+                              it's visible as a line item within the same breakdown the customer
+                              reviews right before approving/signing, since it now counts toward
+                              the total below. */}
+                          {relOrd.towing_required && relOrd.pickup_method === 'flatbed' && Number(relOrd.flatbed_price||0) > 0 && (
+                            <div className="rounded-lg overflow-hidden p-3" style={{ background:'rgba(0,0,0,0.08)' }}>
+                              <div className="flex items-center justify-between text-sm">
+                                <span style={{ color:cc.txt }}>{isRtl?'🚛 نقل السيارة بالساطحة':'🚛 Flatbed Vehicle Pickup'}</span>
+                                <span className="font-bold" dir="ltr" style={{ color:cc.fg }}>{Number(relOrd.flatbed_price).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                              </div>
+                            </div>
+                          )}
                           {/* PDF */}
                           <button onClick={() => openQuotationPDF(relOrd, a, profile, jc)}
                             className="flex items-center justify-center gap-2 w-full px-3 py-3 rounded-xl font-black text-base shadow-md hover:shadow-lg active:scale-95 transition-all"
@@ -3914,7 +3940,8 @@ function HistoryOrderDetail({ jobCard, order, car, appt, profile, isRtl, tr, ope
   const rejectedItems = decided ? items.filter(it => { const k = groupKeyOf(it); return k && decisions[k] === 'rejected'; }) : [];
   const totalParts = approvedItems.filter(i=>i.item_type==='part').reduce((s,i)=>s+lineTotal(i),0);
   const totalLabor = approvedItems.filter(i=>i.item_type==='labor').reduce((s,i)=>s+lineTotal(i),0);
-  const grandTotal = totalParts + totalLabor;
+  const towingAmount = (order?.towing_required && order?.pickup_method === 'flatbed') ? Number(order?.flatbed_price || 0) : 0;
+  const grandTotal = totalParts + totalLabor + towingAmount;
   const totalPaid = (order?.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
   const remaining = grandTotal - totalPaid;
   const rejectedNames = [...new Set(rejectedItems.map(groupKeyOf).filter(Boolean))];
@@ -3940,6 +3967,12 @@ function HistoryOrderDetail({ jobCard, order, car, appt, profile, isRtl, tr, ope
             <div className="flex items-center justify-between text-xs">
               <span style={{ color:C.muted }}>{isRtl?'شغل اليد':'Labor'}</span>
               <span className="font-bold" style={{ color:C.text }}>{totalLabor.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+            </div>
+          )}
+          {towingAmount > 0 && (
+            <div className="flex items-center justify-between text-xs">
+              <span style={{ color:C.muted }}>{isRtl?'🚛 نقل السيارة بالساطحة':'Flatbed Pickup'}</span>
+              <span className="font-bold" style={{ color:C.text }}>{towingAmount.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
             </div>
           )}
           <div className="flex items-center justify-between text-sm pt-1.5 mt-1" style={{ borderTop:`1px dashed ${C.border}` }}>
