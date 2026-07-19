@@ -568,9 +568,12 @@ const BOOKING_YEAR_OPTIONS = (() => {
 })();
 
 // Registration-image storage keys are named after the car's plate number so
-// staff and the customer both land on the exact same file — strip anything
-// that isn't safe in a storage path (spaces, slashes, etc).
-const sanitizeForPath = s => (s || '').trim().replace(/[/\\?#]+/g, '-').replace(/\s+/g, '_');
+// staff and the customer both land on the exact same file. Whitelists rather
+// than blacklists unsafe characters — plate numbers are typed on Arabic
+// keyboards, which routinely insert invisible bidi marks (RLM/ALM) around
+// digits; those pass right through a blacklist but make Supabase Storage
+// reject the key outright with an opaque "Invalid key" error.
+const sanitizeForPath = s => (s || '').trim().replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '');
 
 // Print windows are built as raw HTML strings and rendered via document.write()
 // — any free text the customer typed themselves (their name, a typed
