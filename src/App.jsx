@@ -2392,9 +2392,9 @@ function ContactView({ isRtl }) {
 
   return (
     <div className="max-w-lg mx-auto p-4 md:p-6 space-y-5">
-      <h1 className="text-2xl font-black" style={{ color:C.text }}>{isRtl ? 'تواصل معنا وتعرف علينا' : 'Contact & About Us'}</h1>
+      <h1 className="text-2xl font-black text-center" style={{ color:C.text }}>{isRtl ? 'تواصل معنا وتعرف علينا' : 'Contact & About Us'}</h1>
 
-      {introText && <p className="text-lg font-bold leading-relaxed" style={{ color:C.text }}>{introText}</p>}
+      {introText && <p className="text-lg font-bold leading-relaxed text-center" style={{ color:C.text }}>{introText}</p>}
 
       {info?.image_urls?.length > 0 && (
         <div className="space-y-3">
