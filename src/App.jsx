@@ -906,6 +906,7 @@ export default function App() {
 
   const goHome     = () => { setPage('home'); setStep(1); resetForm(); setMenuOpen(false); };
   const goServices = () => { setPage('services'); setExpandedService(null); setMenuOpen(false); };
+  const goContact  = () => { setPage('contact'); setMenuOpen(false); };
   const goProfile  = () => {
     if (!user) { setAuthModal('signin'); return; }
     setPage('profile'); setMenuOpen(false);
@@ -944,7 +945,7 @@ export default function App() {
               { icon:Sparkles,      label:tr.navServices,active:page==='services', action:goServices },
               { icon:ClipboardList, label:tr.navOrders,  active:page==='orders',   action:goOrders },
               { icon:User,          label:tr.navProfile,  active:page==='profile',  action:goProfile },
-              { icon:Phone,         label:tr.navContact,  active:false,             action:()=>{} },
+              { icon:Phone,         label:tr.navContact,  active:page==='contact', action:goContact },
             ].map((item,i) => (
               <button key={i} onClick={item.action}
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all"
@@ -1106,6 +1107,7 @@ export default function App() {
             {page==='services'&& <ServicesView lang={lang} tr={tr} isRtl={isRtl} user={user} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} theme={theme}/>}
             {page==='profile' && user && <ProfileView lang={lang} tr={tr} isRtl={isRtl} profile={profile} user={user} onBook={(car)=>bookFromProfile(car)} goServices={goServices} goOrders={goOrders} onProfileUpdated={()=>fetchProfile(user.id)} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories}/>}
             {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount} theme={theme}/>}
+            {page==='contact' && <ContactView isRtl={isRtl}/>}
             {page==='booking' && step===2 && <DetailsStep {...shared} prevStep={()=>setPage('home')}/>}
             {page==='booking' && step===3 && <ScheduleStep {...shared} prevStep={()=>setStep(2)}/>}
             {page==='booking' && step===4 && <ReviewStep   {...shared} prevStep={()=>setStep(formData.isQuoteOnly ? 2 : 3)} loading={loading} setLoading={setLoading}/>}
@@ -1242,7 +1244,7 @@ export default function App() {
                 { icon:Sparkles,      label:tr.navServices, action:goServices },
                 { icon:ClipboardList, label:tr.navOrders,  action:goOrders },
                 { icon:User,          label:tr.navProfile,  action:goProfile },
-                { icon:Phone,         label:tr.navContact,  action:()=>setMenuOpen(false) },
+                { icon:Phone,         label:tr.navContact,  action:goContact },
               ].map((item,i)=>(
                 <button key={i} onClick={item.action} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all" style={{ color:C.muted }}>
                   <item.icon size={17}/>{item.label}
@@ -2337,6 +2339,88 @@ const requestNotifPerm = async () => {
     await Notification.requestPermission();
   }
 };
+
+// Brand glyphs lucide-react doesn't ship (it's a generic icon set, not
+// brand marks) — small inline SVGs matching the surrounding icon size.
+const WhatsAppIcon = ({ size = 18, color = '#25D366' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+    <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.39 1.26 4.81L2 22l5.42-1.42a9.87 9.87 0 0 0 4.62 1.18h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.5 2 12.04 2zm5.71 14.02c-.25.7-1.25 1.29-1.98 1.44-.5.1-1.16.19-3.38-.72-2.84-1.17-4.67-4.06-4.81-4.25-.14-.19-1.15-1.53-1.15-2.92 0-1.39.73-2.07.99-2.35.25-.28.55-.35.74-.35.19 0 .37.001.53.01.17.01.4-.06.62.48.25.6.85 2.08.92 2.24.07.15.12.33.02.53-.1.19-.15.3-.3.47-.15.17-.31.38-.44.51-.15.15-.3.31-.13.6.17.3.76 1.25 1.63 2.02 1.12 1 2.06 1.31 2.36 1.46.3.15.48.13.65-.08.18-.2.75-.87.95-1.17.2-.3.4-.25.67-.15.28.1 1.76.83 2.06.98.3.15.5.22.57.35.08.13.08.72-.17 1.42z"/>
+  </svg>
+);
+const FacebookIcon = ({ size = 18, color = '#1877F2' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+    <path d="M22 12a10 10 0 1 0-11.5 9.87v-6.98H7.9V12h2.6V9.8c0-2.6 1.55-4.03 3.92-4.03 1.13 0 2.32.2 2.32.2v2.55h-1.3c-1.29 0-1.69.8-1.69 1.62V12h2.88l-.46 2.89h-2.42v6.98A10 10 0 0 0 22 12z"/>
+  </svg>
+);
+const InstagramIcon = ({ size = 18, color = '#C13584' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
+    <rect x="3" y="3" width="18" height="18" rx="5" ry="5"/>
+    <circle cx="12" cy="12" r="4"/>
+    <circle cx="17.5" cy="6.5" r="0.8" fill={color} stroke="none"/>
+  </svg>
+);
+const SnapchatIcon = ({ size = 18, color = '#111111' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+    <path d="M12 2c-3.5 0-5.5 2.7-5.5 6 0 .9.1 1.7.2 2.4-.5.3-1.1.5-1.7.5-.4 0-.7.3-.7.7 0 .9.9 1.4 1.7 1.7-.1.4-.3.7-.5 1-.2.3 0 .7.4.8.6.1 1.1.2 1.5.5.3.8.9 1.9 2.3 2.4.3.6 1 .9 2.3.9s2-.3 2.3-.9c1.4-.5 2-1.6 2.3-2.4.4-.3.9-.4 1.5-.5.4-.1.6-.5.4-.8-.2-.3-.4-.6-.5-1 .8-.3 1.7-.8 1.7-1.7 0-.4-.3-.7-.7-.7-.6 0-1.2-.2-1.7-.5.1-.7.2-1.5.2-2.4C17.5 4.7 15.5 2 12 2z"/>
+  </svg>
+);
+
+// Public read (no login required) — matches how the "تواصل" nav item is
+// reachable without an account, same as browsing services.
+function ContactView({ isRtl }) {
+  const [info, setInfo] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.from('contact_info').select('*').eq('id', 1).maybeSingle()
+      .then(({ data }) => { setInfo(data); setLoading(false); });
+  }, []);
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-20"><Loader2 size={22} className="animate-spin" style={{ color:C.gold }}/></div>;
+  }
+
+  const introText = isRtl ? info?.intro_text_ar : (info?.intro_text_en || info?.intro_text_ar);
+  const rows = [
+    info?.phone_number && { icon:<Phone size={18} style={{ color:C.gold }}/>, label:info.phone_number, href:`tel:${info.phone_number}` },
+    info?.whatsapp_number && { icon:<WhatsAppIcon size={18}/>, label:isRtl?'واتساب':'WhatsApp', href:`https://wa.me/${info.whatsapp_number.replace(/\D/g,'')}` },
+    info?.email && { icon:<Mail size={18} style={{ color:C.gold }}/>, label:info.email, href:`mailto:${info.email}` },
+    info?.facebook_url && { icon:<FacebookIcon size={18}/>, label:'Facebook', href:info.facebook_url },
+    info?.instagram_url && { icon:<InstagramIcon size={18}/>, label:'Instagram', href:info.instagram_url },
+    info?.snapchat_url && { icon:<SnapchatIcon size={18}/>, label:'Snapchat', href:info.snapchat_url },
+  ].filter(Boolean);
+
+  return (
+    <div className="max-w-lg mx-auto p-4 md:p-6 space-y-5">
+      <h1 className="text-xl font-black" style={{ color:C.text }}>{isRtl ? 'تواصل معنا' : 'Contact Us'}</h1>
+
+      {introText && <p className="text-sm leading-relaxed" style={{ color:C.muted }}>{introText}</p>}
+
+      {info?.image_urls?.length > 0 && (
+        <div className="flex gap-3 overflow-x-auto pb-1">
+          {info.image_urls.map(url => (
+            <img key={url} src={url} alt="" className="w-32 h-32 rounded-xl object-cover flex-shrink-0" style={{ border:`1px solid ${C.border}` }}/>
+          ))}
+        </div>
+      )}
+
+      {rows.length > 0 ? (
+        <div className="rounded-2xl overflow-hidden" style={{ border:`1px solid ${C.border}` }}>
+          {rows.map((r, i) => (
+            <a key={i} href={r.href} target={r.href.startsWith('http') ? '_blank' : undefined} rel="noreferrer"
+              className="flex items-center gap-3 px-4 py-3.5 transition-all hover:brightness-110"
+              style={{ background:C.panel, borderTop: i>0 ? `1px solid ${C.border}` : 'none' }}>
+              <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ background:`${C.gold}15` }}>{r.icon}</div>
+              <span className="text-sm font-semibold" style={{ color:C.text }} dir="ltr">{r.label}</span>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-center py-10" style={{ color:C.muted }}>{isRtl ? 'بيانات التواصل غير متاحة حالياً' : 'Contact info not available yet'}</p>
+      )}
+    </div>
+  );
+}
 
 function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) {
   const [tab, setTab]           = useState('appts');
