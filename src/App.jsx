@@ -2399,7 +2399,7 @@ function ContactView({ isRtl }) {
       {info?.image_urls?.length > 0 && (
         <div className="space-y-3">
           {info.image_urls.map(url => (
-            <img key={url} src={url} alt="" className="w-full rounded-2xl object-cover" style={{ border:`1px solid ${C.border}`, maxHeight:320 }}/>
+            <img key={url} src={url} alt="" className="w-full rounded-2xl object-cover" style={{ border:`1px solid ${C.border}`, maxHeight:520 }}/>
           ))}
         </div>
       )}
