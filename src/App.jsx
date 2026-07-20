@@ -4124,16 +4124,26 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
   const saveProfile = async () => {
     if (!editForm.full_name?.trim() || editForm.phone_number?.length !== 8) return;
     setSavingProfile(true);
-    const { error } = await supabase.from('profiles').update({
+    const updatePayload = {
       full_name: editForm.full_name.trim(),
-      phone_number: editForm.phone_number,
       zone_number: editForm.zone_number?.trim() || null,
       street_number: editForm.street_number?.trim() || null,
       building_number: editForm.building_number?.trim() || null,
-    }).eq('id', user.id);
+    };
+    // Only touch phone_number if it actually changed — it's unique across all
+    // profiles, so leaving it out when unedited avoids ever tripping over a
+    // pre-existing duplicate elsewhere in the table for a field the customer
+    // wasn't even trying to change (e.g. just updating their address).
+    if (editForm.phone_number !== profile?.phone_number) {
+      updatePayload.phone_number = editForm.phone_number;
+    }
+    const { error } = await supabase.from('profiles').update(updatePayload).eq('id', user.id);
     setSavingProfile(false);
     if (error) {
-      alert((isRtl ? 'خطأ في الحفظ: ' : 'Error saving: ') + error.message);
+      const msg = error.message?.includes('profiles_phone_number_key')
+        ? (isRtl ? 'رقم الجوال ده مسجل بالفعل على حساب آخر' : 'This phone number is already registered to another account')
+        : (isRtl ? 'خطأ في الحفظ: ' : 'Error saving: ') + error.message;
+      alert(msg);
       return;
     }
     await onProfileUpdated?.();
