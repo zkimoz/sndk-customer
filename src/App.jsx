@@ -2741,6 +2741,22 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [confirmedType, setConfirmedType] = useState(null);
+  // Grid column count for the staggered category/part cards — 2 on phones
+  // keeps each card readable; 3 (the size Karim asked for) only fits from
+  // small-tablet width up. The per-item offset math below needs the live
+  // count, not just the CSS class, to keep the zigzag stagger aligned.
+  const [gridCols, setGridCols] = useState(() => (typeof window !== 'undefined' && window.innerWidth < 640 ? 2 : 3));
+  useEffect(() => {
+    const onResize = () => setGridCols(window.innerWidth < 640 ? 2 : 3);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const OFFSET_PATTERN = gridCols === 2 ? [0, 34] : [0, 34, 17];
+  const gridItemStyle = (i) => {
+    const colOffset = OFFSET_PATTERN[i % gridCols];
+    const row = Math.floor(i / gridCols);
+    return { marginTop: row === 0 ? colOffset : colOffset - 32, zIndex: i + 1 };
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -2806,17 +2822,13 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
           ) : categories.length === 0 ? (
             <p className="text-sm text-center py-10" style={{ color:C.muted }}>{isRtl ? 'لا توجد تصنيفات بعد' : 'No categories yet'}</p>
           ) : (
-            <div className="grid grid-cols-3 gap-x-3 gap-y-0">
-              {categories.map((cat, i) => {
-                const colOffset = [0, 34, 17][i % 3];
-                const row = Math.floor(i / 3);
-                return (
+            <div className={`grid gap-x-3 gap-y-0 ${gridCols === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+              {categories.map((cat, i) => (
                 <button key={cat.id} onClick={()=>openCategory(cat)}
                   className="relative rounded-2xl text-start transition-all duration-300 active:scale-[0.97]"
                   style={{
                     background:C.panel, boxShadow:'0 20px 40px -14px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.12)', border:`1px solid ${C.border}`,
-                    marginTop: row === 0 ? colOffset : colOffset - 32,
-                    zIndex: i + 1,
+                    ...gridItemStyle(i),
                   }}>
                   <div className="relative h-40 md:h-56 flex items-center justify-center p-6 overflow-hidden">
                     <div className="absolute w-28 h-28 md:w-36 md:h-36 rounded-full pointer-events-none"
@@ -2828,8 +2840,7 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
                   </div>
                   <p className="px-2.5 pb-3.5 font-black text-sm md:text-base text-center" style={{ color:C.text }}>{cat.name?.[lang] || cat.name?.ar}</p>
                 </button>
-                );
-              })}
+              ))}
             </div>
           )}
         </div>
@@ -2843,17 +2854,13 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
           ) : parts.length === 0 ? (
             <p className="text-sm text-center py-10" style={{ color:C.muted }}>{isRtl ? 'لا توجد قطع في هذا التصنيف بعد' : 'No parts in this category yet'}</p>
           ) : (
-            <div className="grid grid-cols-3 gap-x-3 gap-y-0">
-              {parts.map((part, i) => {
-                const colOffset = [0, 34, 17][i % 3];
-                const row = Math.floor(i / 3);
-                return (
+            <div className={`grid gap-x-3 gap-y-0 ${gridCols === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+              {parts.map((part, i) => (
                 <button key={part.id} onClick={()=>openPart(part)}
                   className="relative rounded-2xl text-start transition-all duration-300 active:scale-[0.97]"
                   style={{
                     background:C.panel, boxShadow:'0 20px 40px -14px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.12)', border:`1px solid ${C.border}`,
-                    marginTop: row === 0 ? colOffset : colOffset - 32,
-                    zIndex: i + 1,
+                    ...gridItemStyle(i),
                   }}>
                   <div className="relative h-40 md:h-56 flex items-center justify-center p-6 overflow-hidden">
                     <div className="absolute w-28 h-28 md:w-36 md:h-36 rounded-full pointer-events-none"
@@ -2865,8 +2872,7 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
                   </div>
                   <p className="px-2.5 pb-3.5 font-black text-sm md:text-base text-center" style={{ color:C.text }}>{part.name?.[lang] || part.name?.ar}</p>
                 </button>
-                );
-              })}
+              ))}
             </div>
           )}
         </div>
