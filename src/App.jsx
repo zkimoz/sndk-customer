@@ -920,6 +920,10 @@ export default function App() {
   const goHome     = () => { setPage('home'); setStep(1); resetForm(); setMenuOpen(false); };
   const goServices = () => { setPage('services'); setExpandedService(null); setMenuOpen(false); };
   const goContact  = () => { setPage('contact'); setMenuOpen(false); };
+  const goParts    = () => {
+    if (!user) { setAuthModal('signin'); return; }
+    setPage('parts'); setMenuOpen(false);
+  };
   const goProfile  = () => {
     if (!user) { setAuthModal('signin'); return; }
     setPage('profile'); setMenuOpen(false);
@@ -1116,11 +1120,12 @@ export default function App() {
 
           {/* Page Content */}
           <main className="flex-1 overflow-y-auto pb-24 md:pb-8">
-            {page==='home'    && <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements} goOrders={goOrders} pendingQuotCount={pendingQuotCount}/>}
+            {page==='home'    && <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements} goOrders={goOrders} goParts={goParts} pendingQuotCount={pendingQuotCount}/>}
             {page==='services'&& <ServicesView lang={lang} tr={tr} isRtl={isRtl} user={user} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} theme={theme}/>}
             {page==='profile' && user && <ProfileView lang={lang} tr={tr} isRtl={isRtl} profile={profile} user={user} onBook={(car)=>bookFromProfile(car)} goServices={goServices} goOrders={goOrders} onProfileUpdated={()=>fetchProfile(user.id)} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories}/>}
             {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount} theme={theme}/>}
             {page==='contact' && <ContactView isRtl={isRtl}/>}
+            {page==='parts'   && <PartsFlowView lang={lang} isRtl={isRtl} user={user} profile={profile} goHome={goHome}/>}
             {page==='booking' && step===2 && <DetailsStep {...shared} prevStep={()=>setPage('home')}/>}
             {page==='booking' && step===3 && <ScheduleStep {...shared} prevStep={()=>setStep(2)}/>}
             {page==='booking' && step===4 && <ReviewStep   {...shared} prevStep={()=>setStep(formData.isQuoteOnly ? 2 : 3)} loading={loading} setLoading={setLoading}/>}
@@ -1703,6 +1708,214 @@ function PaymentMethodModal({ orderId, types, amount, user, customerName, isRtl,
         },
       }).catch(() => {});
       onDone(types);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      {(() => {
+        const mc = CARD_BG_CYCLE[0]; // always gold
+        return (
+      <div className="rounded-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}
+        style={{ background:mc.bg, border:'1px solid rgba(138,21,56,0.45)', boxShadow:'0 25px 60px rgba(0,0,0,0.6)' }}>
+        <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor:mc.div }}>
+          <div>
+            <h3 className="font-black text-base" style={{ color:mc.txt }}>{tr.pmModalTitle}</h3>
+            <p className="text-xs mt-0.5" style={{ color:mc.sub }}>{tr.pmModalSub}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg transition-all" style={{ color:mc.sub }}>
+            <X size={18}/>
+          </button>
+        </div>
+        <div className="p-5 space-y-2.5">
+          {loadingMethods ? (
+            <div className="flex justify-center py-6"><Loader2 size={22} className="animate-spin" style={{ color:mc.fg }}/></div>
+          ) : methods.length === 0 ? (
+            <p className="text-sm text-center py-4" style={{ color:mc.sub }}>{tr.pmModalEmpty}</p>
+          ) : (
+            methods.map(m => (
+              <button key={m.id} onClick={()=>setChosenKey(m.key)}
+                className="w-full text-start p-3.5 rounded-xl transition-all active:scale-[0.98]"
+                style={chosenKey===m.key ? { background:'#8A1538', color:'#fff' } : { background:'rgba(0,0,0,0.12)', color:mc.txt }}>
+                <p className="font-bold text-sm">{isRtl ? m.display_name_ar : m.display_name_en}</p>
+                {m.method_type === 'manual' && (isRtl ? m.notes_ar : (m.notes_en || m.notes_ar)) && (
+                  <p className="text-xs mt-0.5 opacity-80">{isRtl ? m.notes_ar : (m.notes_en || m.notes_ar)}</p>
+                )}
+              </button>
+            ))
+          )}
+          {needsReceipt && (
+            <div className="pt-1">
+              {(isRtl ? chosenMethod?.notes_ar : (chosenMethod?.notes_en || chosenMethod?.notes_ar)) && (
+                <p className="text-xs font-bold mb-2 p-2.5 rounded-lg" style={{ color:mc.txt, background:'rgba(0,0,0,0.08)' }}>
+                  {isRtl ? chosenMethod.notes_ar : (chosenMethod.notes_en || chosenMethod.notes_ar)}
+                </p>
+              )}
+              <input ref={receiptFileRef} type="file" accept="image/*,application/pdf" className="hidden"
+                onChange={e => setReceiptFile(e.target.files?.[0] || null)}/>
+              <button onClick={()=>receiptFileRef.current?.click()}
+                className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold border transition-all"
+                style={{ borderColor:'rgba(138,21,56,0.35)', color:mc.txt, background:'rgba(0,0,0,0.06)' }}>
+                📎 {receiptFile ? receiptFile.name : tr.pmReceiptUpload}
+              </button>
+              <p className="text-[11px] mt-1.5" style={{ color:mc.sub }}>{tr.pmReceiptHint}</p>
+            </div>
+          )}
+        </div>
+        {isGateway ? (
+          <div className="p-5 pt-0 space-y-2">
+            <div ref={paypalContainerRef}/>
+            {saving && (
+              <div className="flex justify-center py-1"><Loader2 size={18} className="animate-spin" style={{ color:mc.fg }}/></div>
+            )}
+            <p className="text-[11px] text-center" style={{ color:mc.sub }}>
+              {isRtl ? 'سيتم تحويل المبلغ تلقائيًا لدولار أمريكي بسعر الصرف الثابت (٣.٦٤ ر.ق = ١$)' : 'The amount is automatically converted to US Dollars at the fixed exchange rate (3.64 QAR = $1)'}
+            </p>
+          </div>
+        ) : (
+          <div className="p-5 pt-0">
+            <button onClick={confirm} disabled={!chosenKey || saving || (needsReceipt && !receiptFile)}
+              className="w-full py-3.5 rounded-xl font-black text-sm transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60"
+              style={{ background:'#8A1538', color:'#fff' }}>
+              {saving
+                ? <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"/>{isRtl ? 'جاري الإرسال...' : 'Sending...'}</>
+                : tr.pmModalConfirm
+              }
+            </button>
+          </div>
+        )}
+      </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+// Near-verbatim copy of PaymentMethodModal targeting the independent
+// part_orders/part_order_payments/paypal-parts-payment flow instead of
+// orders/payments/paypal-payment — always exactly one line item, so there's
+// no `types` array. part_orders.profile_id is direct, so (unlike orders)
+// there's no need for a defense-in-depth ownership join before writing —
+// RLS already scopes both the row and (via the column-level GRANT) which
+// columns a customer can touch.
+function PartOrderPaymentModal({ partOrderId, amount, requestNumber, customerName, isRtl, tr, onClose, onDone }) {
+  const [methods, setMethods] = useState([]);
+  const [loadingMethods, setLoadingMethods] = useState(true);
+  const [chosenKey, setChosenKey] = useState(null);
+  const [receiptFile, setReceiptFile] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const receiptFileRef = useRef(null);
+  const paypalContainerRef = useRef(null);
+  const needsReceipt = chosenKey === 'instant_transfer';
+  const chosenMethod = methods.find(m => m.key === chosenKey);
+  const isGateway = chosenMethod?.method_type === 'gateway';
+
+  const latestRef = useRef({ partOrderId, isRtl, onDone });
+  useEffect(() => { latestRef.current = { partOrderId, isRtl, onDone }; });
+
+  useEffect(() => {
+    supabase.from('payment_methods').select('*').eq('is_active', true).order('sort_order')
+      .then(({ data }) => { setMethods(data || []); setLoadingMethods(false); });
+  }, []);
+
+  useEffect(() => {
+    if (!isGateway || !chosenMethod?.client_id) return;
+    let cancelled = false;
+    let buttons = null;
+
+    const renderButtons = () => {
+      if (cancelled || !window.paypal || !paypalContainerRef.current) return;
+      paypalContainerRef.current.innerHTML = '';
+      const extractInvokeError = async (data, error, fallback) => {
+        if (data?.error) return data.error;
+        if (error?.context?.json) {
+          try { const body = await error.context.json(); if (body?.error) return body.error; } catch { /* not JSON */ }
+        }
+        return error?.message || fallback;
+      };
+
+      buttons = window.paypal.Buttons({
+        createOrder: async () => {
+          const { partOrderId: pid, isRtl: rtl } = latestRef.current;
+          const { data, error } = await supabase.functions.invoke('paypal-parts-payment', { body: { action: 'create', partOrderId: pid } });
+          if (error || !data?.id) {
+            const msg = await extractInvokeError(data, error, rtl ? 'تعذر بدء الدفع' : 'Could not start payment');
+            alert((rtl ? 'خطأ: ' : 'Error: ') + msg);
+            throw new Error('create failed');
+          }
+          return data.id;
+        },
+        onApprove: async (data) => {
+          const { partOrderId: pid, isRtl: rtl, onDone: done } = latestRef.current;
+          setSaving(true);
+          const { data: capRes, error } = await supabase.functions.invoke('paypal-parts-payment', { body: { action: 'capture', partOrderId: pid, paypalOrderId: data.orderID } });
+          setSaving(false);
+          if (error || !capRes?.success) {
+            const msg = await extractInvokeError(capRes, error, rtl ? 'تعذر إتمام الدفع' : 'Could not complete payment');
+            alert((rtl ? 'خطأ: ' : 'Error: ') + msg);
+            return;
+          }
+          alert(rtl ? 'تم الدفع بنجاح' : 'Payment successful');
+          done({ gateway: true });
+        },
+        onError: () => { alert(latestRef.current.isRtl ? 'حدث خطأ أثناء الدفع عبر PayPal' : 'An error occurred during PayPal payment'); },
+      });
+      buttons.render(paypalContainerRef.current);
+    };
+
+    if (window.paypal) {
+      renderButtons();
+    } else {
+      const existing = document.getElementById('paypal-sdk-script');
+      if (existing) {
+        existing.addEventListener('load', renderButtons, { once: true });
+      } else {
+        const script = document.createElement('script');
+        script.id = 'paypal-sdk-script';
+        script.src = `https://www.paypal.com/sdk/js?client-id=${chosenMethod.client_id}&currency=USD&intent=capture`;
+        script.onload = renderButtons;
+        document.body.appendChild(script);
+      }
+    }
+
+    return () => { cancelled = true; if (buttons?.close) buttons.close(); };
+  }, [isGateway, chosenMethod?.client_id]);
+
+  const confirm = async () => {
+    if (!chosenKey || saving) return;
+    if (needsReceipt && !receiptFile) return;
+    setSaving(true);
+    try {
+      let receiptUrl = null;
+      if (needsReceipt) {
+        const ext = receiptFile.name.split('.').pop() || (receiptFile.type === 'application/pdf' ? 'pdf' : 'jpg');
+        const path = `part-${partOrderId}-${Date.now()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from('transfer-receipts').upload(path, receiptFile, { contentType: receiptFile.type });
+        if (upErr) { alert('خطأ: ' + upErr.message); setSaving(false); return; }
+        const { data: urlData } = supabase.storage.from('transfer-receipts').getPublicUrl(path);
+        receiptUrl = urlData.publicUrl;
+      }
+      const { error: updErr } = await supabase.from('part_orders').update({
+        payment_method: chosenKey,
+        ...(receiptUrl ? { payment_receipt_url: receiptUrl } : {}),
+        payment_status: 'pending',
+        updated_at: new Date().toISOString(),
+      }).eq('id', partOrderId);
+      if (updErr) { alert('خطأ: ' + updErr.message); setSaving(false); return; }
+      supabase.functions.invoke('clever-endpoint', {
+        body: {
+          event: 'part_order_payment_method_chosen',
+          requestNumber,
+          customerName,
+          amountQAR: amount,
+          methodAr: chosenMethod?.display_name_ar,
+          methodEn: chosenMethod?.display_name_en,
+          receiptUrl,
+        },
+      }).catch(() => {});
+      onDone({ gateway: false });
     } finally {
       setSaving(false);
     }
@@ -2435,6 +2648,232 @@ function ContactView({ isRtl }) {
   );
 }
 
+// A completely separate flow/system from job cards & orders — customer picks
+// a car, browses part_categories → parts_catalog, then requests a quote or
+// the part itself against a part_orders row. Self-contained (owns its own
+// step state) so it doesn't add to the root App component's state.
+function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
+  const [step, setStep] = useState('carGate'); // 'carGate'|'categories'|'parts'|'detail'|'confirm'
+  const [cars, setCars] = useState([]);
+  const [carsLoading, setCarsLoading] = useState(true);
+  const [selectedCar, setSelectedCar] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [catsLoading, setCatsLoading] = useState(true);
+  const [selectedCat, setSelectedCat] = useState(null);
+  const [parts, setParts] = useState([]);
+  const [partsLoading, setPartsLoading] = useState(false);
+  const [selectedPart, setSelectedPart] = useState(null);
+  const [galleryIdx, setGalleryIdx] = useState(0);
+  const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [confirmedType, setConfirmedType] = useState(null);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.from('cars').select('*').eq('profile_id', user.id).order('created_at', { ascending:false })
+      .then(({ data }) => { setCars(data||[]); setCarsLoading(false); });
+  }, [user?.id]);
+
+  useEffect(() => {
+    supabase.from('part_categories').select('*').eq('is_active', true).order('sort_order')
+      .then(({ data }) => { setCategories(data||[]); setCatsLoading(false); });
+  }, []);
+
+  const pickCar = (car) => { setSelectedCar(car); setStep('categories'); };
+
+  const openCategory = (cat) => {
+    setSelectedCat(cat); setPartsLoading(true); setStep('parts');
+    supabase.from('parts_catalog').select('*').eq('category_id', cat.id).eq('is_active', true).order('created_at', { ascending:false })
+      .then(({ data }) => { setParts(data||[]); setPartsLoading(false); });
+  };
+
+  const openPart = (part) => { setSelectedPart(part); setGalleryIdx(0); setNotes(''); setStep('detail'); };
+
+  const submitRequest = async (requestType) => {
+    setSubmitting(true);
+    const request_number = `PR-${Date.now().toString(36).toUpperCase()}`;
+    const { error } = await supabase.from('part_orders').insert({
+      request_number,
+      profile_id: user.id,
+      car_id: selectedCar.id,
+      car_snapshot: { car_type: selectedCar.car_type, car_category: selectedCar.car_category, production_year: selectedCar.production_year, plate_number: selectedCar.plate_number },
+      part_id: selectedPart.id,
+      part_snapshot: { name: selectedPart.name, image_url: selectedPart.image_url, part_number: selectedPart.part_number },
+      request_type: requestType,
+      customer_notes: notes.trim() || null,
+    });
+    setSubmitting(false);
+    if (error) { alert((isRtl ? 'خطأ: ' : 'Error: ') + error.message); return; }
+    supabase.functions.invoke('clever-endpoint', {
+      body: { event: 'part_request_created', customerName: profile?.full_name, requestNumber: request_number },
+    }).catch(() => {});
+    setConfirmedType(requestType);
+    setStep('confirm');
+  };
+
+  const headerBar = (title, onBack) => (
+    <div className="flex items-center gap-3 mb-4">
+      {onBack && (
+        <button onClick={onBack} className="p-2 rounded-full flex-shrink-0" style={{ background:C.panel, border:`1px solid ${C.border}` }}>
+          {isRtl ? <ArrowRight size={16} style={{ color:C.text }}/> : <ChevronLeft size={16} style={{ color:C.text }}/>}
+        </button>
+      )}
+      <h1 className="text-xl font-black" style={{ color:C.text }}>{title}</h1>
+    </div>
+  );
+
+  return (
+    <div className="max-w-lg mx-auto p-4 md:p-6">
+      {step === 'carGate' && (
+        <div>
+          {headerBar(isRtl ? 'توفير قطع غيار' : 'Spare Parts', goHome)}
+          <p className="text-sm mb-4" style={{ color:C.muted }}>{isRtl ? 'اختر سيارتك أولاً' : 'Select your car first'}</p>
+          {carsLoading ? (
+            <div className="flex items-center justify-center py-14"><Loader2 size={22} className="animate-spin" style={{ color:C.gold }}/></div>
+          ) : cars.length === 0 ? (
+            <div className="text-center py-10 space-y-3">
+              <Car size={36} style={{ color:`${C.gold}60` }} className="mx-auto"/>
+              <p className="text-sm" style={{ color:C.muted }}>{isRtl ? 'لا توجد سيارات في حسابك بعد — أضف سيارة من صفحة "حسابي" أولاً' : "You don't have any cars on file yet — add one from your Profile page first"}</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {cars.map(car => (
+                <button key={car.id} onClick={()=>pickCar(car)}
+                  className="w-full flex items-center gap-3 p-3.5 rounded-2xl text-start transition-all active:scale-[0.98]"
+                  style={{ background:C.panel, border:`1px solid ${C.border}` }}>
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background:`${C.gold}15` }}><Car size={18} style={{ color:C.gold }}/></div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-sm truncate" style={{ color:C.text }}>{[car.car_type, car.car_category, car.production_year].filter(Boolean).join(' · ')}</p>
+                    {car.plate_number && <p className="text-xs mt-0.5" style={{ color:C.muted }}>{car.plate_number}</p>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {step === 'categories' && (
+        <div>
+          {headerBar(isRtl ? 'التصنيفات الرئيسية' : 'Main Categories', ()=>setStep('carGate'))}
+          {catsLoading ? (
+            <div className="flex items-center justify-center py-14"><Loader2 size={22} className="animate-spin" style={{ color:C.gold }}/></div>
+          ) : categories.length === 0 ? (
+            <p className="text-sm text-center py-10" style={{ color:C.muted }}>{isRtl ? 'لا توجد تصنيفات بعد' : 'No categories yet'}</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {categories.map(cat => (
+                <button key={cat.id} onClick={()=>openCategory(cat)}
+                  className="rounded-2xl overflow-hidden text-start transition-all active:scale-[0.97]"
+                  style={{ background:C.panel, border:`1px solid ${C.border}` }}>
+                  {cat.image_url
+                    ? <img src={cat.image_url} alt="" className="w-full h-24 object-cover"/>
+                    : <div className="w-full h-24 flex items-center justify-center" style={{ background:`${C.gold}10` }}><Package size={26} style={{ color:`${C.gold}70` }}/></div>
+                  }
+                  <p className="p-3 font-bold text-sm" style={{ color:C.text }}>{cat.name?.[lang] || cat.name?.ar}</p>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {step === 'parts' && (
+        <div>
+          {headerBar(selectedCat?.name?.[lang] || selectedCat?.name?.ar, ()=>setStep('categories'))}
+          {partsLoading ? (
+            <div className="flex items-center justify-center py-14"><Loader2 size={22} className="animate-spin" style={{ color:C.gold }}/></div>
+          ) : parts.length === 0 ? (
+            <p className="text-sm text-center py-10" style={{ color:C.muted }}>{isRtl ? 'لا توجد قطع في هذا التصنيف بعد' : 'No parts in this category yet'}</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {parts.map(part => (
+                <button key={part.id} onClick={()=>openPart(part)}
+                  className="rounded-2xl overflow-hidden text-start transition-all active:scale-[0.97]"
+                  style={{ background:C.panel, border:`1px solid ${C.border}` }}>
+                  {part.image_url
+                    ? <img src={part.image_url} alt="" className="w-full h-28 object-cover"/>
+                    : <div className="w-full h-28 flex items-center justify-center" style={{ background:`${C.gold}10` }}><Package size={26} style={{ color:`${C.gold}70` }}/></div>
+                  }
+                  <div className="p-3">
+                    <p className="font-bold text-sm leading-snug" style={{ color:C.text }}>{part.name?.[lang] || part.name?.ar}</p>
+                    {Number(part.default_sell_price) > 0 && (
+                      <p className="text-sm font-black mt-1" style={{ color:C.gold }}>{Number(part.default_sell_price).toFixed(3)} {isRtl?'ر.ق':'QAR'}</p>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {step === 'detail' && selectedPart && (
+        <div>
+          {headerBar(selectedPart.name?.[lang] || selectedPart.name?.ar, ()=>setStep('parts'))}
+          {selectedPart.image_urls?.length > 0 ? (
+            <div className="space-y-2 mb-4">
+              <img src={selectedPart.image_urls[galleryIdx]} alt="" className="w-full h-56 object-cover rounded-2xl" style={{ border:`1px solid ${C.border}` }}/>
+              {selectedPart.image_urls.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto">
+                  {selectedPart.image_urls.map((url, i) => (
+                    <img key={url} src={url} alt="" onClick={()=>setGalleryIdx(i)}
+                      className="w-14 h-14 rounded-lg object-cover flex-shrink-0 cursor-pointer transition-all"
+                      style={{ border:`2px solid ${i===galleryIdx ? C.gold : C.border}`, opacity: i===galleryIdx?1:0.6 }}/>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="w-full h-40 rounded-2xl flex items-center justify-center mb-4" style={{ background:`${C.gold}10` }}><Package size={32} style={{ color:`${C.gold}70` }}/></div>
+          )}
+          {selectedPart.part_number && <p className="text-xs font-mono mb-2" style={{ color:C.muted }}>{selectedPart.part_number}</p>}
+          {selectedPart.description?.[lang] && <p className="text-sm leading-relaxed mb-4" style={{ color:C.muted }}>{selectedPart.description[lang]}</p>}
+          {Number(selectedPart.default_sell_price) > 0 && (
+            <p className="text-2xl font-black mb-4" style={{ color:C.gold }}>{Number(selectedPart.default_sell_price).toFixed(3)} {isRtl?'ر.ق':'QAR'}</p>
+          )}
+          <div className="mb-4">
+            <label className="block text-sm font-bold mb-1.5" style={{ color:C.text }}>{isRtl?'ملاحظات (اختياري)':'Notes (optional)'}</label>
+            <textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={2}
+              className="w-full px-3 py-2.5 rounded-xl text-sm outline-none resize-none"
+              style={{ background:C.panel, border:`1px solid ${C.border}`, color:C.text }}/>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={()=>submitRequest('quote')} disabled={submitting}
+              className="flex-1 py-3 rounded-xl text-sm font-black transition-all active:scale-95 disabled:opacity-50"
+              style={{ background:'transparent', border:`1.5px solid ${C.gold}`, color:C.gold }}>
+              {isRtl?'طلب عرض سعر':'Request a Quote'}
+            </button>
+            <button onClick={()=>submitRequest('order')} disabled={submitting}
+              className="flex-1 py-3 rounded-xl text-sm font-black transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+              style={{ background:C.gold, color:C.btnTxt }}>
+              {submitting && <Loader2 size={14} className="animate-spin"/>}
+              {isRtl?'طلب القطعة':'Request the Part'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 'confirm' && (
+        <div className="text-center py-14 space-y-4">
+          <CheckCircle2 size={48} style={{ color:'#22c55e' }} className="mx-auto"/>
+          <div>
+            <p className="font-black text-lg" style={{ color:C.text }}>{isRtl ? 'تم إرسال طلبك بنجاح' : 'Your request was sent'}</p>
+            <p className="text-sm mt-1" style={{ color:C.muted }}>
+              {confirmedType === 'quote'
+                ? (isRtl ? 'سيتواصل معك فريقنا بعرض السعر قريباً' : "We'll get back to you with a quote soon")
+                : (isRtl ? 'سيقوم فريقنا بمراجعة طلبك وتأكيد السعر قريباً' : "Our team will review your request and confirm the price soon")}
+            </p>
+          </div>
+          <button onClick={goHome} className="px-6 py-2.5 rounded-xl text-sm font-bold" style={{ background:`${C.gold}15`, color:C.gold, border:`1px solid ${C.gold}30` }}>
+            {isRtl ? '← الرئيسية' : 'Home →'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) {
   const [tab, setTab]           = useState('appts');
   const [appts, setAppts]       = useState([]);
@@ -2451,6 +2890,8 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   // the previous one, which crashes the whole app to a blank screen.
   const [sigModal, setSigModal] = useState({ open:false, orderId:null });
   const [payMethodModal, setPayMethodModal] = useState(null); // { orderId, types } | null
+  const [partOrders, setPartOrders] = useState([]);
+  const [payPartOrderModal, setPayPartOrderModal] = useState(null); // { partOrderId, amount, requestNumber } | null
   const [serviceSelections, setServiceSelections] = useState({}); // { [orderId]: { [serviceKey]: boolean } }
   // Booking a date/time for a quote-only request the customer just approved —
   // the service decisions and quotation are already locked in, this only
@@ -2485,9 +2926,31 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     delivered: { label:tr.ordStDelivered, bg:'rgba(168,85,247,0.15)', text:'#a855f7' },
     cancelled: { label:tr.ordStCancelled, bg:'rgba(239,68,68,0.15)',  text:'#ef4444' },
   };
+  const PART_ORDER_ST = {
+    pending:          { label: isRtl ? 'قيد المراجعة' : 'Pending review',      bg:'rgba(59,130,246,0.15)',  text:'#60a5fa' },
+    reviewing:        { label: isRtl ? 'قيد المراجعة' : 'Under review',        bg:'rgba(59,130,246,0.15)',  text:'#60a5fa' },
+    priced:           { label: isRtl ? 'تم تحديد السعر' : 'Price set',         bg:'rgba(234,179,8,0.15)',   text:'#eab308' },
+    awaiting_payment: { label: isRtl ? 'بانتظار الدفع' : 'Awaiting payment',   bg:'rgba(234,179,8,0.15)',   text:'#eab308' },
+    paid:             { label: isRtl ? 'تم الدفع' : 'Paid',                    bg:'rgba(34,197,94,0.15)',   text:'#22c55e' },
+    sourcing:         { label: isRtl ? 'جاري التجهيز' : 'Sourcing',            bg:'rgba(249,115,22,0.15)',  text:'#f97316' },
+    ready:            { label: isRtl ? 'جاهزة للاستلام' : 'Ready',             bg:'rgba(34,197,94,0.15)',   text:'#22c55e' },
+    delivered:        { label: isRtl ? 'تم التسليم' : 'Delivered',             bg:'rgba(168,85,247,0.15)',  text:'#a855f7' },
+    cancelled:        { label: isRtl ? 'ملغي' : 'Cancelled',                   bg:'rgba(239,68,68,0.15)',   text:'#ef4444' },
+    declined:         { label: isRtl ? 'مرفوض' : 'Declined',                   bg:'rgba(239,68,68,0.15)',   text:'#ef4444' },
+  };
+
+  const loadPartOrders = async () => {
+    if (!user) return;
+    const { data } = await supabase.from('part_orders')
+      .select('*, part_order_payments(*)')
+      .eq('profile_id', user.id)
+      .order('created_at', { ascending: false });
+    setPartOrders(data || []);
+  };
 
   const loadData = async () => {
     if (!user) { setLoading(false); return; }
+    loadPartOrders();
     const { data: apptData } = await supabase.from('appointments')
       .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot)')
       .eq('profile_id', user.id)
@@ -2848,9 +3311,10 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
       <h1 className="text-2xl font-black" style={{ color:C.gold }}>{tr.myOrders}</h1>
 
       {/* Tabs */}
-      <div className="grid grid-cols-3 rounded-2xl overflow-hidden" style={{ border:`1px solid ${C.border}` }}>
+      <div className="grid grid-cols-4 rounded-2xl overflow-hidden" style={{ border:`1px solid ${C.border}` }}>
         {[{ key:'appts',     label: isRtl ? 'المواعيد' : 'Appointments', icon:Calendar },
           { key:'orders',    label: isRtl ? 'الطلبات'  : 'My Orders',    icon:ClipboardList },
+          { key:'parts',     label: isRtl ? 'قطع الغيار' : 'Spare Parts', icon:Package },
           { key:'cancelled', label: isRtl ? 'المواعيد أو الطلبات الملغية' : 'Cancelled Appointments/Orders', icon:X }].map(item => (
           <button key={item.key} onClick={() => setTab(item.key)}
             className="flex items-center justify-center gap-2 py-3 text-base font-bold transition-all"
@@ -3619,6 +4083,52 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
               </div>
             );
           })()}
+
+          {/* ── قسم 4: طلبات قطع الغيار (نظام منفصل عن أوامر الشغل) ── */}
+          {tab==='parts' && (
+            <div className="space-y-3">
+              {partOrders.length === 0 ? (
+                <div className="py-16 text-center space-y-3" style={{ color:C.muted }}>
+                  <Package size={44} className="mx-auto opacity-25"/>
+                  <p className="text-base">{isRtl ? 'لا توجد طلبات قطع غيار' : 'No spare-parts requests'}</p>
+                </div>
+              ) : partOrders.map((po, pi) => {
+                const cc = CARD_BG_CYCLE[pi % 2];
+                const st = PART_ORDER_ST[po.status] || PART_ORDER_ST.pending;
+                const paidSoFar = (po.part_order_payments || []).reduce((s,p)=>s+Number(p.amount||0), 0);
+                const amountDue = Math.max(Number(po.quoted_sell_price||0) - paidSoFar, 0);
+                const canPay = ['priced','awaiting_payment'].includes(po.status) && po.payment_status !== 'paid' && amountDue > 0.01;
+                return (
+                  <div key={po.id} className="rounded-2xl p-4 space-y-3"
+                    style={{ background:cc.bg, border:`1px solid ${cc.fg}40` }}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm" style={{ color:cc.txt }}>{po.part_snapshot?.name?.[lang] || po.part_snapshot?.name?.ar || '—'}</p>
+                        <p className="text-xs mt-1 font-mono" style={{ color:cc.sub }}>{po.request_number}</p>
+                        <p className="text-xs mt-0.5" style={{ color:cc.sub }}>
+                          {po.request_type === 'quote' ? (isRtl ? 'طلب عرض سعر' : 'Quote request') : (isRtl ? 'طلب القطعة' : 'Part order')}
+                        </p>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-full text-sm font-bold flex-shrink-0" style={{ background:st.bg, color:st.text }}>{st.label}</span>
+                    </div>
+                    {Number(po.quoted_sell_price) > 0 && (
+                      <p className="text-base font-black" style={{ color:C.gold }}>{Number(po.quoted_sell_price).toFixed(3)} {isRtl?'ر.ق':'QAR'}</p>
+                    )}
+                    {po.payment_status === 'pending' && (
+                      <p className="text-xs font-semibold" style={{ color:'#eab308' }}>{isRtl ? 'بانتظار تأكيد الدفع من فريقنا' : 'Awaiting payment confirmation from our team'}</p>
+                    )}
+                    {canPay && (
+                      <button onClick={()=>setPayPartOrderModal({ partOrderId:po.id, amount:amountDue, requestNumber:po.request_number })}
+                        className="w-full py-2.5 rounded-xl text-sm font-black transition-all active:scale-95"
+                        style={{ background:C.gold, color:C.btnTxt }}>
+                        {isRtl ? 'اختر طريقة الدفع' : 'Choose Payment Method'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </>
       )}
 
@@ -3647,6 +4157,24 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
             // A gateway payment already showed its own "تم الدفع بنجاح" alert
             // inside the modal — this generic message is only for the
             // manual-method (cash/transfer) request flow.
+            if (opts?.gateway) return;
+            alert(isRtl ? 'تم إرسال طلبك — سيتواصل معك فريقنا لإتمام الدفع' : "Your request has been sent — our team will contact you to complete the payment");
+          }}
+        />
+      )}
+
+      {payPartOrderModal && (
+        <PartOrderPaymentModal
+          partOrderId={payPartOrderModal.partOrderId}
+          amount={payPartOrderModal.amount}
+          requestNumber={payPartOrderModal.requestNumber}
+          customerName={profile?.full_name}
+          isRtl={isRtl}
+          tr={tr}
+          onClose={() => setPayPartOrderModal(null)}
+          onDone={(opts) => {
+            setPayPartOrderModal(null);
+            loadPartOrders();
             if (opts?.gateway) return;
             alert(isRtl ? 'تم إرسال طلبك — سيتواصل معك فريقنا لإتمام الدفع' : "Your request has been sent — our team will contact you to complete the payment");
           }}
@@ -3720,9 +4248,18 @@ const ANN_PRESETS = {
   purple: { bg:'linear-gradient(135deg,#4c1d95 0%,#5b21b6 100%)',                              overlay:'rgba(0,0,0,0.3)',  shadow:'rgba(76,29,149,0.5)'  },
 };
 
-function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, serviceCategories, homeAnnouncements, user, goOrders, pendingQuotCount }) {
+// Matches the exact "توفير قطع غيار"/"Spare Parts" category name — the one
+// tile that routes into the dedicated parts flow instead of the normal
+// cart/booking flow.
+const PARTS_CAT_NAMES = new Set(['توفير قطع غيار', 'Spare Parts']);
+
+function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, serviceCategories, homeAnnouncements, user, goOrders, goParts, pendingQuotCount }) {
   const cats = serviceCategories.map(enrichCat);
   const goToCat = (cat) => {
+    // Only routes into the real parts flow once staff have turned off
+    // "Coming Soon" for this category — until then it behaves exactly like
+    // the other not-yet-live tiles (still visually shows the overlay).
+    if (!cat.comingSoon && (PARTS_CAT_NAMES.has(cat.ar) || PARTS_CAT_NAMES.has(cat.en))) { goParts?.(); return; }
     setFormData(p => ({ ...p, serviceKey: cat.id, serviceName: cat.ar }));
     goServices?.();
   };

@@ -10,8 +10,8 @@ const CUSTOMER_FROM_EMAIL = Deno.env.get("CUSTOMER_FROM_EMAIL") || "SNDK <norepl
 // Always-notified department inboxes, in addition to any staff member who has
 // opted in individually via notify_email in الموظفين.
 const DEPARTMENT_EMAILS = ["info@sndkqa.com", "workshop@sndkqa.com", "customerservice@sndkqa.com"];
-const STAFF_EVENTS = new Set(["quotation_approved", "new_booking", "payment_received", "payment_method_chosen"]);
-const CUSTOMER_EVENTS = new Set(["status_changed", "quotation_sent", "invoice_ready", "job_closed", "resignature_requested", "details_updated", "payment_receipt"]);
+const STAFF_EVENTS = new Set(["quotation_approved", "new_booking", "payment_received", "payment_method_chosen", "part_request_created", "part_order_payment_method_chosen", "part_order_payment_received"]);
+const CUSTOMER_EVENTS = new Set(["status_changed", "quotation_sent", "invoice_ready", "job_closed", "resignature_requested", "details_updated", "payment_receipt", "part_request_priced", "part_request_delivered"]);
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -65,7 +65,7 @@ serve(async (req) => {
     const {
       event, jobNumber, customerName, serviceLabel, carLabel, appointmentDate, appointmentTime,
       customerId, statusLabelAr, statusLabelEn, invoicePdfBase64, invoiceFilename,
-      amountQAR, methodAr, methodEn, receiptUrl,
+      amountQAR, methodAr, methodEn, receiptUrl, requestNumber,
     } = await req.json();
 
     let recipients: string[] = [];
@@ -136,6 +136,20 @@ serve(async (req) => {
           [bi("طريقة الدفع", "Payment Method"), bi(methodAr || "", methodEn || "")],
           [bi("التاريخ", "Date"), new Date().toLocaleString("en-GB", { timeZone: "Asia/Qatar" })],
         ], bi("شكراً لثقتكم بنا — هذا البريد بمثابة إيصال إلكتروني بالدفعة.", "Thank you for your trust — this email serves as your electronic payment receipt."));
+      } else if (event === "part_request_priced") {
+        subject = bi(`💰 تم تسعير طلب القطعة — ${requestNumber || ""}`, `Your part request has been priced — ${requestNumber || ""}`);
+        html = wrap(bi("تم تسعير طلب قطعة الغيار", "Your Spare Part Request Has Been Priced"), [
+          [bi("العميل", "Customer"), name],
+          [bi("رقم الطلب", "Request Number"), requestNumber],
+          [bi("السعر", "Price"), amountQAR != null ? `${amountQAR} ر.ق / QAR` : ""],
+          [bi("الإجراء المطلوب", "Action Needed"), bi("يرجى فتح تطبيق سندك لمراجعة السعر والدفع", "Please open the SNDK app to review the price and pay")],
+        ]);
+      } else if (event === "part_request_delivered") {
+        subject = bi(`✅ تم تسليم قطعة الغيار — ${requestNumber || ""}`, `Your spare part has been delivered — ${requestNumber || ""}`);
+        html = wrap(bi("تم تسليم طلب قطعة الغيار", "Your Spare Part Request Has Been Delivered"), [
+          [bi("العميل", "Customer"), name],
+          [bi("رقم الطلب", "Request Number"), requestNumber],
+        ], bi("شكراً لثقتكم بسندك!", "Thank you for trusting SNDK!"));
       }
     } else if (STAFF_EVENTS.has(event)) {
       const { data: staffList } = await supabase
@@ -179,6 +193,31 @@ serve(async (req) => {
           [bi("المبلغ المتوقع", "Amount Expected"), amountQAR != null ? `${amountQAR} ر.ق / QAR` : ""],
           [bi("طريقة الدفع المختارة", "Method Chosen"), bi(methodAr || "", methodEn || "")],
         ], receiptNote);
+      } else if (event === "part_request_created") {
+        subject = bi(`🔩 طلب قطعة غيار جديد — ${requestNumber || ""}`, `New spare part request — ${requestNumber || ""}`);
+        html = wrap(bi("طلب قطعة غيار جديد", "New Spare Part Request"), [
+          [bi("العميل", "Customer"), customerName],
+          [bi("رقم الطلب", "Request Number"), requestNumber],
+        ]);
+      } else if (event === "part_order_payment_method_chosen") {
+        subject = bi(`🧾 العميل اختار طريقة دفع لطلب قطعة — ${requestNumber || ""}`, `Customer chose a payment method for a part request — ${requestNumber || ""}`);
+        const receiptNote = receiptUrl
+          ? `<a href="${receiptUrl}" target="_blank" style="color:#8A1538;font-weight:700">${bi("عرض إيصال التحويل", "View transfer receipt")}</a>`
+          : undefined;
+        html = wrap(bi("العميل اختار طريقة دفع لطلب قطعة غيار — بانتظار التحصيل", "Customer chose a payment method for a part request — awaiting collection"), [
+          [bi("العميل", "Customer"), customerName],
+          [bi("رقم الطلب", "Request Number"), requestNumber],
+          [bi("المبلغ المتوقع", "Amount Expected"), amountQAR != null ? `${amountQAR} ر.ق / QAR` : ""],
+          [bi("طريقة الدفع المختارة", "Method Chosen"), bi(methodAr || "", methodEn || "")],
+        ], receiptNote);
+      } else if (event === "part_order_payment_received") {
+        subject = bi(`💰 دفعة جديدة لطلب قطعة غيار — ${requestNumber || ""}`, `New part request payment received — ${requestNumber || ""}`);
+        html = wrap(bi("العميل دفع مبلغ عبر بوابة إلكترونية لطلب قطعة غيار", "Customer paid via online gateway for a part request"), [
+          [bi("العميل", "Customer"), customerName],
+          [bi("رقم الطلب", "Request Number"), requestNumber],
+          [bi("المبلغ", "Amount"), amountQAR != null ? `${amountQAR} ر.ق / QAR` : ""],
+          [bi("طريقة الدفع", "Payment Method"), bi(methodAr || "", methodEn || "")],
+        ]);
       }
     } else {
       return new Response(JSON.stringify({ error: "unknown event" }), {
