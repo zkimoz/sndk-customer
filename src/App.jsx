@@ -506,12 +506,14 @@ const CAT_STYLE = {
   'إصلاح وتشخيص أعطال':{ icon:Search },
   'إصلاح حوادث':        { icon:ShieldCheck },
   'إكسسوارات':          { icon:Car },
+  'تجديد استمارة السيارة':{ icon:ClipboardList },
   'Periodic Maintenance':{ icon:Cog },
   'Car Care':            { icon:Sparkles },
   'Spare Parts':         { icon:PackageSearch },
   'Fault Diagnosis':     { icon:Search },
   'Collision Repair':    { icon:ShieldCheck },
   'Accessories':         { icon:Car },
+  'Car Registration Renewal':{ icon:ClipboardList },
 };
 const DEFAULT_CAT_STYLES = [
   { icon:Cog },
@@ -558,6 +560,7 @@ const COMING_SOON_CAT_NAMES = new Set([
   'إصلاح حوادث', 'Collision Repair',
   'عناية بالسيارات', 'Car Care',
   'إكسسوارات', 'Accessories',
+  'تجديد استمارة السيارة', 'Car Registration Renewal',
 ]);
 const enrichCat = (cat, idx) => {
   const style = CAT_STYLE[cat.name?.ar] || CAT_STYLE[cat.name?.en]
