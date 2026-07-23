@@ -2797,7 +2797,7 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
   );
 
   return (
-    <div className="max-w-lg mx-auto p-4 md:p-6">
+    <div className="max-w-4xl mx-auto p-4 md:p-6">
       {step === 'categories' && (
         <div>
           {headerBar(isRtl ? 'توفير قطع غيار' : 'Spare Parts', goHome)}
@@ -2806,22 +2806,30 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
           ) : categories.length === 0 ? (
             <p className="text-sm text-center py-10" style={{ color:C.muted }}>{isRtl ? 'لا توجد تصنيفات بعد' : 'No categories yet'}</p>
           ) : (
-            <div className="grid grid-cols-2 gap-1">
-              {categories.map(cat => (
+            <div className="grid grid-cols-3 gap-x-3 gap-y-0">
+              {categories.map((cat, i) => {
+                const colOffset = [0, 34, 17][i % 3];
+                const row = Math.floor(i / 3);
+                return (
                 <button key={cat.id} onClick={()=>openCategory(cat)}
-                  className="text-start transition-all duration-300 active:scale-[0.97]"
-                  style={{ background:C.panel, boxShadow:'0 20px 40px -14px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.12)', border:`1px solid ${C.border}` }}>
-                  <div className="relative h-48 md:h-64 flex items-center justify-center p-6 overflow-hidden">
-                    <div className="absolute w-32 h-32 md:w-40 md:h-40 rounded-full pointer-events-none"
+                  className="relative rounded-2xl text-start transition-all duration-300 active:scale-[0.97]"
+                  style={{
+                    background:C.panel, boxShadow:'0 20px 40px -14px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.12)', border:`1px solid ${C.border}`,
+                    marginTop: row === 0 ? colOffset : colOffset - 32,
+                    zIndex: i + 1,
+                  }}>
+                  <div className="relative h-40 md:h-56 flex items-center justify-center p-6 overflow-hidden">
+                    <div className="absolute w-28 h-28 md:w-36 md:h-36 rounded-full pointer-events-none"
                       style={{ background:`radial-gradient(circle, ${C.gold}55 0%, ${C.gold}00 72%)` }}/>
                     {cat.image_url
                       ? <img src={cat.image_url} alt="" className="relative max-w-full max-h-full object-contain" style={{ filter:'drop-shadow(0 8px 10px rgba(0,0,0,0.35))' }}/>
-                      : <Package size={56} className="relative" style={{ color:`${C.gold}70` }}/>
+                      : <Package size={48} className="relative" style={{ color:`${C.gold}70` }}/>
                     }
                   </div>
-                  <p className="px-3.5 pb-3.5 font-black text-base text-center" style={{ color:C.text }}>{cat.name?.[lang] || cat.name?.ar}</p>
+                  <p className="px-2.5 pb-3.5 font-black text-sm md:text-base text-center" style={{ color:C.text }}>{cat.name?.[lang] || cat.name?.ar}</p>
                 </button>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -2835,29 +2843,37 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
           ) : parts.length === 0 ? (
             <p className="text-sm text-center py-10" style={{ color:C.muted }}>{isRtl ? 'لا توجد قطع في هذا التصنيف بعد' : 'No parts in this category yet'}</p>
           ) : (
-            <div className="grid grid-cols-2 gap-1">
-              {parts.map(part => (
+            <div className="grid grid-cols-3 gap-x-3 gap-y-0">
+              {parts.map((part, i) => {
+                const colOffset = [0, 34, 17][i % 3];
+                const row = Math.floor(i / 3);
+                return (
                 <button key={part.id} onClick={()=>openPart(part)}
-                  className="text-start transition-all duration-300 active:scale-[0.97]"
-                  style={{ background:C.panel, boxShadow:'0 20px 40px -14px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.12)', border:`1px solid ${C.border}` }}>
-                  <div className="relative h-48 md:h-64 flex items-center justify-center p-6 overflow-hidden">
-                    <div className="absolute w-32 h-32 md:w-40 md:h-40 rounded-full pointer-events-none"
+                  className="relative rounded-2xl text-start transition-all duration-300 active:scale-[0.97]"
+                  style={{
+                    background:C.panel, boxShadow:'0 20px 40px -14px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.12)', border:`1px solid ${C.border}`,
+                    marginTop: row === 0 ? colOffset : colOffset - 32,
+                    zIndex: i + 1,
+                  }}>
+                  <div className="relative h-40 md:h-56 flex items-center justify-center p-6 overflow-hidden">
+                    <div className="absolute w-28 h-28 md:w-36 md:h-36 rounded-full pointer-events-none"
                       style={{ background:`radial-gradient(circle, ${C.gold}55 0%, ${C.gold}00 72%)` }}/>
                     {part.image_url
                       ? <img src={part.image_url} alt="" className="relative max-w-full max-h-full object-contain" style={{ filter:'drop-shadow(0 8px 10px rgba(0,0,0,0.35))' }}/>
-                      : <Package size={56} className="relative" style={{ color:`${C.gold}70` }}/>
+                      : <Package size={48} className="relative" style={{ color:`${C.gold}70` }}/>
                     }
                   </div>
-                  <p className="px-3.5 pb-3.5 font-black text-base text-center" style={{ color:C.text }}>{part.name?.[lang] || part.name?.ar}</p>
+                  <p className="px-2.5 pb-3.5 font-black text-sm md:text-base text-center" style={{ color:C.text }}>{part.name?.[lang] || part.name?.ar}</p>
                 </button>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       )}
 
       {step === 'carGate' && (
-        <div>
+        <div className="max-w-lg mx-auto">
           {headerBar(isRtl ? 'اختر سيارتك' : 'Select Your Car', ()=>setStep('parts'))}
           {carsLoading ? (
             <div className="flex items-center justify-center py-14"><Loader2 size={22} className="animate-spin" style={{ color:C.gold }}/></div>
@@ -2885,7 +2901,7 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
       )}
 
       {step === 'detail' && selectedPart && (
-        <div>
+        <div className="max-w-lg mx-auto">
           {headerBar(selectedPart.name?.[lang] || selectedPart.name?.ar, ()=>setStep('carGate'))}
           <div className="relative w-full h-40 rounded-2xl flex items-center justify-center mb-4 p-6 overflow-hidden"
             style={{ background:C.panel, boxShadow:'0 20px 40px -14px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.12)', border:`1px solid ${C.border}` }}>
@@ -2919,7 +2935,7 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
       )}
 
       {step === 'confirm' && (
-        <div className="text-center py-14 space-y-4">
+        <div className="max-w-lg mx-auto text-center py-14 space-y-4">
           <CheckCircle2 size={48} style={{ color:'#22c55e' }} className="mx-auto"/>
           <div>
             <p className="font-black text-lg" style={{ color:C.text }}>{isRtl ? 'تم إرسال طلبك بنجاح' : 'Your request was sent'}</p>
