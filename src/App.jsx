@@ -1120,7 +1120,7 @@ export default function App() {
           {/* Page Content */}
           <main className="flex-1 overflow-y-auto pb-24 md:pb-8">
             {page==='home'    && <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements} goOrders={goOrders} goParts={goParts} pendingQuotCount={pendingQuotCount}/>}
-            {page==='services'&& <ServicesView lang={lang} tr={tr} isRtl={isRtl} user={user} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} theme={theme}/>}
+            {page==='services'&& <ServicesView lang={lang} tr={tr} isRtl={isRtl} user={user} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} theme={theme} goParts={goParts}/>}
             {page==='profile' && user && <ProfileView lang={lang} tr={tr} isRtl={isRtl} profile={profile} user={user} onBook={(car)=>bookFromProfile(car)} goServices={goServices} goOrders={goOrders} onProfileUpdated={()=>fetchProfile(user.id)} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories}/>}
             {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount} theme={theme}/>}
             {page==='contact' && <ContactView isRtl={isRtl}/>}
@@ -4502,7 +4502,7 @@ function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, service
 }
 
 // ── SERVICES VIEW ──────────────────────────────────────────────────────
-function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCategories, allSubServices, cart, addToCart, removeFromCart, theme }) {
+function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCategories, allSubServices, cart, addToCart, removeFromCart, theme, goParts }) {
   const btnAccent = theme === 'light' ? '#8A1538' : C.gold;
   const loading = serviceCategories.length === 0;
   const [unsureOpenFor, setUnsureOpenFor] = useState(null); // category id whose "describe your fault" box is open
@@ -4538,9 +4538,18 @@ function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCat
           const subs   = allSubServices.filter(s => s.category_id === cat.id);
           const catName = cat.name?.[lang] || cat.name?.ar || '';
           const catInCartCount = cart.filter(x => x.catId === cat.id).length;
+          // "توفير قطع غيار" is its own independent request/quotation system,
+          // not a sub-services accordion — route straight into that flow
+          // instead of expanding, same as the home page tile.
+          const isPartsCat = PARTS_CAT_NAMES.has(cat.name?.ar) || PARTS_CAT_NAMES.has(cat.name?.en);
+          const isComingSoon = COMING_SOON_CAT_NAMES.has(cat.name?.ar) || COMING_SOON_CAT_NAMES.has(cat.name?.en);
+          const onRowClick = () => {
+            if (isPartsCat && !isComingSoon) { goParts?.(); return; }
+            setExpanded(isOpen?null:cat.id);
+          };
           return (
             <div key={cat.id} className="rounded-2xl overflow-hidden transition-all" style={{ background:cc.bg, border:`1px solid ${isOpen?`${cc.fg}50`:`${cc.fg}25`}` }}>
-              <button onClick={()=>setExpanded(isOpen?null:cat.id)}
+              <button onClick={onRowClick}
                 className="w-full flex items-center gap-4 p-4 transition-all"
                 style={{ borderBottom:isOpen?`1px solid ${cc.div}`:'none' }}>
                 <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background:iconCC.bg }}>
@@ -4549,11 +4558,14 @@ function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCat
                 <div className="flex-1 text-start">
                   <p className="font-black text-base" style={{ color:cc.txt }}>{catName}</p>
                   <p className="text-xs mt-0.5" style={{ color:cc.sub }}>
-                    {subs.length} {isRtl?'خدمة فرعية':'sub-services'}
-                    {catInCartCount > 0 && <span style={{ color:cc.fg }}> · {catInCartCount} {isRtl?'مضافة':'added'}</span>}
+                    {isPartsCat
+                      ? (isRtl ? 'تصفّح القطع واطلب عرض سعر أو القطعة' : 'Browse parts and request a quote or the part')
+                      : <>{subs.length} {isRtl?'خدمة فرعية':'sub-services'}
+                          {catInCartCount > 0 && <span style={{ color:cc.fg }}> · {catInCartCount} {isRtl?'مضافة':'added'}</span>}
+                        </>}
                   </p>
                 </div>
-                <div className="transition-transform" style={{ transform:isOpen?'rotate(90deg)':'', color:cc.sub }}>
+                <div className="transition-transform" style={{ transform:(isOpen&&!isPartsCat)?'rotate(90deg)':'', color:cc.sub }}>
                   {isRtl?<ChevronLeft size={18}/>:<ChevronRight size={18}/>}
                 </div>
               </button>
