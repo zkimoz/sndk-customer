@@ -2835,16 +2835,17 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
           ) : categories.length === 0 ? (
             <p className="text-sm text-center py-10" style={{ color:C.muted }}>{isRtl ? 'لا توجد تصنيفات بعد' : 'No categories yet'}</p>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {categories.map(cat => (
                 <button key={cat.id} onClick={()=>openCategory(cat)}
-                  className="rounded-2xl overflow-hidden text-start transition-all active:scale-[0.97]"
-                  style={{ background:C.panel, border:`1px solid ${C.border}` }}>
+                  className="group relative rounded-2xl overflow-hidden text-start h-44 md:h-56 transition-all duration-300 hover:scale-[1.02] active:scale-[0.97]"
+                  style={{ background:C.panel, boxShadow:'0 4px 20px rgba(0,0,0,0.25)', border:`1px solid ${C.border}` }}>
                   {cat.image_url
-                    ? <img src={cat.image_url} alt="" className="w-full h-24 object-cover"/>
-                    : <div className="w-full h-24 flex items-center justify-center" style={{ background:`${C.gold}10` }}><Package size={26} style={{ color:`${C.gold}70` }}/></div>
+                    ? <img src={cat.image_url} alt="" className="absolute inset-0 w-full h-full object-contain"/>
+                    : <div className="absolute inset-0 flex items-center justify-center" style={{ background:`${C.gold}10` }}><Package size={40} style={{ color:`${C.gold}70` }}/></div>
                   }
-                  <p className="p-3 font-bold text-sm" style={{ color:C.text }}>{cat.name?.[lang] || cat.name?.ar}</p>
+                  <div className="absolute inset-0 pointer-events-none" style={{ background:'linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(0,0,0,0.65) 100%)' }}/>
+                  <p className="absolute bottom-0 start-0 p-4 font-black text-base md:text-lg text-white">{cat.name?.[lang] || cat.name?.ar}</p>
                 </button>
               ))}
             </div>
@@ -2860,18 +2861,17 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
           ) : parts.length === 0 ? (
             <p className="text-sm text-center py-10" style={{ color:C.muted }}>{isRtl ? 'لا توجد قطع في هذا التصنيف بعد' : 'No parts in this category yet'}</p>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {parts.map(part => (
                 <button key={part.id} onClick={()=>openPart(part)}
-                  className="rounded-2xl overflow-hidden text-start transition-all active:scale-[0.97]"
-                  style={{ background:C.panel, border:`1px solid ${C.border}` }}>
+                  className="group relative rounded-2xl overflow-hidden text-start h-44 md:h-56 transition-all duration-300 hover:scale-[1.02] active:scale-[0.97]"
+                  style={{ background:C.panel, boxShadow:'0 4px 20px rgba(0,0,0,0.25)', border:`1px solid ${C.border}` }}>
                   {part.image_url
-                    ? <img src={part.image_url} alt="" className="w-full h-28 object-cover"/>
-                    : <div className="w-full h-28 flex items-center justify-center" style={{ background:`${C.gold}10` }}><Package size={26} style={{ color:`${C.gold}70` }}/></div>
+                    ? <img src={part.image_url} alt="" className="absolute inset-0 w-full h-full object-contain"/>
+                    : <div className="absolute inset-0 flex items-center justify-center" style={{ background:`${C.gold}10` }}><Package size={40} style={{ color:`${C.gold}70` }}/></div>
                   }
-                  <div className="p-3">
-                    <p className="font-bold text-sm leading-snug" style={{ color:C.text }}>{part.name?.[lang] || part.name?.ar}</p>
-                  </div>
+                  <div className="absolute inset-0 pointer-events-none" style={{ background:'linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(0,0,0,0.65) 100%)' }}/>
+                  <p className="absolute bottom-0 start-0 p-4 font-black text-base md:text-lg text-white">{part.name?.[lang] || part.name?.ar}</p>
                 </button>
               ))}
             </div>
