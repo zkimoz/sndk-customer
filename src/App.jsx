@@ -2809,16 +2809,15 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {categories.map(cat => (
                 <button key={cat.id} onClick={()=>openCategory(cat)}
-                  className="rounded-2xl overflow-hidden text-start transition-all duration-300 hover:scale-[1.02] active:scale-[0.97]"
-                  style={{ background:C.panel, boxShadow:'0 4px 20px rgba(0,0,0,0.15)', border:`1px solid ${C.border}` }}>
-                  <div className="p-4">
-                    <div className="h-36 md:h-44 rounded-2xl flex items-center justify-center p-6"
-                      style={{ background:`${C.gold}12`, boxShadow:'-6px -6px 14px rgba(255,255,255,0.35), 8px 8px 18px rgba(0,0,0,0.28)' }}>
-                      {cat.image_url
-                        ? <img src={cat.image_url} alt="" className="max-w-full max-h-full object-contain" style={{ filter:'drop-shadow(3px 5px 4px rgba(0,0,0,0.35))' }}/>
-                        : <Package size={48} style={{ color:`${C.gold}70` }}/>
-                      }
-                    </div>
+                  className="rounded-2xl overflow-hidden text-start transition-all duration-300 hover:scale-[1.03] active:scale-[0.97]"
+                  style={{ background:C.panel, boxShadow:'0 20px 40px -14px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.12)', border:`1px solid ${C.border}` }}>
+                  <div className="relative h-36 md:h-44 flex items-center justify-center p-6 overflow-hidden">
+                    <div className="absolute w-28 h-28 md:w-32 md:h-32 rounded-full pointer-events-none"
+                      style={{ background:`radial-gradient(circle, ${C.gold}55 0%, ${C.gold}00 72%)` }}/>
+                    {cat.image_url
+                      ? <img src={cat.image_url} alt="" className="relative max-w-full max-h-full object-contain" style={{ filter:'drop-shadow(0 8px 10px rgba(0,0,0,0.35))' }}/>
+                      : <Package size={48} className="relative" style={{ color:`${C.gold}70` }}/>
+                    }
                   </div>
                   <p className="px-3.5 pb-3.5 font-black text-base text-center" style={{ color:C.text }}>{cat.name?.[lang] || cat.name?.ar}</p>
                 </button>
@@ -2839,16 +2838,15 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {parts.map(part => (
                 <button key={part.id} onClick={()=>openPart(part)}
-                  className="rounded-2xl overflow-hidden text-start transition-all duration-300 hover:scale-[1.02] active:scale-[0.97]"
-                  style={{ background:C.panel, boxShadow:'0 4px 20px rgba(0,0,0,0.15)', border:`1px solid ${C.border}` }}>
-                  <div className="p-4">
-                    <div className="h-36 md:h-44 rounded-2xl flex items-center justify-center p-6"
-                      style={{ background:`${C.gold}12`, boxShadow:'-6px -6px 14px rgba(255,255,255,0.35), 8px 8px 18px rgba(0,0,0,0.28)' }}>
-                      {part.image_url
-                        ? <img src={part.image_url} alt="" className="max-w-full max-h-full object-contain" style={{ filter:'drop-shadow(3px 5px 4px rgba(0,0,0,0.35))' }}/>
-                        : <Package size={48} style={{ color:`${C.gold}70` }}/>
-                      }
-                    </div>
+                  className="rounded-2xl overflow-hidden text-start transition-all duration-300 hover:scale-[1.03] active:scale-[0.97]"
+                  style={{ background:C.panel, boxShadow:'0 20px 40px -14px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.12)', border:`1px solid ${C.border}` }}>
+                  <div className="relative h-36 md:h-44 flex items-center justify-center p-6 overflow-hidden">
+                    <div className="absolute w-28 h-28 md:w-32 md:h-32 rounded-full pointer-events-none"
+                      style={{ background:`radial-gradient(circle, ${C.gold}55 0%, ${C.gold}00 72%)` }}/>
+                    {part.image_url
+                      ? <img src={part.image_url} alt="" className="relative max-w-full max-h-full object-contain" style={{ filter:'drop-shadow(0 8px 10px rgba(0,0,0,0.35))' }}/>
+                      : <Package size={48} className="relative" style={{ color:`${C.gold}70` }}/>
+                    }
                   </div>
                   <p className="px-3.5 pb-3.5 font-black text-base text-center" style={{ color:C.text }}>{part.name?.[lang] || part.name?.ar}</p>
                 </button>
@@ -2889,11 +2887,13 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
       {step === 'detail' && selectedPart && (
         <div>
           {headerBar(selectedPart.name?.[lang] || selectedPart.name?.ar, ()=>setStep('carGate'))}
-          <div className="w-full h-40 rounded-2xl flex items-center justify-center mb-4 p-6"
-            style={{ background:`${C.gold}12`, boxShadow:'-6px -6px 14px rgba(255,255,255,0.35), 8px 8px 18px rgba(0,0,0,0.28)' }}>
+          <div className="relative w-full h-40 rounded-2xl flex items-center justify-center mb-4 p-6 overflow-hidden"
+            style={{ background:C.panel, boxShadow:'0 20px 40px -14px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.12)', border:`1px solid ${C.border}` }}>
+            <div className="absolute w-28 h-28 rounded-full pointer-events-none"
+              style={{ background:`radial-gradient(circle, ${C.gold}55 0%, ${C.gold}00 72%)` }}/>
             {selectedPart.image_url
-              ? <img src={selectedPart.image_url} alt="" className="max-w-full max-h-full object-contain" style={{ filter:'drop-shadow(3px 5px 4px rgba(0,0,0,0.35))' }}/>
-              : <Package size={40} style={{ color:`${C.gold}70` }}/>
+              ? <img src={selectedPart.image_url} alt="" className="relative max-w-full max-h-full object-contain" style={{ filter:'drop-shadow(0 8px 10px rgba(0,0,0,0.35))' }}/>
+              : <Package size={40} className="relative" style={{ color:`${C.gold}70` }}/>
             }
           </div>
           <div className="mb-4">
