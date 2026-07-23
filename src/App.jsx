@@ -4529,7 +4529,12 @@ function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCat
           <div className="flex justify-center py-12" style={{ color:C.gold }}>
             <Loader2 size={24} className="animate-spin"/>
           </div>
-        ) : serviceCategories.map((cat, catIdx) => {
+        ) : serviceCategories
+          // Categories still flagged "Coming Soon" on the home page shouldn't
+          // show up here either — this list has no such overlay, so hide
+          // them entirely until Karim takes them off that list.
+          .filter(cat => !COMING_SOON_CAT_NAMES.has(cat.name?.ar) && !COMING_SOON_CAT_NAMES.has(cat.name?.en))
+          .map((cat, catIdx) => {
           const iconStyle = CAT_STYLE[cat.name?.ar] || CAT_STYLE[cat.name?.en] || DEFAULT_CAT_STYLES[catIdx % DEFAULT_CAT_STYLES.length];
           const cc     = CARD_BG_CYCLE[catIdx % 2];
           const iconCC = CARD_BG_CYCLE[(catIdx + 1) % 2];
