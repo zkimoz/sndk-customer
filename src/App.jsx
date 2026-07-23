@@ -2811,13 +2811,16 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
                 <button key={cat.id} onClick={()=>openCategory(cat)}
                   className="rounded-2xl overflow-hidden text-start transition-all duration-300 hover:scale-[1.02] active:scale-[0.97]"
                   style={{ background:C.panel, boxShadow:'0 4px 20px rgba(0,0,0,0.15)', border:`1px solid ${C.border}` }}>
-                  <div className="w-full h-40 md:h-48 flex items-center justify-center p-6" style={{ background:`${C.gold}10` }}>
-                    {cat.image_url
-                      ? <img src={cat.image_url} alt="" className="max-w-full max-h-full object-contain"/>
-                      : <Package size={48} style={{ color:`${C.gold}70` }}/>
-                    }
+                  <div className="p-4">
+                    <div className="h-36 md:h-44 rounded-2xl flex items-center justify-center p-6"
+                      style={{ background:`${C.gold}12`, boxShadow:'-6px -6px 14px rgba(255,255,255,0.35), 8px 8px 18px rgba(0,0,0,0.28)' }}>
+                      {cat.image_url
+                        ? <img src={cat.image_url} alt="" className="max-w-full max-h-full object-contain" style={{ filter:'drop-shadow(3px 5px 4px rgba(0,0,0,0.35))' }}/>
+                        : <Package size={48} style={{ color:`${C.gold}70` }}/>
+                      }
+                    </div>
                   </div>
-                  <p className="p-3.5 font-black text-base text-center" style={{ color:C.text }}>{cat.name?.[lang] || cat.name?.ar}</p>
+                  <p className="px-3.5 pb-3.5 font-black text-base text-center" style={{ color:C.text }}>{cat.name?.[lang] || cat.name?.ar}</p>
                 </button>
               ))}
             </div>
@@ -2838,13 +2841,16 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
                 <button key={part.id} onClick={()=>openPart(part)}
                   className="rounded-2xl overflow-hidden text-start transition-all duration-300 hover:scale-[1.02] active:scale-[0.97]"
                   style={{ background:C.panel, boxShadow:'0 4px 20px rgba(0,0,0,0.15)', border:`1px solid ${C.border}` }}>
-                  <div className="w-full h-40 md:h-48 flex items-center justify-center p-6" style={{ background:`${C.gold}10` }}>
-                    {part.image_url
-                      ? <img src={part.image_url} alt="" className="max-w-full max-h-full object-contain"/>
-                      : <Package size={48} style={{ color:`${C.gold}70` }}/>
-                    }
+                  <div className="p-4">
+                    <div className="h-36 md:h-44 rounded-2xl flex items-center justify-center p-6"
+                      style={{ background:`${C.gold}12`, boxShadow:'-6px -6px 14px rgba(255,255,255,0.35), 8px 8px 18px rgba(0,0,0,0.28)' }}>
+                      {part.image_url
+                        ? <img src={part.image_url} alt="" className="max-w-full max-h-full object-contain" style={{ filter:'drop-shadow(3px 5px 4px rgba(0,0,0,0.35))' }}/>
+                        : <Package size={48} style={{ color:`${C.gold}70` }}/>
+                      }
+                    </div>
                   </div>
-                  <p className="p-3.5 font-black text-base text-center" style={{ color:C.text }}>{part.name?.[lang] || part.name?.ar}</p>
+                  <p className="px-3.5 pb-3.5 font-black text-base text-center" style={{ color:C.text }}>{part.name?.[lang] || part.name?.ar}</p>
                 </button>
               ))}
             </div>
@@ -2883,9 +2889,10 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
       {step === 'detail' && selectedPart && (
         <div>
           {headerBar(selectedPart.name?.[lang] || selectedPart.name?.ar, ()=>setStep('carGate'))}
-          <div className="w-full h-40 rounded-2xl flex items-center justify-center mb-4 p-6" style={{ background:`${C.gold}10` }}>
+          <div className="w-full h-40 rounded-2xl flex items-center justify-center mb-4 p-6"
+            style={{ background:`${C.gold}12`, boxShadow:'-6px -6px 14px rgba(255,255,255,0.35), 8px 8px 18px rgba(0,0,0,0.28)' }}>
             {selectedPart.image_url
-              ? <img src={selectedPart.image_url} alt="" className="max-w-full max-h-full object-contain"/>
+              ? <img src={selectedPart.image_url} alt="" className="max-w-full max-h-full object-contain" style={{ filter:'drop-shadow(3px 5px 4px rgba(0,0,0,0.35))' }}/>
               : <Package size={40} style={{ color:`${C.gold}70` }}/>
             }
           </div>
