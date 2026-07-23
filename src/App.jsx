@@ -2806,17 +2806,17 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
           ) : categories.length === 0 ? (
             <p className="text-sm text-center py-10" style={{ color:C.muted }}>{isRtl ? 'لا توجد تصنيفات بعد' : 'No categories yet'}</p>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-1">
               {categories.map(cat => (
                 <button key={cat.id} onClick={()=>openCategory(cat)}
-                  className="rounded-2xl overflow-hidden text-start transition-all duration-300 hover:scale-[1.03] active:scale-[0.97]"
+                  className="text-start transition-all duration-300 active:scale-[0.97]"
                   style={{ background:C.panel, boxShadow:'0 20px 40px -14px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.12)', border:`1px solid ${C.border}` }}>
-                  <div className="relative h-36 md:h-44 flex items-center justify-center p-6 overflow-hidden">
-                    <div className="absolute w-28 h-28 md:w-32 md:h-32 rounded-full pointer-events-none"
+                  <div className="relative h-48 md:h-64 flex items-center justify-center p-6 overflow-hidden">
+                    <div className="absolute w-32 h-32 md:w-40 md:h-40 rounded-full pointer-events-none"
                       style={{ background:`radial-gradient(circle, ${C.gold}55 0%, ${C.gold}00 72%)` }}/>
                     {cat.image_url
                       ? <img src={cat.image_url} alt="" className="relative max-w-full max-h-full object-contain" style={{ filter:'drop-shadow(0 8px 10px rgba(0,0,0,0.35))' }}/>
-                      : <Package size={48} className="relative" style={{ color:`${C.gold}70` }}/>
+                      : <Package size={56} className="relative" style={{ color:`${C.gold}70` }}/>
                     }
                   </div>
                   <p className="px-3.5 pb-3.5 font-black text-base text-center" style={{ color:C.text }}>{cat.name?.[lang] || cat.name?.ar}</p>
@@ -2835,17 +2835,17 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
           ) : parts.length === 0 ? (
             <p className="text-sm text-center py-10" style={{ color:C.muted }}>{isRtl ? 'لا توجد قطع في هذا التصنيف بعد' : 'No parts in this category yet'}</p>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-1">
               {parts.map(part => (
                 <button key={part.id} onClick={()=>openPart(part)}
-                  className="rounded-2xl overflow-hidden text-start transition-all duration-300 hover:scale-[1.03] active:scale-[0.97]"
+                  className="text-start transition-all duration-300 active:scale-[0.97]"
                   style={{ background:C.panel, boxShadow:'0 20px 40px -14px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.12)', border:`1px solid ${C.border}` }}>
-                  <div className="relative h-36 md:h-44 flex items-center justify-center p-6 overflow-hidden">
-                    <div className="absolute w-28 h-28 md:w-32 md:h-32 rounded-full pointer-events-none"
+                  <div className="relative h-48 md:h-64 flex items-center justify-center p-6 overflow-hidden">
+                    <div className="absolute w-32 h-32 md:w-40 md:h-40 rounded-full pointer-events-none"
                       style={{ background:`radial-gradient(circle, ${C.gold}55 0%, ${C.gold}00 72%)` }}/>
                     {part.image_url
                       ? <img src={part.image_url} alt="" className="relative max-w-full max-h-full object-contain" style={{ filter:'drop-shadow(0 8px 10px rgba(0,0,0,0.35))' }}/>
-                      : <Package size={48} className="relative" style={{ color:`${C.gold}70` }}/>
+                      : <Package size={56} className="relative" style={{ color:`${C.gold}70` }}/>
                     }
                   </div>
                   <p className="px-3.5 pb-3.5 font-black text-base text-center" style={{ color:C.text }}>{part.name?.[lang] || part.name?.ar}</p>
