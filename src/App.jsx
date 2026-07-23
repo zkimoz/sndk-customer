@@ -2809,14 +2809,15 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {categories.map(cat => (
                 <button key={cat.id} onClick={()=>openCategory(cat)}
-                  className="group relative rounded-2xl overflow-hidden text-start h-44 md:h-56 transition-all duration-300 hover:scale-[1.02] active:scale-[0.97]"
-                  style={{ background:C.panel, boxShadow:'0 4px 20px rgba(0,0,0,0.25)', border:`1px solid ${C.border}` }}>
-                  {cat.image_url
-                    ? <img src={cat.image_url} alt="" className="absolute inset-0 w-full h-full object-contain"/>
-                    : <div className="absolute inset-0 flex items-center justify-center" style={{ background:`${C.gold}10` }}><Package size={40} style={{ color:`${C.gold}70` }}/></div>
-                  }
-                  <div className="absolute inset-0 pointer-events-none" style={{ background:'linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(0,0,0,0.65) 100%)' }}/>
-                  <p className="absolute bottom-0 start-0 p-4 font-black text-base md:text-lg text-white">{cat.name?.[lang] || cat.name?.ar}</p>
+                  className="rounded-2xl overflow-hidden text-start transition-all duration-300 hover:scale-[1.02] active:scale-[0.97]"
+                  style={{ background:C.panel, boxShadow:'0 4px 20px rgba(0,0,0,0.15)', border:`1px solid ${C.border}` }}>
+                  <div className="w-full h-40 md:h-48 flex items-center justify-center p-6" style={{ background:`${C.gold}10` }}>
+                    {cat.image_url
+                      ? <img src={cat.image_url} alt="" className="max-w-full max-h-full object-contain"/>
+                      : <Package size={48} style={{ color:`${C.gold}70` }}/>
+                    }
+                  </div>
+                  <p className="p-3.5 font-black text-base text-center" style={{ color:C.text }}>{cat.name?.[lang] || cat.name?.ar}</p>
                 </button>
               ))}
             </div>
@@ -2835,14 +2836,15 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {parts.map(part => (
                 <button key={part.id} onClick={()=>openPart(part)}
-                  className="group relative rounded-2xl overflow-hidden text-start h-44 md:h-56 transition-all duration-300 hover:scale-[1.02] active:scale-[0.97]"
-                  style={{ background:C.panel, boxShadow:'0 4px 20px rgba(0,0,0,0.25)', border:`1px solid ${C.border}` }}>
-                  {part.image_url
-                    ? <img src={part.image_url} alt="" className="absolute inset-0 w-full h-full object-contain"/>
-                    : <div className="absolute inset-0 flex items-center justify-center" style={{ background:`${C.gold}10` }}><Package size={40} style={{ color:`${C.gold}70` }}/></div>
-                  }
-                  <div className="absolute inset-0 pointer-events-none" style={{ background:'linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(0,0,0,0.65) 100%)' }}/>
-                  <p className="absolute bottom-0 start-0 p-4 font-black text-base md:text-lg text-white">{part.name?.[lang] || part.name?.ar}</p>
+                  className="rounded-2xl overflow-hidden text-start transition-all duration-300 hover:scale-[1.02] active:scale-[0.97]"
+                  style={{ background:C.panel, boxShadow:'0 4px 20px rgba(0,0,0,0.15)', border:`1px solid ${C.border}` }}>
+                  <div className="w-full h-40 md:h-48 flex items-center justify-center p-6" style={{ background:`${C.gold}10` }}>
+                    {part.image_url
+                      ? <img src={part.image_url} alt="" className="max-w-full max-h-full object-contain"/>
+                      : <Package size={48} style={{ color:`${C.gold}70` }}/>
+                    }
+                  </div>
+                  <p className="p-3.5 font-black text-base text-center" style={{ color:C.text }}>{part.name?.[lang] || part.name?.ar}</p>
                 </button>
               ))}
             </div>
@@ -2881,11 +2883,12 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
       {step === 'detail' && selectedPart && (
         <div>
           {headerBar(selectedPart.name?.[lang] || selectedPart.name?.ar, ()=>setStep('carGate'))}
-          {selectedPart.image_url ? (
-            <img src={selectedPart.image_url} alt="" className="w-full h-48 object-cover rounded-2xl mb-4" style={{ border:`1px solid ${C.border}` }}/>
-          ) : (
-            <div className="w-full h-40 rounded-2xl flex items-center justify-center mb-4" style={{ background:`${C.gold}10` }}><Package size={32} style={{ color:`${C.gold}70` }}/></div>
-          )}
+          <div className="w-full h-40 rounded-2xl flex items-center justify-center mb-4 p-6" style={{ background:`${C.gold}10` }}>
+            {selectedPart.image_url
+              ? <img src={selectedPart.image_url} alt="" className="max-w-full max-h-full object-contain"/>
+              : <Package size={40} style={{ color:`${C.gold}70` }}/>
+            }
+          </div>
           <div className="mb-4">
             <label className="block text-sm font-bold mb-1.5" style={{ color:C.text }}>{isRtl?'ملاحظات (اختياري)':'Notes (optional)'}</label>
             <textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={2}
