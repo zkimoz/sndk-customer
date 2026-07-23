@@ -550,12 +550,22 @@ const CARD_BG_CYCLE = [
 ];
 // right card big / left card small, flipping every row (mobile 3-col grid)
 const SPAN_CYCLE = [1, 2, 2, 1];
+// Services not live yet — still shown on the home/services grid (so
+// customers know they're coming) but flagged with a "Coming Soon" overlay
+// instead of silently looking bookable like the ones that actually work.
+const COMING_SOON_CAT_NAMES = new Set([
+  'توفير قطع غيار', 'Spare Parts',
+  'إصلاح حوادث', 'Collision Repair',
+  'عناية بالسيارات', 'Car Care',
+  'إكسسوارات', 'Accessories',
+]);
 const enrichCat = (cat, idx) => {
   const style = CAT_STYLE[cat.name?.ar] || CAT_STYLE[cat.name?.en]
     || DEFAULT_CAT_STYLES[idx % DEFAULT_CAT_STYLES.length];
   const color = CARD_BG_CYCLE[idx % 2];
   const span = SPAN_CYCLE[idx % SPAN_CYCLE.length];
-  return { ...style, ...color, span, fg:'#ffffff', id:cat.id, ar:cat.name?.ar||'', en:cat.name?.en||'', key:String(cat.id) };
+  const comingSoon = COMING_SOON_CAT_NAMES.has(cat.name?.ar) || COMING_SOON_CAT_NAMES.has(cat.name?.en);
+  return { ...style, ...color, span, fg:'#ffffff', id:cat.id, ar:cat.name?.ar||'', en:cat.name?.en||'', key:String(cat.id), comingSoon };
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -5099,6 +5109,13 @@ function ServiceCard({ service, lang, span, onClick }) {
       {service.key==='periodic' && (
         <div className="absolute bottom-3 start-3">
           <span className="text-[9px] font-black px-2 py-0.5 rounded-full tracking-widest uppercase" style={{ background:C.gold, color:C.btnTxt }}>VIP</span>
+        </div>
+      )}
+      {service.comingSoon && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ background:'rgba(0,0,0,0.55)' }}>
+          <span className="font-black text-white uppercase tracking-wide text-xl md:text-2xl drop-shadow-lg" style={{ textShadow:'0 2px 8px rgba(0,0,0,0.6)' }}>
+            {lang==='ar' ? 'قريباً' : 'Coming Soon'}
+          </span>
         </div>
       )}
     </button>
