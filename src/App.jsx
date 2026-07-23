@@ -556,7 +556,6 @@ const SPAN_CYCLE = [1, 2, 2, 1];
 // customers know they're coming) but flagged with a "Coming Soon" overlay
 // instead of silently looking bookable like the ones that actually work.
 const COMING_SOON_CAT_NAMES = new Set([
-  'توفير قطع غيار', 'Spare Parts',
   'إصلاح حوادث', 'Collision Repair',
   'عناية بالسيارات', 'Car Care',
   'إكسسوارات', 'Accessories',
