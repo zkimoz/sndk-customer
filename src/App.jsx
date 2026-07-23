@@ -2728,7 +2728,7 @@ function ContactView({ isRtl }) {
 // the part itself against a part_orders row. Self-contained (owns its own
 // step state) so it doesn't add to the root App component's state.
 function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
-  const [step, setStep] = useState('carGate'); // 'carGate'|'categories'|'parts'|'detail'|'confirm'
+  const [step, setStep] = useState('categories'); // 'categories'|'parts'|'carGate'|'detail'|'confirm'
   const [cars, setCars] = useState([]);
   const [carsLoading, setCarsLoading] = useState(true);
   const [selectedCar, setSelectedCar] = useState(null);
@@ -2753,7 +2753,7 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
       .then(({ data }) => { setCategories(data||[]); setCatsLoading(false); });
   }, []);
 
-  const pickCar = (car) => { setSelectedCar(car); setStep('categories'); };
+  const pickCar = (car) => { setSelectedCar(car); setNotes(''); setStep('detail'); };
 
   const openCategory = (cat) => {
     setSelectedCat(cat); setPartsLoading(true); setStep('parts');
@@ -2761,7 +2761,7 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
       .then(({ data }) => { setParts(data||[]); setPartsLoading(false); });
   };
 
-  const openPart = (part) => { setSelectedPart(part); setNotes(''); setStep('detail'); };
+  const openPart = (part) => { setSelectedPart(part); setStep('carGate'); };
 
   const submitRequest = async (requestType) => {
     setSubmitting(true);
@@ -2798,38 +2798,9 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
 
   return (
     <div className="max-w-lg mx-auto p-4 md:p-6">
-      {step === 'carGate' && (
-        <div>
-          {headerBar(isRtl ? 'توفير قطع غيار' : 'Spare Parts', goHome)}
-          <p className="text-sm mb-4" style={{ color:C.muted }}>{isRtl ? 'اختر سيارتك أولاً' : 'Select your car first'}</p>
-          {carsLoading ? (
-            <div className="flex items-center justify-center py-14"><Loader2 size={22} className="animate-spin" style={{ color:C.gold }}/></div>
-          ) : cars.length === 0 ? (
-            <div className="text-center py-10 space-y-3">
-              <Car size={36} style={{ color:`${C.gold}60` }} className="mx-auto"/>
-              <p className="text-sm" style={{ color:C.muted }}>{isRtl ? 'لا توجد سيارات في حسابك بعد — أضف سيارة من صفحة "حسابي" أولاً' : "You don't have any cars on file yet — add one from your Profile page first"}</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {cars.map(car => (
-                <button key={car.id} onClick={()=>pickCar(car)}
-                  className="w-full flex items-center gap-3 p-3.5 rounded-2xl text-start transition-all active:scale-[0.98]"
-                  style={{ background:C.panel, border:`1px solid ${C.border}` }}>
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background:`${C.gold}15` }}><Car size={18} style={{ color:C.gold }}/></div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-bold text-sm truncate" style={{ color:C.text }}>{[car.car_type, car.car_category, car.production_year].filter(Boolean).join(' · ')}</p>
-                    {car.plate_number && <p className="text-xs mt-0.5" style={{ color:C.muted }}>{car.plate_number}</p>}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
       {step === 'categories' && (
         <div>
-          {headerBar(isRtl ? 'التصنيفات الرئيسية' : 'Main Categories', ()=>setStep('carGate'))}
+          {headerBar(isRtl ? 'توفير قطع غيار' : 'Spare Parts', goHome)}
           {catsLoading ? (
             <div className="flex items-center justify-center py-14"><Loader2 size={22} className="animate-spin" style={{ color:C.gold }}/></div>
           ) : categories.length === 0 ? (
@@ -2879,9 +2850,37 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
         </div>
       )}
 
+      {step === 'carGate' && (
+        <div>
+          {headerBar(isRtl ? 'اختر سيارتك' : 'Select Your Car', ()=>setStep('parts'))}
+          {carsLoading ? (
+            <div className="flex items-center justify-center py-14"><Loader2 size={22} className="animate-spin" style={{ color:C.gold }}/></div>
+          ) : cars.length === 0 ? (
+            <div className="text-center py-10 space-y-3">
+              <Car size={36} style={{ color:`${C.gold}60` }} className="mx-auto"/>
+              <p className="text-sm" style={{ color:C.muted }}>{isRtl ? 'لا توجد سيارات في حسابك بعد — أضف سيارة من صفحة "حسابي" أولاً' : "You don't have any cars on file yet — add one from your Profile page first"}</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {cars.map(car => (
+                <button key={car.id} onClick={()=>pickCar(car)}
+                  className="w-full flex items-center gap-3 p-3.5 rounded-2xl text-start transition-all active:scale-[0.98]"
+                  style={{ background:C.panel, border:`1px solid ${C.border}` }}>
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background:`${C.gold}15` }}><Car size={18} style={{ color:C.gold }}/></div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-sm truncate" style={{ color:C.text }}>{[car.car_type, car.car_category, car.production_year].filter(Boolean).join(' · ')}</p>
+                    {car.plate_number && <p className="text-xs mt-0.5" style={{ color:C.muted }}>{car.plate_number}</p>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {step === 'detail' && selectedPart && (
         <div>
-          {headerBar(selectedPart.name?.[lang] || selectedPart.name?.ar, ()=>setStep('parts'))}
+          {headerBar(selectedPart.name?.[lang] || selectedPart.name?.ar, ()=>setStep('carGate'))}
           {selectedPart.image_url ? (
             <img src={selectedPart.image_url} alt="" className="w-full h-48 object-cover rounded-2xl mb-4" style={{ border:`1px solid ${C.border}` }}/>
           ) : (
