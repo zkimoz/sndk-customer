@@ -2001,6 +2001,82 @@ function PartOrderPaymentModal({ partOrderId, amount, requestNumber, customerNam
   );
 }
 
+// The actual "page" for a requested spare part — built by staff (photos +
+// description) once they've priced the request, viewed here by the customer.
+// Everything staff hasn't filled in yet just doesn't render.
+function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
+  const ST = {
+    pending:          { label: isRtl ? 'قيد المراجعة' : 'Pending review',      bg:'rgba(59,130,246,0.15)',  text:'#60a5fa' },
+    reviewing:        { label: isRtl ? 'قيد المراجعة' : 'Under review',        bg:'rgba(59,130,246,0.15)',  text:'#60a5fa' },
+    priced:           { label: isRtl ? 'تم تحديد السعر' : 'Price set',         bg:'rgba(234,179,8,0.15)',   text:'#eab308' },
+    awaiting_payment: { label: isRtl ? 'بانتظار الدفع' : 'Awaiting payment',   bg:'rgba(234,179,8,0.15)',   text:'#eab308' },
+    paid:             { label: isRtl ? 'تم الدفع' : 'Paid',                    bg:'rgba(34,197,94,0.15)',   text:'#22c55e' },
+    sourcing:         { label: isRtl ? 'جاري التجهيز' : 'Sourcing',            bg:'rgba(249,115,22,0.15)',  text:'#f97316' },
+    ready:            { label: isRtl ? 'جاهزة للاستلام' : 'Ready',             bg:'rgba(34,197,94,0.15)',   text:'#22c55e' },
+    delivered:        { label: isRtl ? 'تم التسليم' : 'Delivered',             bg:'rgba(168,85,247,0.15)',  text:'#a855f7' },
+    cancelled:        { label: isRtl ? 'ملغي' : 'Cancelled',                   bg:'rgba(239,68,68,0.15)',   text:'#ef4444' },
+    declined:         { label: isRtl ? 'مرفوض' : 'Declined',                   bg:'rgba(239,68,68,0.15)',   text:'#ef4444' },
+  };
+  const st = ST[po.status] || ST.pending;
+  const paidSoFar = (po.part_order_payments || []).reduce((s,p)=>s+Number(p.amount||0), 0);
+  const amountDue = Math.max(Number(po.quoted_sell_price||0) - paidSoFar, 0);
+  const canPay = ['priced','awaiting_payment'].includes(po.status) && po.payment_status !== 'paid' && amountDue > 0.01;
+  const photos = po.admin_image_urls?.length ? po.admin_image_urls : (po.part_snapshot?.image_url ? [po.part_snapshot.image_url] : []);
+  const description = po.admin_description?.[lang] || po.admin_description?.ar;
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto" onClick={e=>e.stopPropagation()}
+        style={{ background:C.card }}>
+        <div className="p-5 space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-black text-lg" style={{ color:C.cardText }}>{po.part_snapshot?.name?.[lang] || po.part_snapshot?.name?.ar || '—'}</h3>
+              <p className="text-xs mt-1 font-mono" style={{ color:C.cardMuted }}>{po.request_number}</p>
+            </div>
+            <button onClick={onClose} className="p-1.5 rounded-lg flex-shrink-0" style={{ color:C.cardMuted }}><X size={18}/></button>
+          </div>
+
+          <span className="inline-block px-2.5 py-1 rounded-full text-sm font-bold" style={{ background:st.bg, color:st.text }}>{st.label}</span>
+
+          {photos.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto">
+              {photos.map(url => (
+                <img key={url} src={url} alt="" className="w-full h-48 object-cover rounded-2xl flex-shrink-0" style={{ maxWidth:'100%' }}/>
+              ))}
+            </div>
+          )}
+
+          {description && <p className="text-sm leading-relaxed" style={{ color:C.cardMuted }}>{description}</p>}
+
+          {Number(po.quoted_sell_price) > 0 && (
+            <p className="text-2xl font-black" style={{ color:C.gold }}>{Number(po.quoted_sell_price).toFixed(3)} {isRtl?'ر.ق':'QAR'}</p>
+          )}
+
+          {po.customer_notes && (
+            <div>
+              <p className="text-xs font-bold mb-1" style={{ color:C.cardMuted }}>{isRtl?'ملاحظاتك':'Your notes'}</p>
+              <p className="text-sm" style={{ color:C.cardText }}>{po.customer_notes}</p>
+            </div>
+          )}
+
+          {po.payment_status === 'pending' && (
+            <p className="text-sm font-semibold" style={{ color:'#eab308' }}>{isRtl ? 'بانتظار تأكيد الدفع من فريقنا' : 'Awaiting payment confirmation from our team'}</p>
+          )}
+
+          {canPay && (
+            <button onClick={()=>onPay(amountDue)}
+              className="w-full py-3 rounded-xl text-sm font-black transition-all active:scale-95"
+              style={{ background:C.gold, color:C.btnTxt }}>
+              {isRtl ? 'اختر طريقة الدفع' : 'Choose Payment Method'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function openQuotationPDF(order, linked, profile, jobCard) {
   const isApproved = !!order.customer_approved;
   const approvalDate = order.approved_at
@@ -2663,7 +2739,6 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
   const [parts, setParts] = useState([]);
   const [partsLoading, setPartsLoading] = useState(false);
   const [selectedPart, setSelectedPart] = useState(null);
-  const [galleryIdx, setGalleryIdx] = useState(0);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [confirmedType, setConfirmedType] = useState(null);
@@ -2683,11 +2758,11 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
 
   const openCategory = (cat) => {
     setSelectedCat(cat); setPartsLoading(true); setStep('parts');
-    supabase.from('parts_catalog').select('*').eq('category_id', cat.id).eq('is_active', true).order('created_at', { ascending:false })
+    supabase.from('spare_parts').select('*').eq('category_id', cat.id).eq('is_active', true).order('sort_order')
       .then(({ data }) => { setParts(data||[]); setPartsLoading(false); });
   };
 
-  const openPart = (part) => { setSelectedPart(part); setGalleryIdx(0); setNotes(''); setStep('detail'); };
+  const openPart = (part) => { setSelectedPart(part); setNotes(''); setStep('detail'); };
 
   const submitRequest = async (requestType) => {
     setSubmitting(true);
@@ -2698,7 +2773,7 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
       car_id: selectedCar.id,
       car_snapshot: { car_type: selectedCar.car_type, car_category: selectedCar.car_category, production_year: selectedCar.production_year, plate_number: selectedCar.plate_number },
       part_id: selectedPart.id,
-      part_snapshot: { name: selectedPart.name, image_url: selectedPart.image_url, part_number: selectedPart.part_number },
+      part_snapshot: { name: selectedPart.name, image_url: selectedPart.image_url },
       request_type: requestType,
       customer_notes: notes.trim() || null,
     });
@@ -2797,9 +2872,6 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
                   }
                   <div className="p-3">
                     <p className="font-bold text-sm leading-snug" style={{ color:C.text }}>{part.name?.[lang] || part.name?.ar}</p>
-                    {Number(part.default_sell_price) > 0 && (
-                      <p className="text-sm font-black mt-1" style={{ color:C.gold }}>{Number(part.default_sell_price).toFixed(3)} {isRtl?'ر.ق':'QAR'}</p>
-                    )}
                   </div>
                 </button>
               ))}
@@ -2811,26 +2883,10 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
       {step === 'detail' && selectedPart && (
         <div>
           {headerBar(selectedPart.name?.[lang] || selectedPart.name?.ar, ()=>setStep('parts'))}
-          {selectedPart.image_urls?.length > 0 ? (
-            <div className="space-y-2 mb-4">
-              <img src={selectedPart.image_urls[galleryIdx]} alt="" className="w-full h-56 object-cover rounded-2xl" style={{ border:`1px solid ${C.border}` }}/>
-              {selectedPart.image_urls.length > 1 && (
-                <div className="flex gap-2 overflow-x-auto">
-                  {selectedPart.image_urls.map((url, i) => (
-                    <img key={url} src={url} alt="" onClick={()=>setGalleryIdx(i)}
-                      className="w-14 h-14 rounded-lg object-cover flex-shrink-0 cursor-pointer transition-all"
-                      style={{ border:`2px solid ${i===galleryIdx ? C.gold : C.border}`, opacity: i===galleryIdx?1:0.6 }}/>
-                  ))}
-                </div>
-              )}
-            </div>
+          {selectedPart.image_url ? (
+            <img src={selectedPart.image_url} alt="" className="w-full h-48 object-cover rounded-2xl mb-4" style={{ border:`1px solid ${C.border}` }}/>
           ) : (
             <div className="w-full h-40 rounded-2xl flex items-center justify-center mb-4" style={{ background:`${C.gold}10` }}><Package size={32} style={{ color:`${C.gold}70` }}/></div>
-          )}
-          {selectedPart.part_number && <p className="text-xs font-mono mb-2" style={{ color:C.muted }}>{selectedPart.part_number}</p>}
-          {selectedPart.description?.[lang] && <p className="text-sm leading-relaxed mb-4" style={{ color:C.muted }}>{selectedPart.description[lang]}</p>}
-          {Number(selectedPart.default_sell_price) > 0 && (
-            <p className="text-2xl font-black mb-4" style={{ color:C.gold }}>{Number(selectedPart.default_sell_price).toFixed(3)} {isRtl?'ر.ق':'QAR'}</p>
           )}
           <div className="mb-4">
             <label className="block text-sm font-bold mb-1.5" style={{ color:C.text }}>{isRtl?'ملاحظات (اختياري)':'Notes (optional)'}</label>
@@ -2892,6 +2948,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   const [payMethodModal, setPayMethodModal] = useState(null); // { orderId, types } | null
   const [partOrders, setPartOrders] = useState([]);
   const [payPartOrderModal, setPayPartOrderModal] = useState(null); // { partOrderId, amount, requestNumber } | null
+  const [viewPartOrder, setViewPartOrder] = useState(null); // the tapped part_orders row, or null
   const [serviceSelections, setServiceSelections] = useState({}); // { [orderId]: { [serviceKey]: boolean } }
   // Booking a date/time for a quote-only request the customer just approved —
   // the service decisions and quotation are already locked in, this only
@@ -4095,11 +4152,9 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
               ) : partOrders.map((po, pi) => {
                 const cc = CARD_BG_CYCLE[pi % 2];
                 const st = PART_ORDER_ST[po.status] || PART_ORDER_ST.pending;
-                const paidSoFar = (po.part_order_payments || []).reduce((s,p)=>s+Number(p.amount||0), 0);
-                const amountDue = Math.max(Number(po.quoted_sell_price||0) - paidSoFar, 0);
-                const canPay = ['priced','awaiting_payment'].includes(po.status) && po.payment_status !== 'paid' && amountDue > 0.01;
                 return (
-                  <div key={po.id} className="rounded-2xl p-4 space-y-3"
+                  <button key={po.id} onClick={()=>setViewPartOrder(po)}
+                    className="w-full text-start rounded-2xl p-4 space-y-2 transition-all active:scale-[0.98]"
                     style={{ background:cc.bg, border:`1px solid ${cc.fg}40` }}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
@@ -4117,14 +4172,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                     {po.payment_status === 'pending' && (
                       <p className="text-xs font-semibold" style={{ color:'#eab308' }}>{isRtl ? 'بانتظار تأكيد الدفع من فريقنا' : 'Awaiting payment confirmation from our team'}</p>
                     )}
-                    {canPay && (
-                      <button onClick={()=>setPayPartOrderModal({ partOrderId:po.id, amount:amountDue, requestNumber:po.request_number })}
-                        className="w-full py-2.5 rounded-xl text-sm font-black transition-all active:scale-95"
-                        style={{ background:C.gold, color:C.btnTxt }}>
-                        {isRtl ? 'اختر طريقة الدفع' : 'Choose Payment Method'}
-                      </button>
-                    )}
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -4160,6 +4208,16 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
             if (opts?.gateway) return;
             alert(isRtl ? 'تم إرسال طلبك — سيتواصل معك فريقنا لإتمام الدفع' : "Your request has been sent — our team will contact you to complete the payment");
           }}
+        />
+      )}
+
+      {viewPartOrder && (
+        <PartOrderDetailModal
+          partOrder={viewPartOrder}
+          lang={lang}
+          isRtl={isRtl}
+          onClose={() => setViewPartOrder(null)}
+          onPay={(amountDue) => { setPayPartOrderModal({ partOrderId:viewPartOrder.id, amount:amountDue, requestNumber:viewPartOrder.request_number }); setViewPartOrder(null); }}
         />
       )}
 
