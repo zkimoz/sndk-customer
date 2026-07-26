@@ -2107,6 +2107,55 @@ function openQuotationPDF(order, linked, profile, jobCard) {
       rejectedNames.push({ ar: it.service_name?.ar || key, en: it.service_name?.en || it.service_name?.ar || key });
     }
   });
+  // Group approved items under their service (name, note, its own items,
+  // its own subtotal) instead of one flat items table — matches the real
+  // job-card structure.
+  const qGroups = [];
+  const seenQGroupKeys = new Set();
+  approvedItems.forEach(it => {
+    const key = groupKeyOf(it);
+    if (key && !seenQGroupKeys.has(key)) {
+      seenQGroupKeys.add(key);
+      qGroups.push({
+        key, ar: it.service_name?.ar || key, en: it.service_name?.en || '',
+        notes_ar: it.service_name?.notes_ar || it.service_name?.notes || '', notes_en: it.service_name?.notes_en || '',
+      });
+    }
+  });
+  const qGeneralItems = approvedItems.filter(it => !groupKeyOf(it));
+  let qRowIdx = 0;
+  const buildQItemRow = (item) => {
+    qRowIdx++;
+    const nameAr = item.item_name?.ar || item.item_name?.en || '—';
+    const nameEn = item.item_name?.en || '';
+    const discountPct = Number(item.discount_pct||0);
+    return `<tr>
+      <td style="color:#999;font-size:11px">${qRowIdx}</td>
+      <td>
+        <span class="badge ${item.item_type==='labor'?'badge-labor':'badge-part'}">${item.item_type==='labor'?'عمالة / Labor':'قطعة / Part'}</span><br>
+        <span style="font-weight:600">${nameAr}</span>
+        ${nameEn && nameEn !== nameAr ? `<span style="font-size:11px;color:#666;margin-right:5px">(${nameEn})</span>` : ''}
+        ${item.part_number ? `<span style="font-size:10px;color:#aaa;display:block;font-family:monospace">${item.part_number}</span>` : ''}
+      </td>
+      <td style="text-align:center;font-weight:600">${item.quantity}</td>
+      <td dir="ltr" style="font-size:12px;font-weight:600">${Number(item.sell_price).toFixed(3)}${discountPct>0?`<br><span style="color:#dc2626;font-size:10px">-${discountPct.toFixed(0)}%</span>`:''}</td>
+      <td dir="ltr" style="font-weight:700;color:#8A1538">${lineTotal(item).toFixed(3)}</td>
+    </tr>`;
+  };
+  const qGroupRowsHtml = qGroups.map(g => {
+    const groupItems = approvedItems.filter(it => groupKeyOf(it) === g.key);
+    const subtotal = groupItems.reduce((s,it)=>s+lineTotal(it),0);
+    return `
+      <tr><td colspan="5" style="background:#fdf3e7;padding:9px 10px;font-weight:800;color:#8A1538;font-size:12px">${g.ar}${g.en&&g.en!==g.ar?` / ${g.en}`:''}</td></tr>
+      ${g.notes_ar ? `<tr><td colspan="5" style="padding:2px 10px 9px;font-size:10px;color:#92400e;font-style:italic;background:#fdf3e7">"${escapeHtml(g.notes_ar)}"${g.notes_en?` / "${escapeHtml(g.notes_en)}"`:''}</td></tr>` : ''}
+      ${groupItems.map(buildQItemRow).join('')}
+      <tr><td colspan="4" style="text-align:left;padding:6px 10px;font-weight:700;color:#475569;font-size:11px">إجمالي الخدمة / Service Total</td><td style="padding:6px 10px;font-weight:800;color:#8A1538;font-size:12px" dir="ltr">${subtotal.toFixed(3)} QAR</td></tr>
+    `;
+  }).join('');
+  const qGeneralRowsHtml = qGeneralItems.length > 0 ? `
+    ${qGroups.length>0 ? `<tr><td colspan="5" style="background:#f1f5f9;padding:9px 10px;font-weight:800;color:#475569;font-size:12px">بنود عامة / General Items</td></tr>` : ''}
+    ${qGeneralItems.map(buildQItemRow).join('')}
+  ` : '';
   const serviceLabel = (() => {
     if (!linked?.service_type) return '';
     try { return JSON.parse(linked.service_type).map(s => s.name || s).join(' · '); } catch { return linked.service_type; }
@@ -2232,23 +2281,7 @@ ${(partItems.length > 0 || laborItems.length > 0 || towingAmount > 0) ? `
       <th style="width:110px">الإجمالي / Total</th>
     </tr></thead>
     <tbody>
-      ${[...partItems, ...laborItems].map((item, i) => {
-        const nameAr = item.item_name?.ar || item.item_name?.en || '—';
-        const nameEn = item.item_name?.en || '';
-        const discountPct = Number(item.discount_pct||0);
-        return `<tr>
-          <td style="color:#999;font-size:11px">${i+1}</td>
-          <td>
-            <span class="badge ${item.item_type==='labor'?'badge-labor':'badge-part'}">${item.item_type==='labor'?'عمالة / Labor':'قطعة / Part'}</span><br>
-            <span style="font-weight:600">${nameAr}</span>
-            ${nameEn && nameEn !== nameAr ? `<span style="font-size:11px;color:#666;margin-right:5px">(${nameEn})</span>` : ''}
-            ${item.part_number ? `<span style="font-size:10px;color:#aaa;display:block;font-family:monospace">${item.part_number}</span>` : ''}
-          </td>
-          <td style="text-align:center;font-weight:600">${item.quantity}</td>
-          <td dir="ltr" style="font-size:12px;font-weight:600">${Number(item.sell_price).toFixed(3)}${discountPct>0?`<br><span style="color:#dc2626;font-size:10px">-${discountPct.toFixed(0)}%</span>`:''}</td>
-          <td dir="ltr" style="font-weight:700;color:#8A1538">${lineTotal(item).toFixed(3)}</td>
-        </tr>`;
-      }).join('')}
+      ${qGroupRowsHtml}${qGeneralRowsHtml}
     </tbody>
   </table>` : ''}
   <div class="totals">
