@@ -3645,7 +3645,8 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                 seen.add(key);
                                 services.push({
                                   key, name_ar: i.service_name.ar, name_en: i.service_name.en, priority: i.service_name.priority || 'low',
-                                  category_ar: i.service_name.category_ar || '', category_en: i.service_name.category_en || '', notes: i.service_name.notes || '',
+                                  category_ar: i.service_name.category_ar || '', category_en: i.service_name.category_en || '',
+                                  notes_ar: i.service_name.notes_ar || i.service_name.notes || '', notes_en: i.service_name.notes_en || '',
                                 });
                               }
                             });
@@ -3695,7 +3696,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                                             <p className="text-[10px] font-bold uppercase tracking-wider truncate" style={{ color:cc.sub }}>{isRtl?(s.category_ar||s.category_en):(s.category_en||s.category_ar)}</p>
                                           )}
                                           <span className="text-sm font-semibold" style={{ color:cc.txt }}>{isRtl?(s.name_ar||s.name_en):(s.name_en||s.name_ar)}{displaySuffixOf[s.key]}</span>
-                                          {s.notes && <p className="text-[11px] mt-0.5 italic" style={{ color:cc.sub }}>{s.notes}</p>}
+                                          {s.notes_ar && <p className="text-[11px] mt-0.5 italic" style={{ color:cc.sub }}>{isRtl ? s.notes_ar : (s.notes_en || s.notes_ar)}</p>}
                                         </div>
                                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
                                           <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background:PRIORITY_STYLE[s.priority].bg, color:PRIORITY_STYLE[s.priority].text }}>
