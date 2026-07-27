@@ -3602,6 +3602,11 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           {jc.customer_complaints && (
                             <p className="text-base font-bold mt-1.5" style={{ color:cc.txt }}>{jc.customer_complaints}</p>
                           )}
+                          {jc.general_notes?.ar && (
+                            <p className="text-sm mt-1.5" style={{ color:cc.sub }}>
+                              📝 {isRtl ? jc.general_notes.ar : (jc.general_notes.en || jc.general_notes.ar)}
+                            </p>
+                          )}
                         </div>
                         {/* Job status + number */}
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
