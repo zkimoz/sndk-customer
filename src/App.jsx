@@ -2268,6 +2268,12 @@ ${jobCard?.work_done ? `
   <div class="textarea-field">${escapeHtml(jobCard.work_done)}</div>
 </div>` : ''}
 
+${jobCard?.general_notes?.ar ? `
+<div class="section">
+  <div class="section-title">ملاحظات عامة / General Notes</div>
+  <div class="textarea-field">${escapeHtml(jobCard.general_notes.ar)}${jobCard.general_notes.en?`<br><span dir="ltr">${escapeHtml(jobCard.general_notes.en)}</span>`:''}</div>
+</div>` : ''}
+
 ${(partItems.length > 0 || laborItems.length > 0 || towingAmount > 0) ? `
 <div class="section">
   <div class="section-title">${decided ? 'عرض السعر المعتمد / Approved Quotation' : 'عرض السعر / Quotation'}</div>
@@ -2631,6 +2637,12 @@ function printCustomerInvoice(jobCard, appt, order, profile, brandsData = [], ca
         <div class="grand-amt">${grandTotal.toFixed(3)} QAR</div>
       </div>
     </div>
+
+    ${jobCard?.general_notes?.ar ? `
+    <!-- GENERAL NOTES -->
+    <div style="margin:0 30px 24px;padding:14px 16px;background:#fdf3e7;border:1px solid #f5e6d3;border-radius:8px;font-size:11px;color:#92400e;line-height:1.8">
+      <strong>ملاحظات / Notes:</strong> ${escapeHtml(jobCard.general_notes.ar)}${jobCard.general_notes.en ? ` / <span dir="ltr">${escapeHtml(jobCard.general_notes.en)}</span>` : ''}
+    </div>` : ''}
 
     ${rejectedNames.length > 0 ? `
     <!-- REJECTED SERVICES NOTE -->
@@ -3072,7 +3084,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     if (!user) { setLoading(false); return; }
     loadPartOrders();
     const { data: apptData } = await supabase.from('appointments')
-      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot)')
+      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, general_notes, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot)')
       .eq('profile_id', user.id)
       .order('appointment_date', { ascending: false });
     setAppts(apptData || []);
@@ -4870,7 +4882,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
     if (history[carId]) return;
     const { data } = await supabase
       .from('appointments')
-      .select('*, orders(*, order_items(*), payments(*)), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot)')
+      .select('*, orders(*, order_items(*), payments(*)), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, general_notes, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot)')
       .eq('car_id', carId)
       .order('appointment_date', { ascending: false });
     setHistory(p => ({ ...p, [carId]: data || [] }));
