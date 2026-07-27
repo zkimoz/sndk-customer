@@ -11,7 +11,7 @@ const CUSTOMER_FROM_EMAIL = Deno.env.get("CUSTOMER_FROM_EMAIL") || "SNDK <norepl
 // opted in individually via notify_email in الموظفين.
 const DEPARTMENT_EMAILS = ["info@sndkqa.com", "workshop@sndkqa.com", "customerservice@sndkqa.com"];
 const STAFF_EVENTS = new Set(["quotation_approved", "new_booking", "payment_received", "payment_method_chosen", "part_request_created", "part_order_payment_method_chosen", "part_order_payment_received"]);
-const CUSTOMER_EVENTS = new Set(["status_changed", "quotation_sent", "invoice_ready", "job_closed", "resignature_requested", "details_updated", "payment_receipt", "part_request_priced", "part_request_delivered"]);
+const CUSTOMER_EVENTS = new Set(["status_changed", "quotation_sent", "invoice_ready", "job_closed", "resignature_requested", "payment_receipt", "part_request_priced", "part_request_delivered"]);
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -116,12 +116,6 @@ serve(async (req) => {
       } else if (event === "resignature_requested") {
         subject = bi(`✍️ مطلوب توقيعك مرة أخرى — ${jobNumber || ""}`, `We need your signature again — ${jobNumber || ""}`);
         html = wrap(bi("مطلوب توقيع جديد على عرض السعر", "New Signature Required"), [
-          [bi("العميل", "Customer"), name],
-          [bi("رقم أمر الشغل", "Job Number"), jobNumber],
-        ]);
-      } else if (event === "details_updated") {
-        subject = bi(`🔄 تحديث على بيانات أمر شغلك — ${jobNumber || ""}`, `Your job card was updated — ${jobNumber || ""}`);
-        html = wrap(bi("تم تحديث بيانات أمر الشغل", "Job Card Details Updated"), [
           [bi("العميل", "Customer"), name],
           [bi("رقم أمر الشغل", "Job Number"), jobNumber],
         ]);
