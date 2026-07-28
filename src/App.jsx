@@ -3280,10 +3280,25 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     // "awaiting customer approval" to "preparing parts" — only if it's still
     // sitting at 'pending', so it never steps on progress staff already made.
     const autoPartsStatus = (isApproved && order.status === 'pending') ? { status: 'sourcing', parts_status_at: now } : {};
+    // A second (or later) approval round must not silently erase the
+    // previous one's signature — snapshot whatever's currently in the
+    // "live" columns into history before this round overwrites them. Those
+    // live columns keep holding only the LATEST round on purpose: every
+    // print/PDF/live view that already reads them needs no changes to keep
+    // showing just the latest signature; staff see the full history separately.
+    const hadPriorRound = !!order.approved_at;
+    const newApprovalHistory = hadPriorRound
+      ? [...(order.approval_history || []), {
+          approved_at: order.approved_at, customer_approved: order.customer_approved, customer_rejected: order.customer_rejected,
+          service_decisions: order.service_decisions, signature_data: order.signature_data, signed_by: order.signed_by,
+          wants_old_parts: order.wants_old_parts, total_parts_price: order.total_parts_price, total_labor_price: order.total_labor_price,
+        }]
+      : (order.approval_history || []);
     const { error: decErr } = await supabase.from('orders').update({
       customer_approved: isApproved, customer_rejected: isRejected, approved_at: now,
       service_decisions: decisions,
       total_parts_price: newPartsTotal, total_labor_price: newLaborTotal,
+      approval_history: newApprovalHistory,
       // Only meaningful when this round actually had part items — the
       // signature modal only asks the question (and passes non-null) then.
       ...(wantsOldParts !== null && wantsOldParts !== undefined ? { wants_old_parts: wantsOldParts } : {}),
@@ -3310,7 +3325,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
 
     setOrders(prev => prev.map(o => o.id === orderId
       ? { ...o, customer_approved:isApproved, customer_rejected:isRejected, approved_at:now, service_decisions:decisions,
-          total_parts_price:newPartsTotal, total_labor_price:newLaborTotal,
+          total_parts_price:newPartsTotal, total_labor_price:newLaborTotal, approval_history:newApprovalHistory,
           ...(wantsOldParts !== null && wantsOldParts !== undefined ? { wants_old_parts: wantsOldParts } : {}),
           ...autoPartsStatus,
           ...localSig }
