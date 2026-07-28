@@ -6081,20 +6081,42 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
   // anyone unauthenticated to the auth modal first, so this step is only ever
   // reached once `user` is set. Guarded defensively in case that ever changes.
   if (!user) return null;
-  const canGo = formData.carId !== null || (addingNew && !!formData.carBrandKey && !!formData.carCategoryKey && formData.carModel.length === 4 && !!formData.carRegistrationFile);
+  // A car picked from the existing list can still be one staff added long
+  // ago without a registration photo (or, historically, before this photo
+  // was required at all) — trust-but-verify instead of letting it through
+  // silently, the same gap that let job cards show up with "no car" info.
+  const selectedCarObj = userCars.find(c => c.id === formData.carId);
+  const existingCarNeedsReg = !!selectedCarObj && !selectedCarObj.registration_image_url;
+  const canGo = (formData.carId !== null && (!existingCarNeedsReg || !!formData.carRegistrationFile))
+    || (addingNew && !!formData.carBrandKey && !!formData.carCategoryKey && formData.carModel.length === 4 && !!formData.carRegistrationFile);
   return (
     <>
     <FormShell title={tr.yourCar}>
         {/* Selected car chip */}
         {formData.carId && !addingNew && (
-          <div className="rounded-2xl p-4 flex items-center justify-between" style={{ background: C.card, border: `1px solid ${C.gold}40` }}>
-            <div>
-              <p className="font-black" style={{ color: C.cardText }}>{[resolveLangName(formData.carBrandKey, carBrands, lang), resolveLangName(formData.carCategoryKey, carCategories, lang)].filter(Boolean).join(' · ')}</p>
-              {formData.carModel && <p className="text-xs mt-0.5" style={{ color: C.cardMuted }}>{formData.carModel}</p>}
+          <div className="rounded-2xl p-4 space-y-3" style={{ background: C.card, border: `1px solid ${C.gold}40` }}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-black" style={{ color: C.cardText }}>{[resolveLangName(formData.carBrandKey, carBrands, lang), resolveLangName(formData.carCategoryKey, carCategories, lang)].filter(Boolean).join(' · ')}</p>
+                {formData.carModel && <p className="text-xs mt-0.5" style={{ color: C.cardMuted }}>{formData.carModel}</p>}
+              </div>
+              <button onClick={clearSelection} className="text-xs px-3 py-1.5 rounded-xl font-bold" style={{ color: C.cardText, border: `1px solid ${C.cardText}40` }}>
+                {tr.changeCar}
+              </button>
             </div>
-            <button onClick={clearSelection} className="text-xs px-3 py-1.5 rounded-xl font-bold" style={{ color: C.cardText, border: `1px solid ${C.cardText}40` }}>
-              {tr.changeCar}
-            </button>
+            {existingCarNeedsReg && (
+              <div>
+                <label className="flex items-center gap-2 px-4 py-3.5 rounded-xl cursor-pointer text-sm transition-all"
+                  style={{ background: C.input, border: `1px solid ${formData.carRegistrationFile ? C.gold : '#f87171'}` }}>
+                  <Upload size={14} style={{ color: formData.carRegistrationFile ? C.gold : '#f87171', flexShrink:0 }}/>
+                  <span className="truncate" style={{ color: formData.carRegistrationFile ? C.gold : C.cardMuted }}>
+                    {formData.carRegistrationFile ? formData.carRegistrationFile.name : (isRtl?'بيانات السيارة دي ناقصة صورة الاستمارة — يرجى رفعها':'This car is missing its registration photo — please upload it')}
+                  </span>
+                  <input type="file" accept="image/*,application/pdf" className="hidden"
+                    onChange={e => setFormData(p => ({ ...p, carRegistrationFile: e.target.files[0] || null }))}/>
+                </label>
+              </div>
+            )}
           </div>
         )}
 
@@ -6338,19 +6360,19 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
         ? JSON.stringify(cart.map(s => ({ id: s.id, name: s.name, catName: s.catName })))
         : (formData.serviceName || '');
       let carId = formData.carId;
+      // Namespaced under the owner's user id, same as the profile's own
+      // add-car upload — the bucket is public, so the path is the gate.
+      const plateKey = sanitizeForPath(formData.carPlateNumber) || `${Date.now()}`;
+      const uploadSide = async (file, suffix) => {
+        if (!file) return null;
+        const ext = file.name.split('.').pop();
+        const path = `${user.id}/${plateKey}${suffix}.${ext}`;
+        const { error: upErr } = await supabase.storage.from('car-registration').upload(path, file, { upsert: true });
+        if (upErr) throw new Error((isRtl ? 'فشل رفع صورة الاستمارة: ' : 'Failed to upload registration image: ') + upErr.message);
+        const { data: { publicUrl } } = supabase.storage.from('car-registration').getPublicUrl(path);
+        return publicUrl;
+      };
       if (!carId) {
-        // Namespaced under the owner's user id, same as the profile's own
-        // add-car upload — the bucket is public, so the path is the gate.
-        const plateKey = sanitizeForPath(formData.carPlateNumber) || `${Date.now()}`;
-        const uploadSide = async (file, suffix) => {
-          if (!file) return null;
-          const ext = file.name.split('.').pop();
-          const path = `${user.id}/${plateKey}${suffix}.${ext}`;
-          const { error: upErr } = await supabase.storage.from('car-registration').upload(path, file, { upsert: true });
-          if (upErr) throw new Error((isRtl ? 'فشل رفع صورة الاستمارة: ' : 'Failed to upload registration image: ') + upErr.message);
-          const { data: { publicUrl } } = supabase.storage.from('car-registration').getPublicUrl(path);
-          return publicUrl;
-        };
         const registration_image_url = await uploadSide(formData.carRegistrationFile, '');
         const registration_image_url_2 = await uploadSide(formData.carRegistrationFile2, '-back');
         const { data: carData, error: carErr } = await supabase.from('cars')
@@ -6366,6 +6388,16 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
           }]).select('id').single();
         if (carErr) throw carErr;
         carId = carData.id;
+      } else if (formData.carRegistrationFile) {
+        // Backfilling a registration photo onto a pre-existing car that
+        // didn't have one yet (see DetailsStep's "complete this car" prompt)
+        // — an older car of theirs, or one staff added without one.
+        const registration_image_url = await uploadSide(formData.carRegistrationFile, '');
+        const registration_image_url_2 = await uploadSide(formData.carRegistrationFile2, '-back');
+        await supabase.from('cars').update({
+          registration_image_url,
+          ...(registration_image_url_2 ? { registration_image_url_2 } : {}),
+        }).eq('id', carId);
       }
       const { error: apptErr } = await supabase.from('appointments').insert([{
         profile_id: user.id, car_id: carId,
