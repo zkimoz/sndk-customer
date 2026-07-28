@@ -3923,6 +3923,23 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                               </div>
                             );
                           })()}
+                          {/* Attached receipts — whether the customer uploaded it themselves or
+                              staff attached it while recording a "فوري"/instant-transfer payment
+                              on their behalf, it lands in the same payments table and shows here
+                              the same way, so there's one shared place both sides can open it. */}
+                          {(relOrd.payments || []).filter(p => p.receipt_url).length > 0 && (
+                            <div className="rounded-lg overflow-hidden p-3 space-y-1.5" style={{ background:'rgba(0,0,0,0.08)' }}>
+                              <p className="text-sm font-bold" style={{ color:cc.sub }}>{isRtl?'الإيصالات المرفقة':'Attached Receipts'}</p>
+                              {(relOrd.payments || []).filter(p => p.receipt_url).map(p => (
+                                <div key={p.id} className="flex items-center justify-between text-sm">
+                                  <span style={{ color:cc.txt }}>{Number(p.amount||0).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                                  <a href={p.receipt_url} target="_blank" rel="noreferrer" className="text-xs font-bold underline" style={{ color:cc.fg }}>
+                                    {isRtl?'عرض الإيصال':'View Receipt'}
+                                  </a>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                           {/* Invoice — only once staff has issued it AND the balance is fully settled */}
                           {jc.invoice_ready && (() => {
                             const pendingExcessRaw = (relOrd.wallet_transactions || [])
