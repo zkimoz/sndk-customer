@@ -2823,6 +2823,11 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
   const [selectedCat, setSelectedCat] = useState(null);
   const [parts, setParts] = useState([]);
   const [partsLoading, setPartsLoading] = useState(false);
+  // Ancestor parts drilled into so far — a part can nest sub-parts under
+  // it ("sometimes the part itself has other parts inside it"), so this
+  // isn't always just one level below the category. Empty = showing the
+  // category's own top-level parts.
+  const [partStack, setPartStack] = useState([]);
   const [selectedPart, setSelectedPart] = useState(null);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -2858,12 +2863,37 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
   const pickCar = (car) => { setSelectedCar(car); setNotes(''); setStep('detail'); };
 
   const openCategory = (cat) => {
-    setSelectedCat(cat); setPartsLoading(true); setStep('parts');
-    supabase.from('spare_parts').select('*').eq('category_id', cat.id).eq('is_active', true).order('sort_order')
+    setSelectedCat(cat); setPartStack([]); setPartsLoading(true); setStep('parts');
+    supabase.from('spare_parts').select('*').eq('category_id', cat.id).is('parent_id', null).eq('is_active', true).order('sort_order')
       .then(({ data }) => { setParts(data||[]); setPartsLoading(false); });
   };
 
-  const openPart = (part) => { setSelectedPart(part); setStep('carGate'); };
+  // Tapping a part either drills into its own sub-parts (if it has any) or,
+  // for a normal leaf part, goes straight to picking a car like before.
+  const openPart = async (part) => {
+    setPartsLoading(true);
+    const { data: children } = await supabase.from('spare_parts').select('*').eq('parent_id', part.id).eq('is_active', true).order('sort_order');
+    if (children?.length > 0) {
+      setPartStack(prev => [...prev, part]);
+      setParts(children);
+      setPartsLoading(false);
+    } else {
+      setPartsLoading(false);
+      setSelectedPart(part);
+      setStep('carGate');
+    }
+  };
+
+  const backFromParts = () => {
+    if (partStack.length === 0) { setStep('categories'); return; }
+    const newStack = partStack.slice(0, -1);
+    setPartStack(newStack);
+    setPartsLoading(true);
+    const query = newStack.length > 0
+      ? supabase.from('spare_parts').select('*').eq('parent_id', newStack[newStack.length - 1].id).eq('is_active', true).order('sort_order')
+      : supabase.from('spare_parts').select('*').eq('category_id', selectedCat.id).is('parent_id', null).eq('is_active', true).order('sort_order');
+    query.then(({ data }) => { setParts(data||[]); setPartsLoading(false); });
+  };
 
   const submitRequest = async (requestType) => {
     setSubmitting(true);
@@ -2934,7 +2964,12 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
 
       {step === 'parts' && (
         <div>
-          {headerBar(selectedCat?.name?.[lang] || selectedCat?.name?.ar, ()=>setStep('categories'))}
+          {headerBar(
+            partStack.length > 0
+              ? (partStack[partStack.length - 1].name?.[lang] || partStack[partStack.length - 1].name?.ar)
+              : (selectedCat?.name?.[lang] || selectedCat?.name?.ar),
+            backFromParts
+          )}
           {partsLoading ? (
             <div className="flex items-center justify-center py-14"><Loader2 size={22} className="animate-spin" style={{ color:C.gold }}/></div>
           ) : parts.length === 0 ? (
