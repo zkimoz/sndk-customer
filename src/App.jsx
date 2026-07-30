@@ -739,11 +739,10 @@ function BrandSearchSelect({ value, onSelect, brands, lang, placeholder, disable
     <div className="relative" ref={wrapRef}>
       <div className="relative">
         {!open && selectedBrand && (
-          <div className="absolute top-1/2 -translate-y-1/2 w-9 h-9 rounded-lg bg-white flex items-center justify-center pointer-events-none overflow-hidden" style={{ [isRtl?'right':'left']:'8px' }}>
-            <img key={selectedBrand.id} src={carBrandLogoUrl(selectedBrand.name_en)} alt=""
-              onError={e => { e.target.style.display = 'none'; }}
-              className="w-7 h-7 object-contain"/>
-          </div>
+          <img key={selectedBrand.id} src={carBrandLogoUrl(selectedBrand.name_en)} alt=""
+            onError={e => { e.target.style.display = 'none'; }}
+            className="absolute top-1/2 -translate-y-1/2 w-11 h-11 object-contain pointer-events-none"
+            style={{ [isRtl?'right':'left']:'6px' }}/>
         )}
         <input
           value={open ? query : (selectedBrand ? brandLabel(selectedBrand, lang) : '')}
@@ -755,7 +754,7 @@ function BrandSearchSelect({ value, onSelect, brands, lang, placeholder, disable
           className={`${C.inputCls} ${C.phCls}`}
           style={{
             background:C.input, border:`1px solid ${C.border}`, opacity: disabled?0.4:1,
-            paddingInlineEnd:'2.5rem', paddingInlineStart: (!open && selectedBrand) ? '3.25rem' : undefined,
+            paddingInlineEnd:'2.5rem', paddingInlineStart: (!open && selectedBrand) ? '3.5rem' : undefined,
           }}
           onBlurCapture={e=>e.target.style.borderColor=C.border}
         />
@@ -769,12 +768,10 @@ function BrandSearchSelect({ value, onSelect, brands, lang, placeholder, disable
             <button key={b.id} type="button"
               onMouseDown={e => e.preventDefault()}
               onClick={() => { onSelect(b); setQuery(''); setOpen(false); }}
-              className="w-full flex items-center gap-3 text-start px-4 py-2.5 text-sm hover:bg-white/10 transition-colors" style={{ color:C.text }}>
-              <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center flex-shrink-0 overflow-hidden">
-                <img key={b.id} src={carBrandLogoUrl(b.name_en)} alt=""
-                  onError={e => { e.target.style.display = 'none'; }}
-                  className="w-7 h-7 object-contain"/>
-              </div>
+              className="w-full flex items-center gap-3 text-start px-4 py-2 text-sm hover:bg-white/10 transition-colors" style={{ color:C.text }}>
+              <img key={b.id} src={carBrandLogoUrl(b.name_en)} alt=""
+                onError={e => { e.target.style.display = 'none'; }}
+                className="w-11 h-11 object-contain flex-shrink-0"/>
               {brandLabel(b, lang)}
             </button>
           ))}
@@ -2355,7 +2352,7 @@ function openQuotationPDF(order, linked, profile, jobCard, carBrands = []) {
 <div class="section">
   <div class="section-title">بيانات السيارة / Car Info</div>
   <div class="grid2" style="margin-bottom:8px">
-    <div class="field"><div class="field-label">السيارة / Car</div><div class="field-value"><img src="${escapeHtml(carLogoSrc)}" alt="" style="height:16px;vertical-align:middle;margin-inline-end:6px" onerror="this.style.display='none'"/>${escapeHtml([car.car_type, car.car_category, car.production_year].filter(Boolean).join(' ')) || '—'}</div></div>
+    <div class="field"><div class="field-label">السيارة / Car</div><div class="field-value"><img src="${escapeHtml(carLogoSrc)}" alt="" style="height:26px;vertical-align:middle;margin-inline-end:8px" onerror="this.style.display='none'"/>${escapeHtml([car.car_type, car.car_category, car.production_year].filter(Boolean).join(' ')) || '—'}</div></div>
     <div class="field"><div class="field-label">اللوحة / Plate</div><div class="field-value" dir="ltr">${escapeHtml(car.plate_number) || '—'}</div></div>
   </div>
   ${car.chassis_number ? `<div class="field"><div class="field-label">رقم الشاصيه / VIN</div><div class="field-value" dir="ltr" style="font-family:monospace;letter-spacing:1px">${escapeHtml(car.chassis_number)}</div></div>` : ''}
@@ -2693,7 +2690,7 @@ function printCustomerInvoice(jobCard, appt, order, profile, brandsData = [], ca
         <div class="lbl-ar">بيانات السيارة</div>
         <div class="lbl-en">Vehicle Info</div>
         <div class="sub" style="margin-bottom:4px"><span class="label-ar">النوع</span> <span class="label-en">Type</span>:</div>
-        <div class="val"><img src="${escapeHtml(carBrandLogoUrl(carTypeEn||carTypeAr))}" alt="" style="height:16px;vertical-align:middle;margin-inline-end:6px" onerror="this.style.display='none'"/>${escapeHtml(carTypeAr)}${carTypeEn&&carTypeEn!==carTypeAr?` <span style="color:#64748b;font-weight:500">/ ${escapeHtml(carTypeEn)}</span>`:''}</div>
+        <div class="val"><img src="${escapeHtml(carBrandLogoUrl(carTypeEn||carTypeAr))}" alt="" style="height:26px;vertical-align:middle;margin-inline-end:8px" onerror="this.style.display='none'"/>${escapeHtml(carTypeAr)}${carTypeEn&&carTypeEn!==carTypeAr?` <span style="color:#64748b;font-weight:500">/ ${escapeHtml(carTypeEn)}</span>`:''}</div>
         ${carCatAr?`<div class="sub"><span class="label-ar">الفئة</span> <span class="label-en">Category</span>: <strong>${escapeHtml(carCatAr)}${carCatEn&&carCatEn!==carCatAr?` / ${escapeHtml(carCatEn)}`:''}</strong></div>`:''}
         ${car.production_year?`<div class="sub"><span class="label-ar">موديل</span> <span class="label-en">Model Year</span>: <strong>${escapeHtml(car.production_year)}</strong></div>`:''}
         ${car.plate_number?`<div class="sub"><span class="label-ar">رقم اللوحة</span> <span class="label-en">Plate Number</span>: <strong>${escapeHtml(car.plate_number)}</strong></div>`:''}
@@ -3717,7 +3714,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             <p className="text-sm mt-1.5 flex items-center gap-1.5" style={{ color:cc.sub }}>
                               <img key={car.id} src={carLogoUrlFor(car, carBrandsRef)} alt=""
                                 onError={e => { e.target.style.display = 'none'; }}
-                                className="w-4 h-4 object-contain rounded bg-white p-0.5 flex-shrink-0"/>
+                                className="w-6 h-6 object-contain flex-shrink-0"/>
                               {[carTypeLabel(car, carBrandsRef, lang), carCategoryLabel(car, carCatsRef, lang), car.production_year].filter(Boolean).join(' · ')}
                             </p>
                           )}
@@ -3809,7 +3806,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             <p className="text-sm flex items-center gap-1.5" style={{ color:cc.sub }}>
                               <img key={car.id} src={carLogoUrlFor(car, carBrandsRef)} alt=""
                                 onError={e => { e.target.style.display = 'none'; }}
-                                className="w-4 h-4 object-contain rounded bg-white p-0.5 flex-shrink-0"/>
+                                className="w-6 h-6 object-contain flex-shrink-0"/>
                               {[carTypeLabel(car, carBrandsRef, lang), carCategoryLabel(car, carCatsRef, lang), car.production_year].filter(Boolean).join(' · ')}
                               {car.plate_number ? ` · ${car.plate_number}` : ''}
                             </p>
@@ -4430,7 +4427,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             <p className="text-sm mt-1.5 flex items-center gap-1.5" style={{ color:cc.sub }}>
                               <img key={car.id} src={carLogoUrlFor(car, carBrandsRef)} alt=""
                                 onError={e => { e.target.style.display = 'none'; }}
-                                className="w-4 h-4 object-contain rounded bg-white p-0.5 flex-shrink-0"/>
+                                className="w-6 h-6 object-contain flex-shrink-0"/>
                               {[carTypeLabel(car, carBrandsRef, lang), carCategoryLabel(car, carCatsRef, lang), car.production_year].filter(Boolean).join(' · ')}
                             </p>
                           )}
@@ -5664,11 +5661,12 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                 <div key={car.id} className="rounded-2xl overflow-hidden transition-all" style={{ background:cc.bg, border:`1px solid ${isOpen?`${cc.fg}50`:`${cc.fg}25`}` }}>
                   <div className="flex items-center gap-2 p-4">
                     <button onClick={()=>toggleCar(car.id)} className="flex items-center gap-4 flex-1 min-w-0">
-                      <div className="relative w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background:iconCC.bg }}>
-                        <Car size={22} style={{ color:iconCC.fg }}/>
+                      <div className="relative w-16 h-16 flex items-center justify-center flex-shrink-0">
+                        <div className="absolute inset-0 rounded-xl" style={{ background:iconCC.bg }}/>
+                        <Car size={22} className="relative" style={{ color:iconCC.fg }}/>
                         <img key={car.id} src={carLogoUrlFor(car, carBrands)} alt=""
                           onError={e => { e.target.style.display = 'none'; }}
-                          className="absolute inset-0 w-full h-full object-contain p-2 rounded-xl bg-white"/>
+                          className="absolute inset-0 w-full h-full object-contain"/>
                       </div>
                       <div className="flex-1 text-start min-w-0">
                         <p className="font-black" style={{ color:cc.txt }}>{[carTypeLabel(car, carBrands, lang), carCategoryLabel(car, carCategories, lang)].filter(Boolean).join(' · ')}</p>
@@ -6340,11 +6338,12 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
                     style={{ background: C.card, border: `1px solid ${C.border}` }}
                     onMouseEnter={e => e.currentTarget.style.borderColor = C.gold + '60'}
                     onMouseLeave={e => e.currentTarget.style.borderColor = C.border}>
-                    <div className="relative w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${C.cardText}18` }}>
-                      <Car size={16} style={{ color: C.cardText }}/>
+                    <div className="relative w-14 h-14 flex items-center justify-center flex-shrink-0">
+                      <div className="absolute inset-0 rounded-xl" style={{ background: `${C.cardText}18` }}/>
+                      <Car size={16} className="relative" style={{ color: C.cardText }}/>
                       <img key={car.id} src={carLogoUrlFor(car, carBrands)} alt=""
                         onError={e => { e.target.style.display = 'none'; }}
-                        className="absolute inset-0 w-full h-full object-contain p-1.5 rounded-xl bg-white"/>
+                        className="absolute inset-0 w-full h-full object-contain"/>
                     </div>
                     <div>
                       <p className="font-black text-sm" style={{ color: C.cardText }}>{[carTypeLabel(car, carBrands, lang), carCategoryLabel(car, carCategories, lang)].filter(Boolean).join(' · ')}</p>
