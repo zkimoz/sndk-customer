@@ -2773,7 +2773,7 @@ function printCustomerInvoice(jobCard, appt, order, profile, brandsData = [], ca
       <div class="f-en">This is an official tax invoice issued by SNDK — Qatar</div>
       <div style="margin-top:6px;font-size:10px;color:#cbd5e1">شكراً لثقتكم بنا · Thank you for your trust</div>
       <div style="margin-top:10px;padding-top:10px;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;line-height:1.8">
-        <div style="font-weight:700;color:#64748b">سندك للتجارة الإلكترونية · SNDK E-Commerce Trading</div>
+        <div style="font-weight:700;color:#64748b">سندك الرقمي لوساطة الخدمات والتجارة الإلكترونية · SNDK Digital Platform for Service Brokerage and E-Commerce</div>
         <div>منطقة ٩١، شارع ١٢٠٠، مبنى ١٢٠، الوكير، قطر · Zone 91, Street 1200, Building 120, Al Wukair, Qatar</div>
         <div dir="ltr">📞 66284656 &nbsp;·&nbsp; ✉️ info@sndkqa.com</div>
         <div style="margin-top:2px">س.ت: 244788 &nbsp;·&nbsp; رقم قيد المنشأة: 17-3166-21</div>
