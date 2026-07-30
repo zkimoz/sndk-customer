@@ -5654,19 +5654,17 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
           <div className="space-y-3">
             {cars.map((car, carIdx) => {
               const cc     = CARD_BG_CYCLE[1]; // always maroon
-              const iconCC = CARD_BG_CYCLE[0]; // gold icon for contrast
               const isOpen = expandedCar === car.id;
               const carHistory = history[car.id];
               return (
                 <div key={car.id} className="rounded-2xl overflow-hidden transition-all" style={{ background:cc.bg, border:`1px solid ${isOpen?`${cc.fg}50`:`${cc.fg}25`}` }}>
                   <div className="flex items-center gap-2 p-4">
                     <button onClick={()=>toggleCar(car.id)} className="flex items-center gap-4 flex-1 min-w-0">
-                      <div className="relative w-16 h-16 flex items-center justify-center flex-shrink-0">
-                        <div className="absolute inset-0 rounded-xl" style={{ background:iconCC.bg }}/>
-                        <Car size={22} className="relative" style={{ color:iconCC.fg }}/>
+                      <div className="relative w-16 h-16 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background:'#e2e8f0' }}>
+                        <Car size={22} className="relative" style={{ color:'#94a3b8' }}/>
                         <img key={car.id} src={carLogoUrlFor(car, carBrands)} alt=""
                           onError={e => { e.target.style.display = 'none'; }}
-                          className="absolute inset-0 w-full h-full object-contain"/>
+                          className="absolute inset-0 w-full h-full object-contain p-2"/>
                       </div>
                       <div className="flex-1 text-start min-w-0">
                         <p className="font-black" style={{ color:cc.txt }}>{[carTypeLabel(car, carBrands, lang), carCategoryLabel(car, carCategories, lang)].filter(Boolean).join(' · ')}</p>
