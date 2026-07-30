@@ -2909,24 +2909,28 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
             <p className="text-sm text-center py-10" style={{ color:C.muted }}>{isRtl ? 'لا توجد تصنيفات بعد' : 'No categories yet'}</p>
           ) : (
             <div className={`grid gap-x-3 gap-y-0 ${gridCols === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-              {categories.map((cat, i) => (
+              {categories.map((cat, i) => { const cyc = CARD_BG_CYCLE[i % 2]; return (
                 <button key={cat.id} onClick={()=>openCategory(cat)}
-                  className="relative rounded-2xl text-start transition-all duration-300 active:scale-[0.97]"
-                  style={{
-                    background:C.panel, boxShadow:'0 20px 40px -14px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.12)', border:`1px solid ${C.border}`,
-                    ...gridItemStyle(i),
-                  }}>
+                  className="group relative rounded-2xl overflow-hidden text-start transition-all duration-300 hover:scale-[1.03] active:scale-[0.97]"
+                  style={{ backgroundColor:cyc.bg, boxShadow:'0 4px 20px rgba(0,0,0,0.35)', ...gridItemStyle(i) }}>
+                  <div className="absolute inset-0 pointer-events-none" style={{ background:'linear-gradient(160deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.25) 100%)' }}/>
+                  <div className="absolute inset-0 rounded-2xl pointer-events-none" style={{ boxShadow:`inset 0 0 0 1px ${C.gold}25` }}/>
+                  <div className="absolute top-0 start-0 p-3 md:p-4 z-10">
+                    <p className="font-black text-[14px] md:text-[16px] leading-snug"
+                      style={{ color:cyc.txt, textShadow: cyc.bg==='#FFCB74' ? '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' : 'none' }}>
+                      {cat.name?.[lang] || cat.name?.ar}
+                    </p>
+                  </div>
                   <div className="relative h-40 md:h-56 flex items-center justify-center p-6 overflow-hidden">
                     <div className="absolute w-28 h-28 md:w-36 md:h-36 rounded-full pointer-events-none"
-                      style={{ background:`radial-gradient(circle, ${C.gold}55 0%, ${C.gold}00 72%)` }}/>
+                      style={{ background:'radial-gradient(circle, rgba(0,0,0,0.14) 0%, rgba(0,0,0,0) 72%)' }}/>
                     {cat.image_url
                       ? <img src={cat.image_url} alt="" className="relative max-w-full max-h-full object-contain" style={{ filter:'drop-shadow(0 8px 10px rgba(0,0,0,0.35))' }}/>
-                      : <Package size={48} className="relative" style={{ color:`${C.gold}70` }}/>
+                      : <Package size={48} className="relative" style={{ color:cyc.ic }}/>
                     }
                   </div>
-                  <p className="px-2.5 pb-3.5 font-black text-sm md:text-base text-center" style={{ color:C.text }}>{cat.name?.[lang] || cat.name?.ar}</p>
                 </button>
-              ))}
+              ); })}
             </div>
           )}
         </div>
@@ -2941,24 +2945,28 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
             <p className="text-sm text-center py-10" style={{ color:C.muted }}>{isRtl ? 'لا توجد قطع في هذا التصنيف بعد' : 'No parts in this category yet'}</p>
           ) : (
             <div className={`grid gap-x-3 gap-y-0 ${gridCols === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-              {parts.map((part, i) => (
+              {parts.map((part, i) => { const cyc = CARD_BG_CYCLE[i % 2]; return (
                 <button key={part.id} onClick={()=>openPart(part)}
-                  className="relative rounded-2xl text-start transition-all duration-300 active:scale-[0.97]"
-                  style={{
-                    background:C.panel, boxShadow:'0 20px 40px -14px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.12)', border:`1px solid ${C.border}`,
-                    ...gridItemStyle(i),
-                  }}>
+                  className="group relative rounded-2xl overflow-hidden text-start transition-all duration-300 hover:scale-[1.03] active:scale-[0.97]"
+                  style={{ backgroundColor:cyc.bg, boxShadow:'0 4px 20px rgba(0,0,0,0.35)', ...gridItemStyle(i) }}>
+                  <div className="absolute inset-0 pointer-events-none" style={{ background:'linear-gradient(160deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.25) 100%)' }}/>
+                  <div className="absolute inset-0 rounded-2xl pointer-events-none" style={{ boxShadow:`inset 0 0 0 1px ${C.gold}25` }}/>
+                  <div className="absolute top-0 start-0 p-3 md:p-4 z-10">
+                    <p className="font-black text-[14px] md:text-[16px] leading-snug"
+                      style={{ color:cyc.txt, textShadow: cyc.bg==='#FFCB74' ? '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' : 'none' }}>
+                      {part.name?.[lang] || part.name?.ar}
+                    </p>
+                  </div>
                   <div className="relative h-40 md:h-56 flex items-center justify-center p-6 overflow-hidden">
                     <div className="absolute w-28 h-28 md:w-36 md:h-36 rounded-full pointer-events-none"
-                      style={{ background:`radial-gradient(circle, ${C.gold}55 0%, ${C.gold}00 72%)` }}/>
+                      style={{ background:'radial-gradient(circle, rgba(0,0,0,0.14) 0%, rgba(0,0,0,0) 72%)' }}/>
                     {part.image_url
                       ? <img src={part.image_url} alt="" className="relative max-w-full max-h-full object-contain" style={{ filter:'drop-shadow(0 8px 10px rgba(0,0,0,0.35))' }}/>
-                      : <Package size={48} className="relative" style={{ color:`${C.gold}70` }}/>
+                      : <Package size={48} className="relative" style={{ color:cyc.ic }}/>
                     }
                   </div>
-                  <p className="px-2.5 pb-3.5 font-black text-sm md:text-base text-center" style={{ color:C.text }}>{part.name?.[lang] || part.name?.ar}</p>
                 </button>
-              ))}
+              ); })}
             </div>
           )}
         </div>
