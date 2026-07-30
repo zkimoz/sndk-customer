@@ -2845,24 +2845,24 @@ function PartTreeRow({ part, depth, childrenOf, expandedIds, toggleExpanded, car
   const inCart = cart.some(p => p.id === part.id);
   return (
     <div>
-      <div className="flex items-center gap-2.5 py-2.5 rounded-xl transition-all"
+      <div className="flex items-center gap-3 py-3.5 rounded-xl transition-all"
         style={{ paddingInlineStart: 8 + depth * 22 }}
         onClick={hasKids ? () => toggleExpanded(part.id) : undefined}
         role={hasKids ? 'button' : undefined}>
         {part.image_url
-          ? <img src={part.image_url} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0" style={{ border:`1px solid ${C.border}` }}/>
-          : <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background:`${C.gold}12` }}><Package size={15} style={{ color:`${C.gold}80` }}/></div>
+          ? <img src={part.image_url} alt="" className="w-14 h-14 rounded-xl object-cover flex-shrink-0" style={{ border:`1px solid ${C.border}` }}/>
+          : <div className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background:`${C.gold}12` }}><Package size={22} style={{ color:`${C.gold}80` }}/></div>
         }
-        <span className="flex-1 min-w-0 text-sm font-bold truncate cursor-pointer" style={{ color:C.text }}>
+        <span className="flex-1 min-w-0 text-base font-bold truncate cursor-pointer" style={{ color:C.text }}>
           {part.name?.[lang] || part.name?.ar}
         </span>
         {hasKids ? (
-          <ChevronDown size={16} className="flex-shrink-0 transition-transform" style={{ color:C.muted, transform: isExpanded ? 'rotate(180deg)' : '' }}/>
+          <ChevronDown size={18} className="flex-shrink-0 transition-transform" style={{ color:C.muted, transform: isExpanded ? 'rotate(180deg)' : '' }}/>
         ) : (
           <button onClick={(e) => { e.stopPropagation(); toggleCartItem(part); }}
-            className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-black transition-all active:scale-95"
+            className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-black transition-all active:scale-95"
             style={inCart ? { background:'#22c55e20', color:'#16a34a' } : { background:C.gold, color:C.btnTxt }}>
-            {inCart ? <Check size={12}/> : <ShoppingCart size={12}/>}
+            {inCart ? <Check size={14}/> : <ShoppingCart size={14}/>}
             {inCart ? (isRtl?'في السلة':'In Cart') : (isRtl?'أضف':'Add')}
           </button>
         )}
