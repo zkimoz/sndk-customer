@@ -31,12 +31,14 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-// Recomputes what's owed server-side from the staff-set price, never a
-// client-supplied amount.
+// Recomputes what's owed server-side from the staff-set prices (summed
+// across every part in the request), never a client-supplied amount.
 function computeAmountDueQAR(partOrder: any): number {
+  const totalQuoted = (partOrder.part_order_items || [])
+    .reduce((s: number, i: any) => s + Number(i.quoted_sell_price || 0), 0);
   const paidSoFar = (partOrder.part_order_payments || [])
     .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-  return Math.max(Number(partOrder.quoted_sell_price || 0) - paidSoFar, 0);
+  return Math.max(totalQuoted - paidSoFar, 0);
 }
 
 async function getPaypalAccessToken(base: string, clientId: string): Promise<string> {
@@ -61,7 +63,7 @@ async function loadOwnedPartOrder(userClient: any, partOrderId: string) {
 
   const { data: partOrder } = await adminClient
     .from("part_orders")
-    .select("id, profile_id, request_number, quoted_sell_price, part_order_payments(amount)")
+    .select("id, profile_id, request_number, part_order_items(quoted_sell_price), part_order_payments(amount)")
     .eq("id", partOrderId)
     .maybeSingle();
   if (!partOrder) return { error: jsonResponse({ error: "Request not found" }, 404) };

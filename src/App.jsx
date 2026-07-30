@@ -2058,11 +2058,14 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
     declined:         { label: isRtl ? 'مرفوض' : 'Declined',                   bg:'rgba(239,68,68,0.15)',   text:'#ef4444' },
   };
   const st = ST[po.status] || ST.pending;
+  const items = po.part_order_items || [];
+  const totalQuoted = items.reduce((s,i)=>s+Number(i.quoted_sell_price||0), 0);
   const paidSoFar = (po.part_order_payments || []).reduce((s,p)=>s+Number(p.amount||0), 0);
-  const amountDue = Math.max(Number(po.quoted_sell_price||0) - paidSoFar, 0);
+  const amountDue = Math.max(totalQuoted - paidSoFar, 0);
   const canPay = ['priced','awaiting_payment'].includes(po.status) && po.payment_status !== 'paid' && amountDue > 0.01;
-  const photos = po.admin_image_urls?.length ? po.admin_image_urls : (po.part_snapshot?.image_url ? [po.part_snapshot.image_url] : []);
-  const description = po.admin_description?.[lang] || po.admin_description?.ar;
+  const title = items.length > 1
+    ? (isRtl ? `${items.length} قطع غيار` : `${items.length} spare parts`)
+    : (items[0]?.part_snapshot?.name?.[lang] || items[0]?.part_snapshot?.name?.ar || '—');
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -2071,7 +2074,7 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
         <div className="p-5 space-y-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h3 className="font-black text-lg" style={{ color:C.cardText }}>{po.part_snapshot?.name?.[lang] || po.part_snapshot?.name?.ar || '—'}</h3>
+              <h3 className="font-black text-lg" style={{ color:C.cardText }}>{title}</h3>
               <p className="text-xs mt-1 font-mono" style={{ color:C.cardMuted }}>{po.request_number}</p>
             </div>
             <button onClick={onClose} className="p-1.5 rounded-lg flex-shrink-0" style={{ color:C.cardMuted }}><X size={18}/></button>
@@ -2079,18 +2082,36 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
 
           <span className="inline-block px-2.5 py-1 rounded-full text-sm font-bold" style={{ background:st.bg, color:st.text }}>{st.label}</span>
 
-          {photos.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto">
-              {photos.map(url => (
-                <img key={url} src={url} alt="" className="w-full h-48 object-cover rounded-2xl flex-shrink-0" style={{ maxWidth:'100%' }}/>
-              ))}
+          <div className="space-y-3">
+            {items.map(it => {
+              const photos = it.admin_image_urls?.length ? it.admin_image_urls : (it.part_snapshot?.image_url ? [it.part_snapshot.image_url] : []);
+              const description = it.admin_description?.[lang] || it.admin_description?.ar;
+              return (
+                <div key={it.id} className="rounded-xl p-3 space-y-2" style={{ background:`${C.gold}0a`, border:`1px solid ${C.gold}20` }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-bold text-sm" style={{ color:C.cardText }}>{it.part_snapshot?.name?.[lang] || it.part_snapshot?.name?.ar}</p>
+                    {Number(it.quoted_sell_price) > 0 && (
+                      <span className="font-black text-sm flex-shrink-0" style={{ color:C.gold }}>{Number(it.quoted_sell_price).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                    )}
+                  </div>
+                  {photos.length > 0 && (
+                    <div className="flex gap-2 overflow-x-auto">
+                      {photos.map(url => (
+                        <img key={url} src={url} alt="" className="h-32 rounded-xl object-cover flex-shrink-0"/>
+                      ))}
+                    </div>
+                  )}
+                  {description && <p className="text-sm leading-relaxed" style={{ color:C.cardMuted }}>{description}</p>}
+                </div>
+              );
+            })}
+          </div>
+
+          {totalQuoted > 0 && (
+            <div className="flex items-center justify-between pt-2" style={{ borderTop:`1px dashed ${C.gold}30` }}>
+              <span className="text-sm font-bold" style={{ color:C.cardMuted }}>{isRtl?'الإجمالي':'Total'}</span>
+              <p className="text-2xl font-black" style={{ color:C.gold }}>{totalQuoted.toFixed(3)} {isRtl?'ر.ق':'QAR'}</p>
             </div>
-          )}
-
-          {description && <p className="text-sm leading-relaxed" style={{ color:C.cardMuted }}>{description}</p>}
-
-          {Number(po.quoted_sell_price) > 0 && (
-            <p className="text-2xl font-black" style={{ color:C.gold }}>{Number(po.quoted_sell_price).toFixed(3)} {isRtl?'ر.ق':'QAR'}</p>
           )}
 
           {po.customer_notes && (
@@ -2813,27 +2834,81 @@ function ContactView({ isRtl }) {
 // a car, browses part_categories → parts_catalog, then requests a quote or
 // the part itself against a part_orders row. Self-contained (owns its own
 // step state) so it doesn't add to the root App component's state.
+// One row in the parts tree — recursive: a part with sub-parts toggles
+// them open indented below instead of navigating away, so a customer can
+// browse "المحرك" and add several parts from it (a filter, a bearing, a
+// connecting rod...) without losing their place each time.
+function PartTreeRow({ part, depth, childrenOf, expandedIds, toggleExpanded, cart, toggleCartItem, lang, isRtl }) {
+  const kids = childrenOf(part.id);
+  const hasKids = kids.length > 0;
+  const isExpanded = expandedIds.has(part.id);
+  const inCart = cart.some(p => p.id === part.id);
+  return (
+    <div>
+      <div className="flex items-center gap-2.5 py-2.5 rounded-xl transition-all"
+        style={{ paddingInlineStart: 8 + depth * 22 }}
+        onClick={hasKids ? () => toggleExpanded(part.id) : undefined}
+        role={hasKids ? 'button' : undefined}>
+        {part.image_url
+          ? <img src={part.image_url} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0" style={{ border:`1px solid ${C.border}` }}/>
+          : <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background:`${C.gold}12` }}><Package size={15} style={{ color:`${C.gold}80` }}/></div>
+        }
+        <span className="flex-1 min-w-0 text-sm font-bold truncate cursor-pointer" style={{ color:C.text }}>
+          {part.name?.[lang] || part.name?.ar}
+        </span>
+        {hasKids ? (
+          <ChevronDown size={16} className="flex-shrink-0 transition-transform" style={{ color:C.muted, transform: isExpanded ? 'rotate(180deg)' : '' }}/>
+        ) : (
+          <button onClick={(e) => { e.stopPropagation(); toggleCartItem(part); }}
+            className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-black transition-all active:scale-95"
+            style={inCart ? { background:'#22c55e20', color:'#16a34a' } : { background:C.gold, color:C.btnTxt }}>
+            {inCart ? <Check size={12}/> : <ShoppingCart size={12}/>}
+            {inCart ? (isRtl?'في السلة':'In Cart') : (isRtl?'أضف':'Add')}
+          </button>
+        )}
+      </div>
+      {hasKids && isExpanded && (
+        <div className="space-y-0.5" style={{ borderInlineStart:`1px dashed ${C.border}`, marginInlineStart: 8 + depth * 22 + 18 }}>
+          {kids.map(k => (
+            <PartTreeRow key={k.id} part={k} depth={depth+1} childrenOf={childrenOf} expandedIds={expandedIds} toggleExpanded={toggleExpanded}
+              cart={cart} toggleCartItem={toggleCartItem} lang={lang} isRtl={isRtl}/>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
-  const [step, setStep] = useState('categories'); // 'categories'|'parts'|'carGate'|'detail'|'confirm'
+  const [step, setStep] = useState('carGate'); // 'carGate'|'categories'|'parts'|'confirm'
   const [cars, setCars] = useState([]);
   const [carsLoading, setCarsLoading] = useState(true);
   const [selectedCar, setSelectedCar] = useState(null);
   const [categories, setCategories] = useState([]);
   const [catsLoading, setCatsLoading] = useState(true);
   const [selectedCat, setSelectedCat] = useState(null);
-  const [parts, setParts] = useState([]);
+  // Every spare part in the currently open category, flat — fetched once
+  // per category so the whole nested tree (parts + their sub-parts) can be
+  // built and expanded client-side without a round-trip per tap.
+  const [catParts, setCatParts] = useState([]);
   const [partsLoading, setPartsLoading] = useState(false);
-  // Ancestor parts drilled into so far — a part can nest sub-parts under
-  // it ("sometimes the part itself has other parts inside it"), so this
-  // isn't always just one level below the category. Empty = showing the
-  // category's own top-level parts.
-  const [partStack, setPartStack] = useState([]);
-  const [selectedPart, setSelectedPart] = useState(null);
+  const [expandedIds, setExpandedIds] = useState(new Set());
+  const childrenOf = (parentId) => catParts.filter(p => p.parent_id === parentId);
+  const toggleExpanded = (id) => setExpandedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  // The cart — every leaf part the customer has picked so far, across
+  // however many categories they browse, submitted together as one request.
+  const [cart, setCart] = useState([]);
+  const [cartOpen, setCartOpen] = useState(false);
+  const toggleCartItem = (part) => setCart(prev => prev.some(p => p.id === part.id) ? prev.filter(p => p.id !== part.id) : [...prev, part]);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [confirmedType, setConfirmedType] = useState(null);
-  // Grid column count for the staggered category/part cards — 2 on phones
-  // keeps each card readable; 3 (the size Karim asked for) only fits from
+  // Grid column count for the staggered category cards — 2 on phones keeps
+  // each card readable; 3 (the size Karim asked for) only fits from
   // small-tablet width up. The per-item offset math below needs the live
   // count, not just the CSS class, to keep the zigzag stagger aligned.
   const [gridCols, setGridCols] = useState(() => (typeof window !== 'undefined' && window.innerWidth < 640 ? 2 : 3));
@@ -2860,59 +2935,36 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
       .then(({ data }) => { setCategories(data||[]); setCatsLoading(false); });
   }, []);
 
-  const pickCar = (car) => { setSelectedCar(car); setNotes(''); setStep('detail'); };
+  const pickCar = (car) => { setSelectedCar(car); setStep('categories'); };
 
   const openCategory = (cat) => {
-    setSelectedCat(cat); setPartStack([]); setPartsLoading(true); setStep('parts');
-    supabase.from('spare_parts').select('*').eq('category_id', cat.id).is('parent_id', null).eq('is_active', true).order('sort_order')
-      .then(({ data }) => { setParts(data||[]); setPartsLoading(false); });
-  };
-
-  // Tapping a part either drills into its own sub-parts (if it has any) or,
-  // for a normal leaf part, goes straight to picking a car like before.
-  const openPart = async (part) => {
-    setPartsLoading(true);
-    const { data: children } = await supabase.from('spare_parts').select('*').eq('parent_id', part.id).eq('is_active', true).order('sort_order');
-    if (children?.length > 0) {
-      setPartStack(prev => [...prev, part]);
-      setParts(children);
-      setPartsLoading(false);
-    } else {
-      setPartsLoading(false);
-      setSelectedPart(part);
-      setStep('carGate');
-    }
-  };
-
-  const backFromParts = () => {
-    if (partStack.length === 0) { setStep('categories'); return; }
-    const newStack = partStack.slice(0, -1);
-    setPartStack(newStack);
-    setPartsLoading(true);
-    const query = newStack.length > 0
-      ? supabase.from('spare_parts').select('*').eq('parent_id', newStack[newStack.length - 1].id).eq('is_active', true).order('sort_order')
-      : supabase.from('spare_parts').select('*').eq('category_id', selectedCat.id).is('parent_id', null).eq('is_active', true).order('sort_order');
-    query.then(({ data }) => { setParts(data||[]); setPartsLoading(false); });
+    setSelectedCat(cat); setPartsLoading(true); setExpandedIds(new Set()); setStep('parts');
+    supabase.from('spare_parts').select('*').eq('category_id', cat.id).eq('is_active', true).order('sort_order')
+      .then(({ data }) => { setCatParts(data||[]); setPartsLoading(false); });
   };
 
   const submitRequest = async (requestType) => {
+    if (cart.length === 0) return;
     setSubmitting(true);
     const request_number = `PR-${Date.now().toString(36).toUpperCase()}`;
-    const { error } = await supabase.from('part_orders').insert({
+    const { data: order, error } = await supabase.from('part_orders').insert({
       request_number,
       profile_id: user.id,
       car_id: selectedCar.id,
       car_snapshot: { car_type: selectedCar.car_type, car_category: selectedCar.car_category, production_year: selectedCar.production_year, plate_number: selectedCar.plate_number },
-      part_id: selectedPart.id,
-      part_snapshot: { name: selectedPart.name, image_url: selectedPart.image_url },
       request_type: requestType,
       customer_notes: notes.trim() || null,
-    });
+    }).select('id').single();
+    if (error) { setSubmitting(false); alert((isRtl ? 'خطأ: ' : 'Error: ') + error.message); return; }
+    const { error: itemsErr } = await supabase.from('part_order_items').insert(
+      cart.map(part => ({ part_order_id: order.id, part_id: part.id, part_snapshot: { name: part.name, image_url: part.image_url } }))
+    );
     setSubmitting(false);
-    if (error) { alert((isRtl ? 'خطأ: ' : 'Error: ') + error.message); return; }
+    if (itemsErr) { alert((isRtl ? 'خطأ: ' : 'Error: ') + itemsErr.message); return; }
     supabase.functions.invoke('clever-endpoint', {
       body: { event: 'part_request_created', customerName: profile?.full_name, requestNumber: request_number },
     }).catch(() => {});
+    setCart([]); setNotes(''); setCartOpen(false);
     setConfirmedType(requestType);
     setStep('confirm');
   };
@@ -2929,10 +2981,41 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
   );
 
   return (
-    <div className="max-w-4xl mx-auto p-4 md:p-6">
+    <div className="max-w-4xl mx-auto p-4 md:p-6" style={{ paddingBottom: cart.length > 0 ? 90 : undefined }}>
+      {step === 'carGate' && (
+        <div className="max-w-lg mx-auto">
+          {headerBar(isRtl ? 'اختر سيارتك' : 'Select Your Car', goHome)}
+          <p className="text-sm mb-4" style={{ color:C.muted }}>
+            {isRtl ? 'اختر السيارة اللي هتضيف قطع الغيار لطلبها' : "Pick the car you're requesting spare parts for"}
+          </p>
+          {carsLoading ? (
+            <div className="flex items-center justify-center py-14"><Loader2 size={22} className="animate-spin" style={{ color:C.gold }}/></div>
+          ) : cars.length === 0 ? (
+            <div className="text-center py-10 space-y-3">
+              <Car size={36} style={{ color:`${C.gold}60` }} className="mx-auto"/>
+              <p className="text-sm" style={{ color:C.muted }}>{isRtl ? 'لا توجد سيارات في حسابك بعد — أضف سيارة من صفحة "حسابي" أولاً' : "You don't have any cars on file yet — add one from your Profile page first"}</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {cars.map(car => (
+                <button key={car.id} onClick={()=>pickCar(car)}
+                  className="w-full flex items-center gap-3 p-3.5 rounded-2xl text-start transition-all active:scale-[0.98]"
+                  style={{ background:C.panel, border:`1px solid ${C.border}` }}>
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background:`${C.gold}15` }}><Car size={18} style={{ color:C.gold }}/></div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-sm truncate" style={{ color:C.text }}>{[car.car_type, car.car_category, car.production_year].filter(Boolean).join(' · ')}</p>
+                    {car.plate_number && <p className="text-xs mt-0.5" style={{ color:C.muted }}>{car.plate_number}</p>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {step === 'categories' && (
         <div>
-          {headerBar(isRtl ? 'توفير قطع غيار' : 'Spare Parts', goHome)}
+          {headerBar(isRtl ? 'توفير قطع غيار' : 'Spare Parts', ()=>setStep('carGate'))}
           {catsLoading ? (
             <div className="flex items-center justify-center py-14"><Loader2 size={22} className="animate-spin" style={{ color:C.gold }}/></div>
           ) : categories.length === 0 ? (
@@ -2964,99 +3047,80 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
 
       {step === 'parts' && (
         <div>
-          {headerBar(
-            partStack.length > 0
-              ? (partStack[partStack.length - 1].name?.[lang] || partStack[partStack.length - 1].name?.ar)
-              : (selectedCat?.name?.[lang] || selectedCat?.name?.ar),
-            backFromParts
-          )}
+          {headerBar(selectedCat?.name?.[lang] || selectedCat?.name?.ar, ()=>setStep('categories'))}
           {partsLoading ? (
             <div className="flex items-center justify-center py-14"><Loader2 size={22} className="animate-spin" style={{ color:C.gold }}/></div>
-          ) : parts.length === 0 ? (
+          ) : childrenOf(null).length === 0 ? (
             <p className="text-sm text-center py-10" style={{ color:C.muted }}>{isRtl ? 'لا توجد قطع في هذا التصنيف بعد' : 'No parts in this category yet'}</p>
           ) : (
-            <div className={`grid gap-x-3 gap-y-0 ${gridCols === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-              {parts.map((part, i) => (
-                <button key={part.id} onClick={()=>openPart(part)}
-                  className="relative rounded-2xl text-start transition-all duration-300 active:scale-[0.97]"
-                  style={{
-                    background:C.panel, boxShadow:'0 20px 40px -14px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.12)', border:`1px solid ${C.border}`,
-                    ...gridItemStyle(i),
-                  }}>
-                  <div className="relative h-40 md:h-56 flex items-center justify-center p-6 overflow-hidden">
-                    <div className="absolute w-28 h-28 md:w-36 md:h-36 rounded-full pointer-events-none"
-                      style={{ background:`radial-gradient(circle, ${C.gold}55 0%, ${C.gold}00 72%)` }}/>
-                    {part.image_url
-                      ? <img src={part.image_url} alt="" className="relative max-w-full max-h-full object-contain" style={{ filter:'drop-shadow(0 8px 10px rgba(0,0,0,0.35))' }}/>
-                      : <Package size={48} className="relative" style={{ color:`${C.gold}70` }}/>
-                    }
-                  </div>
-                  <p className="px-2.5 pb-3.5 font-black text-sm md:text-base text-center" style={{ color:C.text }}>{part.name?.[lang] || part.name?.ar}</p>
-                </button>
+            <div className="rounded-2xl divide-y px-2" style={{ background:C.panel, border:`1px solid ${C.border}`, borderColor:C.border }}>
+              {childrenOf(null).map(part => (
+                <PartTreeRow key={part.id} part={part} depth={0} childrenOf={childrenOf} expandedIds={expandedIds} toggleExpanded={toggleExpanded}
+                  cart={cart} toggleCartItem={toggleCartItem} lang={lang} isRtl={isRtl}/>
               ))}
             </div>
           )}
         </div>
       )}
 
-      {step === 'carGate' && (
-        <div className="max-w-lg mx-auto">
-          {headerBar(isRtl ? 'اختر سيارتك' : 'Select Your Car', ()=>setStep('parts'))}
-          {carsLoading ? (
-            <div className="flex items-center justify-center py-14"><Loader2 size={22} className="animate-spin" style={{ color:C.gold }}/></div>
-          ) : cars.length === 0 ? (
-            <div className="text-center py-10 space-y-3">
-              <Car size={36} style={{ color:`${C.gold}60` }} className="mx-auto"/>
-              <p className="text-sm" style={{ color:C.muted }}>{isRtl ? 'لا توجد سيارات في حسابك بعد — أضف سيارة من صفحة "حسابي" أولاً' : "You don't have any cars on file yet — add one from your Profile page first"}</p>
+      {/* Floating cart button — stays visible while browsing categories/parts */}
+      {cart.length > 0 && (step === 'categories' || step === 'parts') && (
+        <button onClick={()=>setCartOpen(true)}
+          className="fixed bottom-5 inset-x-4 md:inset-x-auto md:end-6 md:w-80 z-40 flex items-center justify-between gap-3 px-5 py-3.5 rounded-2xl shadow-2xl transition-all active:scale-[0.98]"
+          style={{ background:C.gold, color:C.btnTxt }}>
+          <span className="flex items-center gap-2 font-black text-sm">
+            <ShoppingCart size={16}/>{isRtl ? `السلة (${cart.length})` : `Cart (${cart.length})`}
+          </span>
+          <span className="font-black text-sm">{isRtl ? 'مراجعة الطلب ←' : '→ Review'}</span>
+        </button>
+      )}
+
+      {/* Cart review / submit drawer */}
+      {cartOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end" style={{ background:'rgba(0,0,0,0.65)' }} onClick={()=>setCartOpen(false)}>
+          <div className="rounded-t-3xl p-5 pb-8 space-y-4 max-h-[85vh] overflow-y-auto"
+            style={{ background:C.panel, border:`1px solid ${C.gold}25` }} onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="font-black text-base" style={{ color:C.text }}>{isRtl ? 'طلب قطع الغيار' : 'Spare Parts Request'}</h3>
+              <button onClick={()=>setCartOpen(false)} className="p-1 rounded-lg" style={{ color:C.muted }}><X size={18}/></button>
             </div>
-          ) : (
+            {selectedCar && (
+              <div className="flex items-center gap-2 text-sm px-3 py-2 rounded-xl" style={{ background:`${C.gold}10`, color:C.text }}>
+                <Car size={14} style={{ color:C.gold }}/>
+                {[selectedCar.car_type, selectedCar.car_category, selectedCar.production_year].filter(Boolean).join(' · ')}
+              </div>
+            )}
             <div className="space-y-2">
-              {cars.map(car => (
-                <button key={car.id} onClick={()=>pickCar(car)}
-                  className="w-full flex items-center gap-3 p-3.5 rounded-2xl text-start transition-all active:scale-[0.98]"
-                  style={{ background:C.panel, border:`1px solid ${C.border}` }}>
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background:`${C.gold}15` }}><Car size={18} style={{ color:C.gold }}/></div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-bold text-sm truncate" style={{ color:C.text }}>{[car.car_type, car.car_category, car.production_year].filter(Boolean).join(' · ')}</p>
-                    {car.plate_number && <p className="text-xs mt-0.5" style={{ color:C.muted }}>{car.plate_number}</p>}
-                  </div>
-                </button>
+              {cart.map(part => (
+                <div key={part.id} className="flex items-center gap-2.5 p-2 rounded-xl" style={{ background:`${C.gold}08` }}>
+                  {part.image_url
+                    ? <img src={part.image_url} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0"/>
+                    : <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background:`${C.gold}15` }}><Package size={14} style={{ color:C.gold }}/></div>
+                  }
+                  <span className="flex-1 min-w-0 text-sm font-bold truncate" style={{ color:C.text }}>{part.name?.[lang] || part.name?.ar}</span>
+                  <button onClick={()=>toggleCartItem(part)} className="p-1.5 rounded-lg flex-shrink-0" style={{ color:'#ef4444' }}><Trash2 size={14}/></button>
+                </div>
               ))}
             </div>
-          )}
-        </div>
-      )}
-
-      {step === 'detail' && selectedPart && (
-        <div className="max-w-lg mx-auto">
-          {headerBar(selectedPart.name?.[lang] || selectedPart.name?.ar, ()=>setStep('carGate'))}
-          <div className="relative w-full h-40 rounded-2xl flex items-center justify-center mb-4 p-6 overflow-hidden"
-            style={{ background:C.panel, boxShadow:'0 20px 40px -14px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.12)', border:`1px solid ${C.border}` }}>
-            <div className="absolute w-28 h-28 rounded-full pointer-events-none"
-              style={{ background:`radial-gradient(circle, ${C.gold}55 0%, ${C.gold}00 72%)` }}/>
-            {selectedPart.image_url
-              ? <img src={selectedPart.image_url} alt="" className="relative max-w-full max-h-full object-contain" style={{ filter:'drop-shadow(0 8px 10px rgba(0,0,0,0.35))' }}/>
-              : <Package size={40} className="relative" style={{ color:`${C.gold}70` }}/>
-            }
-          </div>
-          <div className="mb-4">
-            <label className="block text-sm font-bold mb-1.5" style={{ color:C.text }}>{isRtl?'ملاحظات (اختياري)':'Notes (optional)'}</label>
-            <textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={2}
-              className="w-full px-3 py-2.5 rounded-xl text-sm outline-none resize-none"
-              style={{ background:C.panel, border:`1px solid ${C.border}`, color:C.text }}/>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={()=>submitRequest('quote')} disabled={submitting}
-              className="flex-1 py-3 rounded-xl text-sm font-black transition-all active:scale-95 disabled:opacity-50"
-              style={{ background:'transparent', border:`1.5px solid ${C.gold}`, color:C.gold }}>
-              {isRtl?'طلب عرض سعر':'Request a Quote'}
-            </button>
-            <button onClick={()=>submitRequest('order')} disabled={submitting}
-              className="flex-1 py-3 rounded-xl text-sm font-black transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
-              style={{ background:C.gold, color:C.btnTxt }}>
-              {submitting && <Loader2 size={14} className="animate-spin"/>}
-              {isRtl?'طلب القطعة':'Request the Part'}
-            </button>
+            <div>
+              <label className="block text-sm font-bold mb-1.5" style={{ color:C.text }}>{isRtl?'ملاحظات (اختياري)':'Notes (optional)'}</label>
+              <textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={2}
+                className="w-full px-3 py-2.5 rounded-xl text-sm outline-none resize-none"
+                style={{ background:C.input || C.panel, border:`1px solid ${C.border}`, color:C.text }}/>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={()=>submitRequest('quote')} disabled={submitting || cart.length===0}
+                className="flex-1 py-3 rounded-xl text-sm font-black transition-all active:scale-95 disabled:opacity-50"
+                style={{ background:'transparent', border:`1.5px solid ${C.gold}`, color:C.gold }}>
+                {isRtl?'طلب عرض سعر':'Request a Quote'}
+              </button>
+              <button onClick={()=>submitRequest('order')} disabled={submitting || cart.length===0}
+                className="flex-1 py-3 rounded-xl text-sm font-black transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                style={{ background:C.gold, color:C.btnTxt }}>
+                {submitting && <Loader2 size={14} className="animate-spin"/>}
+                {isRtl?'طلب القطع':'Request the Parts'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -3150,7 +3214,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   const loadPartOrders = async () => {
     if (!user) return;
     const { data } = await supabase.from('part_orders')
-      .select('*, part_order_payments(*)')
+      .select('*, part_order_payments(*), part_order_items(*)')
       .eq('profile_id', user.id)
       .order('created_at', { ascending: false });
     setPartOrders(data || []);
@@ -3226,7 +3290,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     onCountChange?.(pending);
   };
   useLiveTables(['orders'], checkForNewQuotations, !!user);
-  useLiveTables(['appointments', 'job_cards', 'part_orders', 'part_order_payments', 'order_items', 'payments', 'wallet_transactions'], loadData, !!user);
+  useLiveTables(['appointments', 'job_cards', 'part_orders', 'part_order_payments', 'part_order_items', 'order_items', 'payments', 'wallet_transactions'], loadData, !!user);
 
   const serviceKeysOf = (order) => {
     const seen = new Set();
@@ -4347,13 +4411,18 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
               ) : partOrders.map((po, pi) => {
                 const cc = CARD_BG_CYCLE[pi % 2];
                 const st = PART_ORDER_ST[po.status] || PART_ORDER_ST.pending;
+                const items = po.part_order_items || [];
+                const totalQuoted = items.reduce((s,i)=>s+Number(i.quoted_sell_price||0), 0);
+                const title = items.length > 1
+                  ? (isRtl ? `${items.length} قطع غيار` : `${items.length} spare parts`)
+                  : (items[0]?.part_snapshot?.name?.[lang] || items[0]?.part_snapshot?.name?.ar || '—');
                 return (
                   <button key={po.id} onClick={()=>setViewPartOrder(po)}
                     className="w-full text-start rounded-2xl p-4 space-y-2 transition-all active:scale-[0.98]"
                     style={{ background:cc.bg, border:`1px solid ${cc.fg}40` }}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
-                        <p className="font-bold text-sm" style={{ color:cc.txt }}>{po.part_snapshot?.name?.[lang] || po.part_snapshot?.name?.ar || '—'}</p>
+                        <p className="font-bold text-sm" style={{ color:cc.txt }}>{title}</p>
                         <p className="text-xs mt-1 font-mono" style={{ color:cc.sub }}>{po.request_number}</p>
                         <p className="text-xs mt-0.5" style={{ color:cc.sub }}>
                           {po.request_type === 'quote' ? (isRtl ? 'طلب عرض سعر' : 'Quote request') : (isRtl ? 'طلب القطعة' : 'Part order')}
@@ -4361,8 +4430,8 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                       </div>
                       <span className="px-2.5 py-1 rounded-full text-sm font-bold flex-shrink-0" style={{ background:st.bg, color:st.text }}>{st.label}</span>
                     </div>
-                    {Number(po.quoted_sell_price) > 0 && (
-                      <p className="text-base font-black" style={{ color:C.gold }}>{Number(po.quoted_sell_price).toFixed(3)} {isRtl?'ر.ق':'QAR'}</p>
+                    {totalQuoted > 0 && (
+                      <p className="text-base font-black" style={{ color:C.gold }}>{totalQuoted.toFixed(3)} {isRtl?'ر.ق':'QAR'}</p>
                     )}
                     {po.payment_status === 'pending' && (
                       <p className="text-xs font-semibold" style={{ color:'#eab308' }}>{isRtl ? 'بانتظار تأكيد الدفع من فريقنا' : 'Awaiting payment confirmation from our team'}</p>
