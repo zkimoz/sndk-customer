@@ -2714,7 +2714,7 @@ function printCustomerInvoice(jobCard, appt, order, profile, brandsData = [], ca
 
     <!-- COMPANY STAMP -->
     <div style="margin:0 30px 10px;text-align:left">
-      <img src="${window.location.origin}/company-stamp.jpg" alt="SNDK Stamp" style="width:180px;height:180px;object-fit:contain;display:inline-block"/>
+      <img src="${window.location.origin}/company-stamp.jpg" alt="SNDK Stamp" style="width:280px;height:280px;object-fit:contain;display:inline-block"/>
     </div>
 
     <!-- FOOTER -->
