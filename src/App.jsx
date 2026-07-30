@@ -5967,6 +5967,9 @@ function ServiceCard({ service, lang, span, onClick }) {
         ) : (service.ar === 'عناية بالسيارات' || service.en === 'Car Care') ? (
           <img src="/car-care.png" alt="" aria-hidden="true"
             width={span===2?170:140} className="md:!w-[190px]" style={{ opacity:0.6, filter:'drop-shadow(6px 10px 8px rgba(0,0,0,0.45))' }}/>
+        ) : (service.ar === 'إكسسوارات' || service.en === 'Accessories') ? (
+          <img src="/car-accessories.png" alt="" aria-hidden="true"
+            width={span===2?170:140} className="md:!w-[190px]" style={{ opacity:0.6, transform:'rotate(-6deg)', filter:'drop-shadow(6px 10px 8px rgba(0,0,0,0.45))' }}/>
         ) : (
           <Icon size={span===2?95:75} strokeWidth={1.1} className="md:!w-[110px] md:!h-[110px]" style={{ color:service.ic }}/>
         )}
