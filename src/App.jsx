@@ -5879,6 +5879,9 @@ function ServiceCard({ service, lang, span, onClick }) {
             <circle cx="21" cy="79" r="5" fill="rgba(255,255,255,0.35)"/>
             <circle cx="59" cy="79" r="5" fill="rgba(255,255,255,0.35)"/>
           </svg>
+        ) : (service.ar === 'توفير قطع غيار' || service.en === 'Spare Parts') ? (
+          <img src="/parts-logo.png" alt="" aria-hidden="true"
+            width={span===2?130:105} className="md:!w-[145px]" style={{ opacity:0.35 }}/>
         ) : (
           <Icon size={span===2?95:75} strokeWidth={1.1} className="md:!w-[110px] md:!h-[110px]" style={{ color:service.ic }}/>
         )}
