@@ -167,7 +167,6 @@ const T = {
     jc_awaiting_invoice:'في انتظار إصدار الفاتورة',
     jc_returning:'السيارة في طريقها للعودة',
     jc_delivered:'تم تسليم السيارة',
-    jc_sourcing_parts:'جاري تجهيز قطع الغيار',
     jc_number:'أمر الشغل',
   },
   en: {
@@ -324,7 +323,6 @@ const T = {
     jc_awaiting_invoice:'Awaiting Invoice',
     jc_returning:'Car Returning',
     jc_delivered:'Delivered',
-    jc_sourcing_parts:'Preparing Spare Parts',
     jc_number:'Job Card',
   },
 };
@@ -342,11 +340,12 @@ const JOB_STATUS_ORDER = ['waiting','confirmed','en_route','car_received','at_wo
 // separate from order.status's broader lifecycle values (draft/pending/etc.),
 // only these two are staff-settable now.
 const PARTS_STATUS_LABEL = {
-  pending:  { ar:'في انتظار موافقة العميل', en:'Awaiting customer approval' },
-  sourcing: { ar:'جاري تجهيز قطع الغيار', en:'Preparing parts' },
-  ready:    { ar:'تم تسليم قطع الغيار للورشة', en:'Parts delivered to workshop' },
+  pending:     { ar:'في انتظار موافقة العميل', en:'Awaiting customer approval' },
+  sourcing:    { ar:'جاري تجهيز قطع الغيار', en:'Preparing parts' },
+  unavailable: { ar:'تم طلب قطع الغيار الغير متاحة', en:'Unavailable parts ordered' },
+  ready:       { ar:'تم تسليم قطع الغيار للورشة', en:'Parts delivered to workshop' },
 };
-const PARTS_STATUS_COLOR = { pending:'#60a5fa', sourcing:'#eab308', ready:'#22c55e' };
+const PARTS_STATUS_COLOR = { pending:'#60a5fa', sourcing:'#eab308', unavailable:'#f97316', ready:'#22c55e' };
 
 const getStatusTimes = (history, statusKey) => {
   if (!Array.isArray(history)) return null;
@@ -398,18 +397,6 @@ const JobStatusVideoBlock = ({ videos, isRtl, jcId, videoKeyPrefix, openVideoId,
 const JobStatusTimeline = ({ jobCard, isRtl, tr, textColor, mutedColor, fg, receptionVideos = [], workshopVideos = [], openVideoId, setOpenVideoId }) => {
   const currentIdx = JOB_STATUS_ORDER.indexOf(jobCard.job_status);
   const fmtDT = iso => iso ? new Date(iso).toLocaleString(isRtl?'ar-QA':'en-QA', { dateStyle:'short', timeStyle:'short' }) : '';
-  // Staff-toggled override — while on, replace the whole step timeline with
-  // just this one line instead of highlighting a step in it. Turning it off
-  // (in the admin app) brings the normal timeline right back.
-  if (jobCard.sourcing_parts) {
-    const spColor = '#0d9488';
-    return (
-      <div className="flex items-start gap-2.5 px-2 py-1.5 rounded-lg" style={{ background:`${spColor}18` }}>
-        <span className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background:spColor }}/>
-        <span className="block text-sm font-bold" style={{ color:spColor }}>{tr.jc_sourcing_parts}</span>
-      </div>
-    );
-  }
   return (
     <div className="space-y-1">
       {JOB_STATUS_ORDER.map((key, idx) => {
@@ -649,7 +636,6 @@ const publishedJobCard = (jc) => {
     ...jc,
     job_status: snap.job_status || 'waiting',
     status_history: snap.status_history || [],
-    sourcing_parts: !!snap.sourcing_parts,
     reception_videos: snap.reception_videos || '[]',
     reception_video_url: snap.reception_video_url || null,
     workshop_notes_videos: snap.workshop_notes_videos || '[]',
