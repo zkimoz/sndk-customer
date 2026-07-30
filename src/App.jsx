@@ -160,6 +160,7 @@ const T = {
     jc_en_route:'فريقنا في الطريق إليك',
     jc_car_received:'تم استلام السيارة',
     jc_at_workshop:'وصلت السيارة للورشة',
+    jc_inspecting:'جاري فحص السيارة وتجهيز عرض السعر',
     jc_in_maintenance:'السيارة تحت الصيانة',
     jc_maintenance_done:'تم الانتهاء من أعمال الصيانة',
     jc_washing:'السيارة في الغسيل',
@@ -315,6 +316,7 @@ const T = {
     jc_en_route:'Team En Route',
     jc_car_received:'Car Received',
     jc_at_workshop:'At Workshop',
+    jc_inspecting:'Inspecting Car & Preparing Quotation',
     jc_in_maintenance:'Under Maintenance',
     jc_maintenance_done:'Maintenance Done',
     jc_washing:'Car Washing',
@@ -328,11 +330,11 @@ const T = {
 // ── Job Status Colors ──────────────────────────────────────────────────
 const JC_STATUS_COLOR = {
   waiting:'#94a3b8', confirmed:'#3b82f6', en_route:'#8b5cf6',
-  car_received:'#f97316', at_workshop:'#eab308', in_maintenance:'#ef4444',
+  car_received:'#f97316', at_workshop:'#eab308', inspecting:'#0d9488', in_maintenance:'#ef4444',
   maintenance_done:'#22c55e', washing:'#06b6d4', awaiting_invoice:'#a855f7',
   returning:'#f59e0b', delivered:'#16a34a',
 };
-const JOB_STATUS_ORDER = ['waiting','confirmed','en_route','car_received','at_workshop','in_maintenance','maintenance_done','washing','awaiting_invoice','returning','delivered'];
+const JOB_STATUS_ORDER = ['waiting','confirmed','en_route','car_received','at_workshop','inspecting','in_maintenance','maintenance_done','washing','awaiting_invoice','returning','delivered'];
 
 // Spare-parts status shown to the customer next to the main job status —
 // separate from order.status's broader lifecycle values (draft/pending/etc.),
