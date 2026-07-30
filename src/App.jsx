@@ -5942,7 +5942,7 @@ function ServiceCard({ service, lang, span, onClick }) {
       style={{ backgroundColor:service.bg, boxShadow:'0 4px 20px rgba(0,0,0,0.35)' }}>
       <div className="absolute inset-0 pointer-events-none" style={{ background:'linear-gradient(160deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.25) 100%)' }}/>
       <div className="absolute inset-0 rounded-2xl pointer-events-none" style={{ boxShadow:`inset 0 0 0 1px ${C.gold}25` }}/>
-      <div className="absolute top-0 start-0 p-3 md:p-4">
+      <div className="absolute top-0 start-0 p-3 md:p-4 z-10">
         <p className="font-black text-[15px] md:text-[18px] leading-snug text-white"
           style={{ textShadow: service.bg==='#FFCB74' ? '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' : 'none' }}>
           {service[lang]}
