@@ -2850,8 +2850,8 @@ function PartTreeRow({ part, depth, childrenOf, expandedIds, toggleExpanded, car
         onClick={hasKids ? () => toggleExpanded(part.id) : undefined}
         role={hasKids ? 'button' : undefined}>
         {part.image_url
-          ? <img src={part.image_url} alt="" className="w-14 h-14 rounded-xl object-cover flex-shrink-0" style={{ border:`1px solid ${C.border}` }}/>
-          : <div className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background:`${C.gold}12` }}><Package size={22} style={{ color:`${C.gold}80` }}/></div>
+          ? <img src={part.image_url} alt="" className="w-24 h-24 rounded-xl object-cover flex-shrink-0" style={{ border:`1px solid ${C.border}` }}/>
+          : <div className="w-24 h-24 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background:`${C.gold}12` }}><Package size={32} style={{ color:`${C.gold}80` }}/></div>
         }
         <span className="flex-1 min-w-0 text-base font-bold truncate cursor-pointer" style={{ color:C.text }}>
           {part.name?.[lang] || part.name?.ar}
