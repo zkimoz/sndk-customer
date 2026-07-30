@@ -394,9 +394,22 @@ const JobStatusVideoBlock = ({ videos, isRtl, jcId, videoKeyPrefix, openVideoId,
   );
 };
 
-const JobStatusTimeline = ({ jobCard, isRtl, tr, textColor, mutedColor, fg, receptionVideos = [], workshopVideos = [], openVideoId, setOpenVideoId }) => {
+const JobStatusTimeline = ({ jobCard, isRtl, tr, textColor, mutedColor, fg, receptionVideos = [], workshopVideos = [], openVideoId, setOpenVideoId, partsOverride = false }) => {
   const currentIdx = JOB_STATUS_ORDER.indexOf(jobCard.job_status);
   const fmtDT = iso => iso ? new Date(iso).toLocaleString(isRtl?'ar-QA':'en-QA', { dateStyle:'short', timeStyle:'short' }) : '';
+  // "Unavailable parts ordered" takes over as the whole displayed status —
+  // this replaces the step timeline entirely instead of just highlighting a
+  // step in it. Reverts to the normal timeline the moment the order's
+  // status moves off "unavailable".
+  if (partsOverride) {
+    const color = PARTS_STATUS_COLOR.unavailable;
+    return (
+      <div className="flex items-start gap-2.5 px-2 py-1.5 rounded-lg" style={{ background:`${color}18` }}>
+        <span className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background:color }}/>
+        <span className="block text-sm font-bold" style={{ color }}>{isRtl ? PARTS_STATUS_LABEL.unavailable.ar : PARTS_STATUS_LABEL.unavailable.en}</span>
+      </div>
+    );
+  }
   return (
     <div className="space-y-1">
       {JOB_STATUS_ORDER.map((key, idx) => {
@@ -3583,8 +3596,13 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                   const jc     = publishedJobCard(a.job_cards[0]);
                   const car    = a.cars;
                   const relOrd = orderByApptId[a.id];
-                  const jcColor = JC_STATUS_COLOR[jc.job_status] || '#94a3b8';
-                  const jcLabel = tr[`jc_${jc.job_status}`] || jc.job_status;
+                  // "Unavailable parts ordered" fully takes over as the
+                  // displayed status (instead of showing alongside the
+                  // normal job status) — it's a bigger deal than the other
+                  // parts statuses, which stay as a badge next to it.
+                  const partsOverride = relOrd?.status === 'unavailable';
+                  const jcColor = partsOverride ? PARTS_STATUS_COLOR.unavailable : (JC_STATUS_COLOR[jc.job_status] || '#94a3b8');
+                  const jcLabel = partsOverride ? (isRtl ? PARTS_STATUS_LABEL.unavailable.ar : PARTS_STATUS_LABEL.unavailable.en) : (tr[`jc_${jc.job_status}`] || jc.job_status);
                   return (
                     <div key={a.id} className="rounded-2xl overflow-hidden"
                       style={{ background:cc.bg, border:`1px solid ${cc.fg}30` }}>
@@ -3629,7 +3647,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                         {/* Job status + number */}
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
                           <div className="flex items-center gap-1.5">
-                            {relOrd && relOrd.sent_to_customer && PARTS_STATUS_LABEL[relOrd.status] && (
+                            {relOrd && relOrd.sent_to_customer && !partsOverride && PARTS_STATUS_LABEL[relOrd.status] && (
                               <span className="flex flex-col items-end text-[10px] font-bold px-2 py-1 rounded-full text-white leading-tight text-end"
                                 style={{ background:PARTS_STATUS_COLOR[relOrd.status] }}>
                                 <span>{isRtl ? PARTS_STATUS_LABEL[relOrd.status].ar : PARTS_STATUS_LABEL[relOrd.status].en}</span>
@@ -3659,7 +3677,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           return (
                             <JobStatusTimeline jobCard={jc} isRtl={isRtl} tr={tr} textColor={cc.txt} mutedColor={cc.sub} fg={cc.fg}
                               receptionVideos={receptionVideos} workshopVideos={workshopVideos}
-                              openVideoId={openVideoId} setOpenVideoId={setOpenVideoId}/>
+                              openVideoId={openVideoId} setOpenVideoId={setOpenVideoId} partsOverride={partsOverride}/>
                           );
                         })()}
                       </div>
@@ -4773,7 +4791,7 @@ function HistoryOrderDetail({ jobCard, order, car, appt, profile, isRtl, tr, ope
       <div className="pt-3">
         <JobStatusTimeline jobCard={jobCard} isRtl={isRtl} tr={tr} textColor={C.text} mutedColor={C.muted} fg={C.gold}
           receptionVideos={receptionVideos} workshopVideos={workshopVideos}
-          openVideoId={openVideoId} setOpenVideoId={setOpenVideoId}/>
+          openVideoId={openVideoId} setOpenVideoId={setOpenVideoId} partsOverride={order?.status === 'unavailable'}/>
       </div>
 
       {grandTotal > 0 && (
