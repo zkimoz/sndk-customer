@@ -5950,39 +5950,8 @@ function ServiceCard({ service, lang, span, onClick }) {
       </div>
       <div className="absolute bottom-0 end-0 -mb-3 -me-3 pointer-events-none">
         {service.ar === 'صيانة دورية' ? (
-          <svg width={span===2?110:85} height={span===2?110:85} viewBox="0 0 80 92" xmlns="http://www.w3.org/2000/svg" className="md:!w-[125px] md:!h-[125px]" style={{ color:'rgba(0,0,0,0.32)' }}>
-            <defs>
-              <mask id="sandak-gear-mask">
-                <rect fill="white" width="80" height="92"/>
-                <circle cx="40" cy="22" r="8" fill="black"/>
-              </mask>
-            </defs>
-            {/* Gear — 8 wide teeth + ring, center hole */}
-            <g fill="currentColor" mask="url(#sandak-gear-mask)">
-              <circle cx="40" cy="22" r="15"/>
-              {[0,45,90,135,180,225,270,315].map(d=>(
-                <rect key={d} x="36.5" y="2" width="7" height="14" rx="2" transform={`rotate(${d} 40 22)`}/>
-              ))}
-            </g>
-            {/* Car cabin trapezoid */}
-            <path d="M23 55 L30 44 L50 44 L57 55Z" fill="currentColor"/>
-            {/* Car body */}
-            <rect x="10" y="54" width="60" height="19" rx="4" fill="currentColor"/>
-            {/* Windshield highlight */}
-            <path d="M26 54 L32 46 L48 46 L54 54Z" fill="rgba(255,255,255,0.25)"/>
-            {/* Left headlight */}
-            <rect x="12" y="57" width="13" height="11" rx="3" fill="rgba(255,255,255,0.3)"/>
-            {/* Right headlight */}
-            <rect x="55" y="57" width="13" height="11" rx="3" fill="rgba(255,255,255,0.3)"/>
-            {/* Grille */}
-            <rect x="33" y="60" width="14" height="7" rx="2" fill="rgba(255,255,255,0.2)"/>
-            {/* Wheels */}
-            <circle cx="21" cy="79" r="10" fill="currentColor"/>
-            <circle cx="59" cy="79" r="10" fill="currentColor"/>
-            {/* Wheel rims */}
-            <circle cx="21" cy="79" r="5" fill="rgba(255,255,255,0.35)"/>
-            <circle cx="59" cy="79" r="5" fill="rgba(255,255,255,0.35)"/>
-          </svg>
+          <img src="/periodic-service.png" alt="" aria-hidden="true"
+            width={span===2?170:140} className="md:!w-[190px]" style={{ opacity:0.6, transform:'rotate(-6deg)', filter:'drop-shadow(6px 10px 8px rgba(0,0,0,0.45))' }}/>
         ) : (service.ar === 'توفير قطع غيار' || service.en === 'Spare Parts') ? (
           <img src="/parts-logo.png" alt="" aria-hidden="true"
             width={span===2?170:140} className="md:!w-[190px]" style={{ opacity:0.6, transform:'rotate(-6deg)', filter:'drop-shadow(6px 10px 8px rgba(0,0,0,0.45))' }}/>
