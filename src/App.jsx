@@ -9,6 +9,27 @@ import {
   Sun, Moon, Eye, EyeOff, PlayCircle, Wallet, AlertCircle,
 } from 'lucide-react';
 
+// Re-runs `onChange` (usually a view's own `load`) whenever any row in the
+// given table(s) changes on the server — lets a screen stay live instead of
+// needing a manual page refresh to see a staff update (or the customer's
+// own action from another tab/device). `onChange` is read through a ref so
+// the subscription itself never needs to be torn down and recreated just
+// because the view re-rendered with a fresh closure.
+function useLiveTables(tables, onChange, enabled = true) {
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { onChangeRef.current = onChange; });
+  const key = tables.join(',');
+  useEffect(() => {
+    if (!enabled) return;
+    const channel = supabase.channel(`live_${key}_${Math.random().toString(36).slice(2, 9)}`);
+    tables.forEach(table => {
+      channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => onChangeRef.current());
+    });
+    channel.subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [enabled, key]);
+}
+
 // ── Translations ───────────────────────────────────────────────────────
 const T = {
   ar: {
@@ -841,17 +862,7 @@ export default function App() {
     return () => clearTimeout(t);
   }, [emailConfirmedBanner]);
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) { fetchProfile(session.user.id); registerPushSubscription(session.user.id); }
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY') { setShowNewPassword(true); return; }
-      setUser(session?.user ?? null);
-      if (session?.user) { fetchProfile(session.user.id); if (event === 'SIGNED_IN') registerPushSubscription(session.user.id); }
-      else { setProfile(null); }
-    });
+  const loadReferenceData = () => {
     // Load dynamic car brands, categories, and brand-category links
     supabase.from('car_brands').select('id,name_ar,name_en').or('is_active.eq.true,is_active.is.null').order('sort_order').order('id')
       .then(({ data }) => { if (data?.length) setCarBrands(data); });
@@ -872,8 +883,22 @@ export default function App() {
     // Staff-controlled appointment time slots (capacity, open/closed)
     supabase.from('time_slots').select('*').eq('is_active', true).order('sort_order').order('slot_key')
       .then(({ data }) => { if (data) setTimeSlots(data); });
+  };
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (session?.user) { fetchProfile(session.user.id); registerPushSubscription(session.user.id); }
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') { setShowNewPassword(true); return; }
+      setUser(session?.user ?? null);
+      if (session?.user) { fetchProfile(session.user.id); if (event === 'SIGNED_IN') registerPushSubscription(session.user.id); }
+      else { setProfile(null); }
+    });
+    loadReferenceData();
     return () => subscription.unsubscribe();
   }, []);
+  useLiveTables(['car_brands', 'car_categories', 'brand_categories', 'service_categories', 'services', 'announcements', 'time_slots'], loadReferenceData);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -3130,42 +3155,43 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
     loadData();
   }, [user]);
 
-  // Poll every 20s for new quotations while view is open
-  useEffect(() => {
+  // Checks for newly-sent quotations (and merges any other live order
+  // change) — used to run on a 20s poll, now fired the moment staff
+  // actually change something instead.
+  const checkForNewQuotations = async () => {
     if (!user) return;
-    const id = setInterval(async () => {
-      const { data: apptData } = await supabase.from('appointments')
-        .select('id').eq('profile_id', user.id);
-      if (!apptData?.length) return;
-      const ids = apptData.map(a => a.id);
-      const { data: ordData } = await supabase.from('orders')
-        .select('*, order_items(*), payments(*)')
-        .in('appointment_id', ids)
-        .eq('sent_to_customer', true);
-      if (!ordData) return;
-      // detect newly sent quotations
-      ordData.forEach(o => {
-        if (!seenIdsRef.current.has(o.id)) {
-          seenIdsRef.current.add(o.id);
-          showBrowserNotif(
-            isRtl ? '📋 وصلك عرض سعر جديد!' : '📋 New Quotation!',
-            isRtl ? 'راجع الطلبات وأعطِ موافقتك على عرض السعر.' : 'Check your orders and approve the quotation.'
-          );
-        }
+    const { data: apptData } = await supabase.from('appointments')
+      .select('id').eq('profile_id', user.id);
+    if (!apptData?.length) return;
+    const ids = apptData.map(a => a.id);
+    const { data: ordData } = await supabase.from('orders')
+      .select('*, order_items(*), payments(*)')
+      .in('appointment_id', ids)
+      .eq('sent_to_customer', true);
+    if (!ordData) return;
+    // detect newly sent quotations
+    ordData.forEach(o => {
+      if (!seenIdsRef.current.has(o.id)) {
+        seenIdsRef.current.add(o.id);
+        showBrowserNotif(
+          isRtl ? '📋 وصلك عرض سعر جديد!' : '📋 New Quotation!',
+          isRtl ? 'راجع الطلبات وأعطِ موافقتك على عرض السعر.' : 'Check your orders and approve the quotation.'
+        );
+      }
+    });
+    setOrders(prev => {
+      const updated = [...prev];
+      ordData.forEach(newOrd => {
+        const idx = updated.findIndex(o => o.id === newOrd.id);
+        if (idx >= 0) updated[idx] = newOrd; else updated.push(newOrd);
       });
-      setOrders(prev => {
-        const updated = [...prev];
-        ordData.forEach(newOrd => {
-          const idx = updated.findIndex(o => o.id === newOrd.id);
-          if (idx >= 0) updated[idx] = newOrd; else updated.push(newOrd);
-        });
-        return updated;
-      });
-      const pending = ordData.filter(o => !o.customer_approved && !o.customer_rejected).length;
-      onCountChange?.(pending);
-    }, 20000);
-    return () => clearInterval(id);
-  }, [user, isRtl]);
+      return updated;
+    });
+    const pending = ordData.filter(o => !o.customer_approved && !o.customer_rejected).length;
+    onCountChange?.(pending);
+  };
+  useLiveTables(['orders'], checkForNewQuotations, !!user);
+  useLiveTables(['appointments', 'job_cards', 'part_orders', 'part_order_payments', 'order_items', 'payments', 'wallet_transactions'], loadData, !!user);
 
   const serviceKeysOf = (order) => {
     const seen = new Set();
@@ -4906,6 +4932,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
   };
 
   useEffect(() => { if (user) loadCars(); }, [user]);
+  useLiveTables(['cars'], loadCars, !!user);
 
   const loadWallet = () => {
     if (!user) return;
@@ -4914,6 +4941,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
       .then(({ data }) => { setWalletTxns(data || []); setWalletLoading(false); });
   };
   useEffect(() => { loadWallet(); }, [user]);
+  useLiveTables(['wallet_transactions'], loadWallet, !!user);
 
   const walletBalance = walletTxns.filter(w => w.status === 'confirmed').reduce((s, w) => s + Number(w.amount || 0), 0);
   // Only top-up requests the customer made are shown as "pending" here — a pending
