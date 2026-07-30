@@ -690,6 +690,24 @@ const publishedJobCard = (jc) => {
   };
 };
 
+// Manufacturer logos from a public, MIT-licensed dataset (Karim confirmed
+// he has the rights to use these) — looked up by English brand name, no
+// per-brand upload needed. A few of our brand names don't match the
+// dataset's slug exactly (typos, abbreviations); everything else falls
+// back to a straightforward lowercase-and-hyphenate of the name.
+const CAR_BRAND_LOGO_ALIASES = {
+  'Baic': 'baic-motor',
+  'Chirey': 'chery',
+  'GAC': 'gac-group',
+  'GWM': 'great-wall',
+  'Mercedes': 'mercedes-benz',
+};
+const carBrandLogoUrl = (nameEn) => {
+  if (!nameEn) return null;
+  const slug = CAR_BRAND_LOGO_ALIASES[nameEn] || nameEn.trim().toLowerCase().replace(/\s+/g, '-');
+  return `https://cdn.jsdelivr.net/gh/filippofilip95/car-logos-dataset@master/logos/optimized/${slug}.png`;
+};
+
 // Searchable car-brand picker — the customer can type in Arabic or English
 // regardless of which language the site is currently displayed in, since
 // brand names are matched against both name_ar and name_en at once.
@@ -714,6 +732,12 @@ function BrandSearchSelect({ value, onSelect, brands, lang, placeholder, disable
   return (
     <div className="relative" ref={wrapRef}>
       <div className="relative">
+        {!open && selectedBrand && (
+          <img key={selectedBrand.id} src={carBrandLogoUrl(selectedBrand.name_en)} alt=""
+            onError={e => { e.target.style.display = 'none'; }}
+            className="absolute top-1/2 -translate-y-1/2 w-5 h-5 object-contain pointer-events-none"
+            style={{ [isRtl?'right':'left']:'14px' }}/>
+        )}
         <input
           value={open ? query : (selectedBrand ? brandLabel(selectedBrand, lang) : '')}
           onChange={e => { setQuery(e.target.value); setOpen(true); }}
@@ -722,7 +746,10 @@ function BrandSearchSelect({ value, onSelect, brands, lang, placeholder, disable
           disabled={disabled}
           dir="auto"
           className={`${C.inputCls} ${C.phCls}`}
-          style={{ background:C.input, border:`1px solid ${C.border}`, opacity: disabled?0.4:1, paddingInlineEnd:'2.5rem' }}
+          style={{
+            background:C.input, border:`1px solid ${C.border}`, opacity: disabled?0.4:1,
+            paddingInlineEnd:'2.5rem', paddingInlineStart: (!open && selectedBrand) ? '2.5rem' : undefined,
+          }}
           onBlurCapture={e=>e.target.style.borderColor=C.border}
         />
         <Search size={15} className="absolute top-1/2 -translate-y-1/2 pointer-events-none" style={{ [isRtl?'left':'right']:'14px', color:C.muted }}/>
@@ -735,7 +762,10 @@ function BrandSearchSelect({ value, onSelect, brands, lang, placeholder, disable
             <button key={b.id} type="button"
               onMouseDown={e => e.preventDefault()}
               onClick={() => { onSelect(b); setQuery(''); setOpen(false); }}
-              className="w-full text-start px-4 py-2.5 text-sm hover:bg-white/10 transition-colors" style={{ color:C.text }}>
+              className="w-full flex items-center gap-2.5 text-start px-4 py-2.5 text-sm hover:bg-white/10 transition-colors" style={{ color:C.text }}>
+              <img key={b.id} src={carBrandLogoUrl(b.name_en)} alt=""
+                onError={e => { e.target.style.display = 'none'; }}
+                className="w-5 h-5 object-contain flex-shrink-0"/>
               {brandLabel(b, lang)}
             </button>
           ))}
