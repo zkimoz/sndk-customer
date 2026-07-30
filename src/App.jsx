@@ -552,6 +552,18 @@ const CAT_STYLE = {
   'Accessories':         { icon:Car },
   'Car Registration Renewal':{ icon:ClipboardList },
 };
+// Same custom logos used as the home-page card watermarks, reused as the
+// small icon badge on the All Services list — falls back to CAT_STYLE's
+// plain icon for any category without one of these.
+const CAT_LOGO_IMG = {
+  'صيانة دورية':'/periodic-service.png', 'Periodic Maintenance':'/periodic-service.png',
+  'عناية بالسيارات':'/car-care.png', 'Car Care':'/car-care.png',
+  'توفير قطع غيار':'/parts-logo.png', 'Spare Parts':'/parts-logo.png',
+  'إصلاح وتشخيص أعطال':'/diagnosis.png', 'Fault Diagnosis':'/diagnosis.png',
+  'إصلاح حوادث':'/accident.png', 'Collision Repair':'/accident.png',
+  'إكسسوارات':'/car-accessories.png', 'Accessories':'/car-accessories.png',
+  'تجديد استمارة السيارة':'/istimara-qatar.jpg', 'Car Registration Renewal':'/istimara-qatar.jpg',
+};
 const DEFAULT_CAT_STYLES = [
   { icon:Cog },
   { icon:Sparkles },
@@ -4770,6 +4782,7 @@ function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCat
           .filter(cat => !COMING_SOON_CAT_NAMES.has(cat.name?.ar) && !COMING_SOON_CAT_NAMES.has(cat.name?.en))
           .map((cat, catIdx) => {
           const iconStyle = CAT_STYLE[cat.name?.ar] || CAT_STYLE[cat.name?.en] || DEFAULT_CAT_STYLES[catIdx % DEFAULT_CAT_STYLES.length];
+          const logoImg = CAT_LOGO_IMG[cat.name?.ar] || CAT_LOGO_IMG[cat.name?.en];
           const cc     = CARD_BG_CYCLE[catIdx % 2];
           const iconCC = CARD_BG_CYCLE[(catIdx + 1) % 2];
           const Icon   = iconStyle.icon;
@@ -4791,8 +4804,11 @@ function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCat
               <button onClick={onRowClick}
                 className="w-full flex items-center gap-4 p-4 transition-all"
                 style={{ borderBottom:isOpen?`1px solid ${cc.div}`:'none' }}>
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background:iconCC.bg }}>
-                  <Icon size={22} style={{ color:iconCC.fg }}/>
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background:iconCC.bg }}>
+                  {logoImg
+                    ? <img src={logoImg} alt="" className="w-full h-full object-contain p-1"/>
+                    : <Icon size={22} style={{ color:iconCC.fg }}/>
+                  }
                 </div>
                 <div className="flex-1 text-start">
                   <p className="font-black text-base" style={{ color:cc.txt }}>{catName}</p>
