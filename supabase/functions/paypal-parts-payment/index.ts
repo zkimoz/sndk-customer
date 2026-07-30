@@ -17,7 +17,12 @@ const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 // Same fixed peg used by paypal-payment/index.ts — QAR never floats against
 // USD, so there's no live FX call.
-const QAR_PER_USD = 3.64;
+const QAR_PER_USD = 3.65;
+
+// PayPal keeps ~3% of every captured payment — this never touches what the
+// customer paid or the request's price, it's purely an internal cost logged
+// to Finance > Expenses so profit reporting accounts for it.
+const PAYPAL_FEE_RATE = 0.03;
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -72,6 +77,21 @@ async function loadOwnedPartOrder(userClient: any, partOrderId: string) {
   }
 
   return { partOrder, profileId: partOrder.profile_id };
+}
+
+// Best-effort — logging PayPal's cut must never fail the payment response
+// itself. Recorded as a plain internal expense (not tied to the request in
+// any way the customer can see).
+function recordPaypalFee(amountQAR: number, requestNumber: string) {
+  const fee = Math.round(amountQAR * PAYPAL_FEE_RATE * 1000) / 1000;
+  if (fee <= 0) return;
+  adminClient.from("admin_expenses").insert({
+    item_name: "رسوم باي بال",
+    cost: fee,
+    note: `طلب قطع غيار ${requestNumber} — دفعة ${amountQAR.toFixed(3)} ر.ق`,
+    expense_date: new Date().toISOString().slice(0, 10),
+    created_by: null,
+  }).then(() => {}).catch(() => {});
 }
 
 // Best-effort — a notification failure must never fail the payment response
@@ -174,6 +194,7 @@ serve(async (req) => {
       });
       if (insErr) return jsonResponse({ error: `Payment captured but failed to record: ${insErr.message}` }, 500);
 
+      recordPaypalFee(amountQAR, partOrder.request_number);
       await adminClient.from("part_orders").update({
         status: "paid",
         payment_status: "paid",

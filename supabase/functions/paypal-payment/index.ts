@@ -16,7 +16,12 @@ const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 // QAR is pegged to USD at a fixed rate by Qatar's central bank (never
 // floats) — PayPal doesn't settle in QAR, so every charge is converted at
 // this constant instead of calling a live FX API.
-const QAR_PER_USD = 3.64;
+const QAR_PER_USD = 3.65;
+
+// PayPal keeps ~3% of every captured payment — this never touches what the
+// customer paid or the order/job-card totals, it's purely an internal cost
+// logged to Finance > Expenses so profit reporting accounts for it.
+const PAYPAL_FEE_RATE = 0.03;
 
 // `types` elements are 'parts'/'labor' (matching the *_payment_method order
 // columns), but order_items.item_type is singular 'part'/'labor' — easy to
@@ -126,6 +131,21 @@ async function loadOwnedOrder(userClient: any, orderId: string) {
   return { order, profileId: appt.profile_id, jobNumber: appt.job_cards?.job_number };
 }
 
+// Best-effort — logging PayPal's cut must never fail the payment response
+// itself. Recorded as a plain internal expense (not tied to the order/job
+// card in any way the customer or job card totals can see).
+function recordPaypalFee(amountQAR: number, jobNumber: string | undefined) {
+  const fee = Math.round(amountQAR * PAYPAL_FEE_RATE * 1000) / 1000;
+  if (fee <= 0) return;
+  adminClient.from("admin_expenses").insert({
+    item_name: "رسوم باي بال",
+    cost: fee,
+    note: jobNumber ? `أمر شغل ${jobNumber} — دفعة ${amountQAR.toFixed(3)} ر.ق` : `دفعة ${amountQAR.toFixed(3)} ر.ق`,
+    expense_date: new Date().toISOString().slice(0, 10),
+    created_by: null,
+  }).then(() => {}).catch(() => {});
+}
+
 // Best-effort — a notification failure must never fail the payment response
 // itself (the money has already moved by the time this is called).
 function notifyPaymentReceived(profileId: string, jobNumber: string | undefined, amountQAR: number, isTowing: boolean) {
@@ -226,6 +246,7 @@ serve(async (req) => {
       });
       if (insErr) return jsonResponse({ error: `Payment captured but failed to record: ${insErr.message}` }, 500);
 
+      recordPaypalFee(amountQAR, jobNumber);
       notifyPaymentReceived(profileId!, jobNumber, amountQAR, isTowing);
       return jsonResponse({ success: true, amountQAR });
     }
