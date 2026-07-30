@@ -4637,7 +4637,7 @@ function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, service
           {/* Decorative watermark */}
           {ann
             ? <div className="absolute bottom-0 end-0 text-[170px] leading-none opacity-15 pointer-events-none select-none -mb-4 -me-4">{ann.emoji}</div>
-            : <img src="/logo-gear-email.png" alt="" aria-hidden="true" className="absolute bottom-0 end-0 -mb-4 -me-4 pointer-events-none select-none" width={200} style={{ opacity:0.4 }}/>
+            : <img src="/logo-gear-email.png" alt="" aria-hidden="true" className="absolute bottom-0 end-0 -mb-4 -me-4 pointer-events-none select-none" width={300} style={{ opacity:0.4 }}/>
           }
           {/* Main text */}
           <div className="relative">
