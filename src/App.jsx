@@ -667,6 +667,12 @@ const resolveLangName = (rawValue, refList = [], lang = 'ar') => {
 };
 const carTypeLabel     = (car, carBrands = [], lang = 'ar') => resolveLangName(car?.car_type, carBrands, lang);
 const carCategoryLabel = (car, carCats = [], lang = 'ar')   => resolveLangName(car?.car_category, carCats, lang);
+// car.car_type is saved as whichever language the brand was picked in — look
+// it up against either name column to get the English name carBrandLogoUrl needs.
+const carLogoUrlFor = (car, carBrands = []) => {
+  const match = carBrands.find(b => b.name_ar === car?.car_type || b.name_en === car?.car_type);
+  return carBrandLogoUrl(match?.name_en || car?.car_type);
+};
 
 // A job card's live status/videos change the moment staff act on them (so
 // other staff stay in sync), but the customer should only see whatever
@@ -733,10 +739,11 @@ function BrandSearchSelect({ value, onSelect, brands, lang, placeholder, disable
     <div className="relative" ref={wrapRef}>
       <div className="relative">
         {!open && selectedBrand && (
-          <img key={selectedBrand.id} src={carBrandLogoUrl(selectedBrand.name_en)} alt=""
-            onError={e => { e.target.style.display = 'none'; }}
-            className="absolute top-1/2 -translate-y-1/2 w-5 h-5 object-contain pointer-events-none"
-            style={{ [isRtl?'right':'left']:'14px' }}/>
+          <div className="absolute top-1/2 -translate-y-1/2 w-9 h-9 rounded-lg bg-white flex items-center justify-center pointer-events-none overflow-hidden" style={{ [isRtl?'right':'left']:'8px' }}>
+            <img key={selectedBrand.id} src={carBrandLogoUrl(selectedBrand.name_en)} alt=""
+              onError={e => { e.target.style.display = 'none'; }}
+              className="w-7 h-7 object-contain"/>
+          </div>
         )}
         <input
           value={open ? query : (selectedBrand ? brandLabel(selectedBrand, lang) : '')}
@@ -748,7 +755,7 @@ function BrandSearchSelect({ value, onSelect, brands, lang, placeholder, disable
           className={`${C.inputCls} ${C.phCls}`}
           style={{
             background:C.input, border:`1px solid ${C.border}`, opacity: disabled?0.4:1,
-            paddingInlineEnd:'2.5rem', paddingInlineStart: (!open && selectedBrand) ? '2.5rem' : undefined,
+            paddingInlineEnd:'2.5rem', paddingInlineStart: (!open && selectedBrand) ? '3.25rem' : undefined,
           }}
           onBlurCapture={e=>e.target.style.borderColor=C.border}
         />
@@ -762,10 +769,12 @@ function BrandSearchSelect({ value, onSelect, brands, lang, placeholder, disable
             <button key={b.id} type="button"
               onMouseDown={e => e.preventDefault()}
               onClick={() => { onSelect(b); setQuery(''); setOpen(false); }}
-              className="w-full flex items-center gap-2.5 text-start px-4 py-2.5 text-sm hover:bg-white/10 transition-colors" style={{ color:C.text }}>
-              <img key={b.id} src={carBrandLogoUrl(b.name_en)} alt=""
-                onError={e => { e.target.style.display = 'none'; }}
-                className="w-5 h-5 object-contain flex-shrink-0"/>
+              className="w-full flex items-center gap-3 text-start px-4 py-2.5 text-sm hover:bg-white/10 transition-colors" style={{ color:C.text }}>
+              <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center flex-shrink-0 overflow-hidden">
+                <img key={b.id} src={carBrandLogoUrl(b.name_en)} alt=""
+                  onError={e => { e.target.style.display = 'none'; }}
+                  className="w-7 h-7 object-contain"/>
+              </div>
               {brandLabel(b, lang)}
             </button>
           ))}
@@ -2180,7 +2189,7 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
   );
 }
 
-function openQuotationPDF(order, linked, profile, jobCard) {
+function openQuotationPDF(order, linked, profile, jobCard, carBrands = []) {
   const isApproved = !!order.customer_approved;
   const approvalDate = order.approved_at
     ? new Date(order.approved_at).toLocaleString('ar-QA', { dateStyle:'long', timeStyle:'short' }) : '';
@@ -2191,6 +2200,8 @@ function openQuotationPDF(order, linked, profile, jobCard) {
   const groupKeyOf = it => it.service_name?.group_id || it.service_name?.ar || it.service_name?.en || null;
   const lineTotal = it => Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
   const car = linked?.cars || {};
+  const carBrandRec = carBrands.find(b => b.name_ar === car.car_type || b.name_en === car.car_type);
+  const carLogoSrc = carBrandLogoUrl(carBrandRec?.name_en || car.car_type);
   const items = order.order_items || [];
   const approvedItems = decided ? items.filter(it => { const k = groupKeyOf(it); return !k || decisions[k] !== 'rejected'; }) : items;
   const rejectedItems = decided ? items.filter(it => { const k = groupKeyOf(it); return k && decisions[k] === 'rejected'; }) : [];
@@ -2344,7 +2355,7 @@ function openQuotationPDF(order, linked, profile, jobCard) {
 <div class="section">
   <div class="section-title">بيانات السيارة / Car Info</div>
   <div class="grid2" style="margin-bottom:8px">
-    <div class="field"><div class="field-label">السيارة / Car</div><div class="field-value">${escapeHtml([car.car_type, car.car_category, car.production_year].filter(Boolean).join(' ')) || '—'}</div></div>
+    <div class="field"><div class="field-label">السيارة / Car</div><div class="field-value"><img src="${escapeHtml(carLogoSrc)}" alt="" style="height:16px;vertical-align:middle;margin-inline-end:6px" onerror="this.style.display='none'"/>${escapeHtml([car.car_type, car.car_category, car.production_year].filter(Boolean).join(' ')) || '—'}</div></div>
     <div class="field"><div class="field-label">اللوحة / Plate</div><div class="field-value" dir="ltr">${escapeHtml(car.plate_number) || '—'}</div></div>
   </div>
   ${car.chassis_number ? `<div class="field"><div class="field-label">رقم الشاصيه / VIN</div><div class="field-value" dir="ltr" style="font-family:monospace;letter-spacing:1px">${escapeHtml(car.chassis_number)}</div></div>` : ''}
@@ -2682,7 +2693,7 @@ function printCustomerInvoice(jobCard, appt, order, profile, brandsData = [], ca
         <div class="lbl-ar">بيانات السيارة</div>
         <div class="lbl-en">Vehicle Info</div>
         <div class="sub" style="margin-bottom:4px"><span class="label-ar">النوع</span> <span class="label-en">Type</span>:</div>
-        <div class="val">${escapeHtml(carTypeAr)}${carTypeEn&&carTypeEn!==carTypeAr?` <span style="color:#64748b;font-weight:500">/ ${escapeHtml(carTypeEn)}</span>`:''}</div>
+        <div class="val"><img src="${escapeHtml(carBrandLogoUrl(carTypeEn||carTypeAr))}" alt="" style="height:16px;vertical-align:middle;margin-inline-end:6px" onerror="this.style.display='none'"/>${escapeHtml(carTypeAr)}${carTypeEn&&carTypeEn!==carTypeAr?` <span style="color:#64748b;font-weight:500">/ ${escapeHtml(carTypeEn)}</span>`:''}</div>
         ${carCatAr?`<div class="sub"><span class="label-ar">الفئة</span> <span class="label-en">Category</span>: <strong>${escapeHtml(carCatAr)}${carCatEn&&carCatEn!==carCatAr?` / ${escapeHtml(carCatEn)}`:''}</strong></div>`:''}
         ${car.production_year?`<div class="sub"><span class="label-ar">موديل</span> <span class="label-en">Model Year</span>: <strong>${escapeHtml(car.production_year)}</strong></div>`:''}
         ${car.plate_number?`<div class="sub"><span class="label-ar">رقم اللوحة</span> <span class="label-en">Plate Number</span>: <strong>${escapeHtml(car.plate_number)}</strong></div>`:''}
@@ -3703,7 +3714,10 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             ) : <p className="font-bold text-base" style={{ color:cc.txt }}>{a.service_type||'—'}</p>;
                           })()}
                           {car && (
-                            <p className="text-sm mt-1.5" style={{ color:cc.sub }}>
+                            <p className="text-sm mt-1.5 flex items-center gap-1.5" style={{ color:cc.sub }}>
+                              <img key={car.id} src={carLogoUrlFor(car, carBrandsRef)} alt=""
+                                onError={e => { e.target.style.display = 'none'; }}
+                                className="w-4 h-4 object-contain rounded bg-white p-0.5 flex-shrink-0"/>
                               {[carTypeLabel(car, carBrandsRef, lang), carCategoryLabel(car, carCatsRef, lang), car.production_year].filter(Boolean).join(' · ')}
                             </p>
                           )}
@@ -3792,7 +3806,10 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             ) : <p className="text-base font-bold mb-0.5" style={{ color:cc.txt }}>{a.service_type||'—'}</p>;
                           })()}
                           {car && (
-                            <p className="text-sm" style={{ color:cc.sub }}>
+                            <p className="text-sm flex items-center gap-1.5" style={{ color:cc.sub }}>
+                              <img key={car.id} src={carLogoUrlFor(car, carBrandsRef)} alt=""
+                                onError={e => { e.target.style.display = 'none'; }}
+                                className="w-4 h-4 object-contain rounded bg-white p-0.5 flex-shrink-0"/>
                               {[carTypeLabel(car, carBrandsRef, lang), carCategoryLabel(car, carCatsRef, lang), car.production_year].filter(Boolean).join(' · ')}
                               {car.plate_number ? ` · ${car.plate_number}` : ''}
                             </p>
@@ -4059,7 +4076,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             </div>
                           )}
                           {/* PDF */}
-                          <button onClick={() => openQuotationPDF(relOrd, a, profile, jc)}
+                          <button onClick={() => openQuotationPDF(relOrd, a, profile, jc, carBrandsRef)}
                             className="flex items-center justify-center gap-2 w-full px-3 py-3 rounded-xl font-black text-base shadow-md hover:shadow-lg active:scale-95 transition-all"
                             style={{ background:cc.fg, color:'#111111' }}>
                             <FileImage size={16}/>{isRtl ? 'فتح أمر الشغل PDF' : 'Open Job Card PDF'}
@@ -4410,7 +4427,10 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                             ) : <p className="font-bold text-base" style={{ color:cc.txt }}>{a.service_type||'—'}</p>;
                           })()}
                           {car && (
-                            <p className="text-sm mt-1.5" style={{ color:cc.sub }}>
+                            <p className="text-sm mt-1.5 flex items-center gap-1.5" style={{ color:cc.sub }}>
+                              <img key={car.id} src={carLogoUrlFor(car, carBrandsRef)} alt=""
+                                onError={e => { e.target.style.display = 'none'; }}
+                                className="w-4 h-4 object-contain rounded bg-white p-0.5 flex-shrink-0"/>
                               {[carTypeLabel(car, carBrandsRef, lang), carCategoryLabel(car, carCatsRef, lang), car.production_year].filter(Boolean).join(' · ')}
                             </p>
                           )}
@@ -5012,7 +5032,7 @@ function HistoryOrderDetail({ jobCard, order, car, appt, profile, isRtl, tr, ope
       )}
 
       <div className="flex gap-2">
-        <button onClick={() => openQuotationPDF(order || {}, linked, profile, jobCard)}
+        <button onClick={() => openQuotationPDF(order || {}, linked, profile, jobCard, carBrands)}
           className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl font-bold text-xs"
           style={{ background:'rgba(0,0,0,0.08)', border:`1px solid ${C.border}`, color:C.text }}>
           <FileImage size={13}/>{isRtl?'PDF أمر الشغل':'Job Card PDF'}
@@ -5644,8 +5664,11 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                 <div key={car.id} className="rounded-2xl overflow-hidden transition-all" style={{ background:cc.bg, border:`1px solid ${isOpen?`${cc.fg}50`:`${cc.fg}25`}` }}>
                   <div className="flex items-center gap-2 p-4">
                     <button onClick={()=>toggleCar(car.id)} className="flex items-center gap-4 flex-1 min-w-0">
-                      <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background:iconCC.bg }}>
+                      <div className="relative w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background:iconCC.bg }}>
                         <Car size={22} style={{ color:iconCC.fg }}/>
+                        <img key={car.id} src={carLogoUrlFor(car, carBrands)} alt=""
+                          onError={e => { e.target.style.display = 'none'; }}
+                          className="absolute inset-0 w-full h-full object-contain p-2 rounded-xl bg-white"/>
                       </div>
                       <div className="flex-1 text-start min-w-0">
                         <p className="font-black" style={{ color:cc.txt }}>{[carTypeLabel(car, carBrands, lang), carCategoryLabel(car, carCategories, lang)].filter(Boolean).join(' · ')}</p>
@@ -6317,8 +6340,11 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
                     style={{ background: C.card, border: `1px solid ${C.border}` }}
                     onMouseEnter={e => e.currentTarget.style.borderColor = C.gold + '60'}
                     onMouseLeave={e => e.currentTarget.style.borderColor = C.border}>
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${C.cardText}18` }}>
+                    <div className="relative w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${C.cardText}18` }}>
                       <Car size={16} style={{ color: C.cardText }}/>
+                      <img key={car.id} src={carLogoUrlFor(car, carBrands)} alt=""
+                        onError={e => { e.target.style.display = 'none'; }}
+                        className="absolute inset-0 w-full h-full object-contain p-1.5 rounded-xl bg-white"/>
                     </div>
                     <div>
                       <p className="font-black text-sm" style={{ color: C.cardText }}>{[carTypeLabel(car, carBrands, lang), carCategoryLabel(car, carCategories, lang)].filter(Boolean).join(' · ')}</p>
