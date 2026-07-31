@@ -4345,7 +4345,10 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                               label={(isRtl ? 'قطع الغيار' : 'Parts') + (partsIsPartial ? (isRtl ? ' (المتبقي)' : ' (Remaining)') : '')}
                               amount={partsDisplayAmount}
                               status={partsEffectiveStatus}
-                              canPay={relOrd.customer_approved && relOrd.status !== 'draft' && !partsCoveredByPayments && !towingPending}
+                              // Once every service is already done, paying parts on their own no
+                              // longer makes sense (the whole point was paying before work started) —
+                              // the combined "Pay Remaining" button below covers everything at once instead.
+                              canPay={relOrd.customer_approved && relOrd.status !== 'draft' && !partsCoveredByPayments && !towingPending && !allServicesDone}
                               onPay={() => setPayMethodModal({ orderId: relOrd.id, types: ['parts'], amount: partsDisplayAmount })}
                               tr={tr} isRtl={isRtl} cc={cc}
                             />
