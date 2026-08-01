@@ -5859,11 +5859,18 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                         }, 0);
                         if (yearTotal <= 0) return null;
                         return (
-                          <div className="mx-4 mb-3 px-3 py-2.5 rounded-xl flex items-center justify-between" style={{ background:'rgba(0,0,0,0.08)' }}>
-                            <span className="text-xs font-semibold" style={{ color:C.muted }}>
-                              {isRtl ? `مصروفاتك على هذه السيارة خلال عام ${currentYear}` : `Your expenses on this car during ${currentYear}`}
-                            </span>
-                            <span className="text-sm font-black" style={{ color:C.gold }}>{yearTotal.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                          <div className="mx-4 mb-3 px-3.5 py-3 rounded-xl flex items-center gap-3" style={{ background:`${C.gold}12`, border:`1px solid ${C.gold}30` }}>
+                            <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background:`${C.gold}20` }}>
+                              <Wallet size={16} style={{ color:C.gold }}/>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold leading-snug" style={{ color:C.muted }}>
+                                {isRtl ? `إجمالي مصروفاتك على هذه السيارة في ${currentYear}` : `Total spent on this car in ${currentYear}`}
+                              </p>
+                              <p className="text-lg font-black leading-tight mt-0.5" style={{ color:C.gold }}>
+                                {yearTotal.toFixed(3)} {isRtl?'ر.ق':'QAR'}
+                              </p>
+                            </div>
                           </div>
                         );
                       })()}
@@ -5875,8 +5882,26 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                         <div className="divide-y" style={{ borderColor:C.border }}>
                           {carHistory.map(appt => {
                             const svcs = parseServices(appt.service_type);
-                            const svcLabel = svcs ? svcs.map(s => s.name || '').join(' · ') : (appt.service_type || '—');
                             const order = appt.orders?.[0];
+                            // Walk-in appointments (created by staff at reception, not booked
+                            // through the app) store the literal placeholder "استقبال مباشر" as
+                            // service_type since there's no formal service list yet — once staff
+                            // build the quotation, the real approved service names live on the
+                            // order's line items instead, and are a truer title than the placeholder.
+                            const approvedServiceNames = !svcs && order?.order_items?.length ? [...new Set(
+                              order.order_items
+                                .filter(it => {
+                                  if (!order.customer_approved && !order.customer_rejected) return true;
+                                  const decisions = order.service_decisions || {};
+                                  const k = it.service_name?.group_id || it.service_name?.ar || it.service_name?.en;
+                                  return !k || decisions[k] !== 'rejected';
+                                })
+                                .map(it => (isRtl ? it.service_name?.ar : it.service_name?.en) || it.service_name?.ar || it.service_name?.en)
+                                .filter(Boolean)
+                            )] : [];
+                            const svcLabel = svcs ? svcs.map(s => s.name || '').join(' · ')
+                              : approvedServiceNames.length ? approvedServiceNames.join(' · ')
+                              : (appt.service_type || '—');
                             const jobCard = publishedJobCard(appt.job_cards?.[0]);
                             const ORD_LABEL = {
                               draft:     isRtl ? 'مسودة عرض السعر'  : 'Draft Quote',
