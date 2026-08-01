@@ -5666,6 +5666,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                       <div className="relative w-16 h-16 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background:'#e2e8f0' }}>
                         <Car size={22} className="relative" style={{ color:'#94a3b8' }}/>
                         <img key={car.id} src={carLogoUrlFor(car, carBrands)} alt=""
+                          onLoad={e => { e.target.previousElementSibling.style.display = 'none'; }}
                           onError={e => { e.target.style.display = 'none'; }}
                           className="absolute inset-0 w-full h-full object-contain p-2"/>
                       </div>
@@ -6368,6 +6369,7 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
                       <div className="absolute inset-0 rounded-xl" style={{ background: `${C.cardText}18` }}/>
                       <Car size={16} className="relative" style={{ color: C.cardText }}/>
                       <img key={car.id} src={carLogoUrlFor(car, carBrands)} alt=""
+                        onLoad={e => { e.target.previousElementSibling.style.display = 'none'; }}
                         onError={e => { e.target.style.display = 'none'; }}
                         className="absolute inset-0 w-full h-full object-contain"/>
                     </div>
