@@ -6,7 +6,7 @@ import {
   Menu, X, ChevronLeft, ChevronRight, ChevronDown, User, Calendar,
   Wrench, ArrowRight, Lock, LogOut, MapPin, Mail,
   ClipboardList, Package, ShoppingCart, Trash2, Upload, FileImage, Pencil, Check,
-  Sun, Moon, Eye, EyeOff, PlayCircle, Wallet, AlertCircle,
+  Sun, Moon, Eye, EyeOff, PlayCircle, Wallet, AlertCircle, Download,
 } from 'lucide-react';
 
 // Re-runs `onChange` (usually a view's own `load`) whenever any row in the
@@ -380,6 +380,26 @@ const getStatusTimes = (history, statusKey) => {
 // when they placed the request, not just where things stand right now.
 const isImageUrl = (url) => /\.(jpe?g|png|gif|webp|heic|heif)(\?|$)/i.test(url || '');
 
+// Storage URLs are cross-origin, so a plain <a download> gets ignored by the
+// browser and just navigates to the file — fetching it as a blob first and
+// downloading that forces an actual save instead of a tab navigation.
+const downloadMedia = async (url, filename) => {
+  try {
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
+  } catch {
+    window.open(url, '_blank');
+  }
+};
+
 const JobStatusVideoBlock = ({ videos, isRtl, jcId, videoKeyPrefix, openVideoId, setOpenVideoId, fg, txt }) => {
   if (!videos.length) return null;
   return (
@@ -391,6 +411,7 @@ const JobStatusVideoBlock = ({ videos, isRtl, jcId, videoKeyPrefix, openVideoId,
         const label = videoKeyPrefix === 'reception'
           ? (isImg ? (isRtl ? `صورة الاستلام ${idx + 1}` : `Reception Photo ${idx + 1}`) : (isRtl ? `فيديو الاستلام ${idx + 1}` : `Reception Video ${idx + 1}`))
           : (isImg ? (isRtl ? `صورة ملاحظات الورشة ${idx + 1}` : `Workshop Notes Photo ${idx + 1}`) : (isRtl ? `فيديو ملاحظات في السيارة ${idx + 1}` : `Car Notes Video ${idx + 1}`));
+        const ext = /\.([a-zA-Z0-9]{2,5})(\?|$)/.exec(url || '')?.[1] || (isImg ? 'jpg' : 'mp4');
         return (
           <div key={idx}>
             <div className="flex items-center gap-2 w-full px-3 py-2 rounded-xl" style={{ background:'rgba(0,0,0,0.10)', border:`1px solid ${fg}50` }}>
@@ -401,6 +422,12 @@ const JobStatusVideoBlock = ({ videos, isRtl, jcId, videoKeyPrefix, openVideoId,
                 {isImg ? <FileImage size={13}/> : <PlayCircle size={13}/>}
                 <span className="hidden sm:inline">{isImg ? (isRtl?'اضغط لمشاهدة الصورة':'Click to view photo') : (isRtl ? 'اضغط لمشاهدة الفيديو' : 'Click to watch video')}</span>
                 <span className="sm:hidden">{isImg ? (isRtl?'مشاهدة':'View') : (isRtl ? 'مشاهدة' : 'Watch')}</span>
+              </button>
+              <button onClick={() => downloadMedia(url, `${label}.${ext}`)}
+                title={isRtl?'تحميل':'Download'}
+                className="flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0 transition-all active:scale-95"
+                style={{ background:'rgba(255,255,255,0.08)', color:txt, border:`1px solid ${fg}40` }}>
+                <Download size={14}/>
               </button>
             </div>
             {isOpen && (
