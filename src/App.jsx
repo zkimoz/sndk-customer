@@ -3897,13 +3897,25 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                         if (!computerScans.length) return null;
                         return (
                           <div className="px-4 pb-1 space-y-1.5">
-                            {computerScans.map((url, idx) => (
-                              <a key={idx} href={url} target="_blank" rel="noreferrer"
-                                className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold transition-all"
-                                style={{ background:'rgba(0,0,0,0.10)', color:cc.txt }}>
-                                🖥️ {isRtl ? `فحص الكمبيوتر ${computerScans.length > 1 ? idx + 1 : ''}` : `Computer Scan ${computerScans.length > 1 ? idx + 1 : ''}`}
-                              </a>
-                            ))}
+                            {computerScans.map((url, idx) => {
+                              const label = (isRtl ? `فحص الكمبيوتر ${computerScans.length > 1 ? idx + 1 : ''}` : `Computer Scan ${computerScans.length > 1 ? idx + 1 : ''}`).trim();
+                              const ext = /\.([a-zA-Z0-9]{2,5})(\?|$)/.exec(url || '')?.[1] || 'pdf';
+                              return (
+                                <div key={idx} className="flex items-center gap-2">
+                                  <a href={url} target="_blank" rel="noreferrer"
+                                    className="flex-1 min-w-0 flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold transition-all truncate"
+                                    style={{ background:'rgba(0,0,0,0.10)', color:cc.txt }}>
+                                    🖥️ {label}
+                                  </a>
+                                  <button onClick={() => downloadMedia(url, `${label}.${ext}`)}
+                                    title={isRtl?'تحميل':'Download'}
+                                    className="flex items-center justify-center w-9 h-9 rounded-xl flex-shrink-0 transition-all active:scale-95"
+                                    style={{ background:'rgba(0,0,0,0.10)', color:cc.txt }}>
+                                    <Download size={14}/>
+                                  </button>
+                                </div>
+                              );
+                            })}
                           </div>
                         );
                       })()}
