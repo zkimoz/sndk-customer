@@ -417,6 +417,16 @@ const copyText = (text, isRtl) => {
   });
 };
 
+// Pulls the transfer number out of a manual-payment note (e.g. "...to
+// CR-244788 under the name...") so it can be shown bigger/bold and copied on
+// its own — the note itself stays a single free-text field staff edit as one
+// sentence, so this is a display-time split rather than a separate DB column.
+const extractNoteNumber = (text) => {
+  const m = /\d{4,}/.exec(text || '');
+  if (!m) return null;
+  return { before: text.slice(0, m.index), number: m[0], after: text.slice(m.index + m[0].length) };
+};
+
 const JobStatusVideoBlock = ({ videos, isRtl, jcId, videoKeyPrefix, openVideoId, setOpenVideoId, fg, txt }) => {
   if (!videos.length) return null;
   return (
@@ -1919,19 +1929,23 @@ function PaymentMethodModal({ orderId, types, amount, user, customerName, isRtl,
           )}
           {needsReceipt && (
             <div className="pt-1">
-              {(isRtl ? chosenMethod?.notes_ar : (chosenMethod?.notes_en || chosenMethod?.notes_ar)) && (
-                <div className="flex items-start gap-2 mb-2 p-2.5 rounded-lg" style={{ color:mc.txt, background:'rgba(0,0,0,0.08)' }}>
-                  <p className="text-xs font-bold flex-1">
-                    {isRtl ? chosenMethod.notes_ar : (chosenMethod.notes_en || chosenMethod.notes_ar)}
-                  </p>
-                  <button type="button"
-                    onClick={() => copyText(isRtl ? chosenMethod.notes_ar : (chosenMethod.notes_en || chosenMethod.notes_ar), isRtl)}
-                    className="flex-shrink-0 text-[10px] font-black px-2 py-1 rounded-lg transition-all active:scale-95"
-                    style={{ background:'#8A1538', color:'#fff' }}>
-                    {isRtl?'نسخ':'Copy'}
-                  </button>
-                </div>
-              )}
+              {(isRtl ? chosenMethod?.notes_ar : (chosenMethod?.notes_en || chosenMethod?.notes_ar)) && (() => {
+                const noteText = isRtl ? chosenMethod.notes_ar : (chosenMethod.notes_en || chosenMethod.notes_ar);
+                const parsed = extractNoteNumber(noteText);
+                return (
+                  <div className="flex items-start gap-2 mb-2 p-2.5 rounded-lg" style={{ color:mc.txt, background:'rgba(0,0,0,0.08)' }}>
+                    <p className="text-xs font-bold flex-1">
+                      {parsed ? <>{parsed.before}<span className="text-base font-black">{parsed.number}</span>{parsed.after}</> : noteText}
+                    </p>
+                    <button type="button"
+                      onClick={() => copyText(parsed ? parsed.number : noteText, isRtl)}
+                      className="flex-shrink-0 text-[10px] font-black px-2 py-1 rounded-lg transition-all active:scale-95"
+                      style={{ background:'#8A1538', color:'#fff' }}>
+                      {isRtl?'نسخ':'Copy'}
+                    </button>
+                  </div>
+                );
+              })()}
               <input ref={receiptFileRef} type="file" accept="image/*,application/pdf" className="hidden"
                 onChange={e => setReceiptFile(e.target.files?.[0] || null)}/>
               <button onClick={()=>receiptFileRef.current?.click()}
@@ -2135,19 +2149,23 @@ function PartOrderPaymentModal({ partOrderId, amount, requestNumber, customerNam
           )}
           {needsReceipt && (
             <div className="pt-1">
-              {(isRtl ? chosenMethod?.notes_ar : (chosenMethod?.notes_en || chosenMethod?.notes_ar)) && (
-                <div className="flex items-start gap-2 mb-2 p-2.5 rounded-lg" style={{ color:mc.txt, background:'rgba(0,0,0,0.08)' }}>
-                  <p className="text-xs font-bold flex-1">
-                    {isRtl ? chosenMethod.notes_ar : (chosenMethod.notes_en || chosenMethod.notes_ar)}
-                  </p>
-                  <button type="button"
-                    onClick={() => copyText(isRtl ? chosenMethod.notes_ar : (chosenMethod.notes_en || chosenMethod.notes_ar), isRtl)}
-                    className="flex-shrink-0 text-[10px] font-black px-2 py-1 rounded-lg transition-all active:scale-95"
-                    style={{ background:'#8A1538', color:'#fff' }}>
-                    {isRtl?'نسخ':'Copy'}
-                  </button>
-                </div>
-              )}
+              {(isRtl ? chosenMethod?.notes_ar : (chosenMethod?.notes_en || chosenMethod?.notes_ar)) && (() => {
+                const noteText = isRtl ? chosenMethod.notes_ar : (chosenMethod.notes_en || chosenMethod.notes_ar);
+                const parsed = extractNoteNumber(noteText);
+                return (
+                  <div className="flex items-start gap-2 mb-2 p-2.5 rounded-lg" style={{ color:mc.txt, background:'rgba(0,0,0,0.08)' }}>
+                    <p className="text-xs font-bold flex-1">
+                      {parsed ? <>{parsed.before}<span className="text-base font-black">{parsed.number}</span>{parsed.after}</> : noteText}
+                    </p>
+                    <button type="button"
+                      onClick={() => copyText(parsed ? parsed.number : noteText, isRtl)}
+                      className="flex-shrink-0 text-[10px] font-black px-2 py-1 rounded-lg transition-all active:scale-95"
+                      style={{ background:'#8A1538', color:'#fff' }}>
+                      {isRtl?'نسخ':'Copy'}
+                    </button>
+                  </div>
+                );
+              })()}
               <input ref={receiptFileRef} type="file" accept="image/*,application/pdf" className="hidden"
                 onChange={e => setReceiptFile(e.target.files?.[0] || null)}/>
               <button onClick={()=>receiptFileRef.current?.click()}
