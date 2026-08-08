@@ -905,6 +905,14 @@ export default function App() {
   const [cartOpen, setCartOpen] = useState(false);
   const [homeAnnouncements, setHomeAnnouncements] = useState([]);
   const [pendingQuotCount, setPendingQuotCount] = useState(0);
+  // A staff-shared signing link (?jc=JC-2026-0011) — jumps straight to that
+  // job card's quotation in Orders once auth resolves (login-gated rather
+  // than a public token link, so it reuses the app's existing RLS/auth
+  // instead of a new unauthenticated surface). authChecked guards against
+  // flashing the sign-in modal at an already-logged-in customer before the
+  // initial session restore finishes.
+  const [deepLinkJobNumber, setDeepLinkJobNumber] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const addToCart    = (catId, subId, subName, catName) =>
     setCart(p => p.find(x => x.id === subId) ? p : [...p, { id: subId, name: subName, catId, catName }]);
   const removeFromCart = (subId) => setCart(p => p.filter(x => x.id !== subId));
@@ -959,6 +967,25 @@ export default function App() {
     return () => clearTimeout(t);
   }, [emailConfirmedBanner]);
 
+  // Staff-shared signing link — waits for the initial session check
+  // (authChecked) so an already-logged-in customer never sees a login
+  // prompt flash before their session restores.
+  useEffect(() => {
+    if (!authChecked) return;
+    const jc = new URLSearchParams(window.location.search).get('jc');
+    if (!jc) return;
+    window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+    setDeepLinkJobNumber(jc);
+    setPendingQuotCount(0);
+    setPage('orders');
+    setMenuOpen(false);
+    if (!user) setAuthModal('signin');
+    // user is read deliberately without being a dep — this must only run once
+    // per authChecked flip, not re-run (and re-open the signin modal) every
+    // time user changes afterward.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authChecked]);
+
   const loadReferenceData = () => {
     // Load dynamic car brands, categories, and brand-category links
     supabase.from('car_brands').select('id,name_ar,name_en').or('is_active.eq.true,is_active.is.null').order('sort_order').order('id')
@@ -985,6 +1012,7 @@ export default function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       if (session?.user) { fetchProfile(session.user.id); registerPushSubscription(session.user.id); }
+      setAuthChecked(true);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') { setShowNewPassword(true); return; }
@@ -1260,7 +1288,7 @@ export default function App() {
             {page==='home'    && <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements} goOrders={goOrders} goParts={goParts} pendingQuotCount={pendingQuotCount}/>}
             {page==='services'&& <ServicesView lang={lang} tr={tr} isRtl={isRtl} user={user} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} theme={theme} goParts={goParts}/>}
             {page==='profile' && user && <ProfileView lang={lang} tr={tr} isRtl={isRtl} profile={profile} user={user} onBook={(car)=>bookFromProfile(car)} goServices={goServices} goOrders={goOrders} onProfileUpdated={()=>fetchProfile(user.id)} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories}/>}
-            {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount} theme={theme}/>}
+            {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount} theme={theme} highlightJobNumber={deepLinkJobNumber}/>}
             {page==='contact' && <ContactView isRtl={isRtl}/>}
             {page==='parts'   && <PartsFlowView lang={lang} isRtl={isRtl} user={user} profile={profile} goHome={goHome}/>}
             {page==='booking' && step===2 && <DetailsStep {...shared} prevStep={()=>setPage('home')}/>}
@@ -3244,7 +3272,7 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
   );
 }
 
-function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) {
+function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, highlightJobNumber }) {
   const [tab, setTab]           = useState('appts');
   const [appts, setAppts]       = useState([]);
   const [orders, setOrders]     = useState([]);
@@ -3254,6 +3282,17 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
   const [carBrandsRef, setCarBrandsRef] = useState([]);
   const [carCatsRef, setCarCatsRef]     = useState([]);
   const seenIdsRef = useRef(new Set());
+  // Scrolls to and highlights the job card a staff-shared signing link
+  // pointed at (see App()'s highlightJobNumber/?jc= handling) — the ref
+  // only ever attaches to the one matching card, and scrolledRef stops it
+  // from re-scrolling on every later re-render once it's already happened.
+  const highlightRef = useRef(null);
+  const scrolledRef = useRef(false);
+  useEffect(() => {
+    if (!highlightJobNumber || scrolledRef.current || !highlightRef.current) return;
+    highlightRef.current.scrollIntoView({ behavior:'smooth', block:'center' });
+    scrolledRef.current = true;
+  }, [highlightJobNumber, appts]);
   // Must stay above the `if (!user) return` below — a session dropping while
   // this view is mounted (auth listener firing setUser(null) without
   // changing page) would otherwise call fewer hooks on that re-render than
@@ -3831,9 +3870,10 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                   const rejectedOverride = rejectedAllOverride(relOrd);
                   const jcColor = rejectedOverride ? REJECTED_ALL_COLOR : partsOverride ? PARTS_STATUS_COLOR.unavailable : (JC_STATUS_COLOR[jc.job_status] || '#94a3b8');
                   const jcLabel = rejectedOverride ? (isRtl ? REJECTED_ALL_LABEL.ar : REJECTED_ALL_LABEL.en) : partsOverride ? (isRtl ? PARTS_STATUS_LABEL.unavailable.ar : PARTS_STATUS_LABEL.unavailable.en) : (tr[`jc_${jc.job_status}`] || jc.job_status);
+                  const isHighlighted = highlightJobNumber && jc.job_number === highlightJobNumber;
                   return (
-                    <div key={a.id} className="rounded-2xl overflow-hidden"
-                      style={{ background:cc.bg, border:`1px solid ${cc.fg}30` }}>
+                    <div key={a.id} ref={isHighlighted ? highlightRef : null} className="rounded-2xl overflow-hidden"
+                      style={{ background:cc.bg, border: isHighlighted ? `2px solid ${C.gold}` : `1px solid ${cc.fg}30`, boxShadow: isHighlighted ? `0 0 0 4px ${C.gold}30` : undefined }}>
 
                       {/* ── Header ── */}
                       <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3"
