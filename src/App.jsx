@@ -4184,12 +4184,36 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                               Gated on there being a quotation at all (order_items present), not on the total
                               being positive — a single free/fully-discounted service has a real total of 0
                               and must still show, instead of looking like the quotation never sent. */}
-                          {(relOrd.order_items?.length > 0) && (
-                            <div className="flex items-center justify-between px-1">
-                              <span className="text-sm" style={{ color:cc.sub }}>{isRtl ? 'إجمالي عرض السعر:' : 'Quotation Total:'}</span>
-                              <span className="text-lg font-black" style={{ color:cc.fg }}>{selectedQuotationTotal(relOrd).toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
-                            </div>
-                          )}
+                          {(relOrd.order_items?.length > 0) && (() => {
+                            // Spelled out as Services + Flatbed when towing applies, instead of
+                            // just a bare grand total — otherwise the flatbed fee (shown as its
+                            // own line above) looks disconnected from this number, especially
+                            // before any service is approved, when the total is towing-only.
+                            const towingAmount = (relOrd.towing_required && relOrd.pickup_method === 'flatbed') ? Number(relOrd.flatbed_price||0) : 0;
+                            const grandTotal = selectedQuotationTotal(relOrd);
+                            const servicesTotal = grandTotal - towingAmount;
+                            return (
+                              <div className="rounded-xl px-3 py-2.5 space-y-1.5" style={{ background:'rgba(0,0,0,0.08)' }}>
+                                {towingAmount > 0 && (
+                                  <>
+                                    <div className="flex items-center justify-between text-sm">
+                                      <span style={{ color:cc.sub }}>{isRtl?'إجمالي الخدمات':'Services Total'}</span>
+                                      <span className="font-bold" dir="ltr" style={{ color:cc.txt }}>{servicesTotal.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-sm">
+                                      <span style={{ color:cc.sub }}>{isRtl?'🚛 نقل السيارة بالساطحة':'🚛 Flatbed Pickup'}</span>
+                                      <span className="font-bold" dir="ltr" style={{ color:cc.txt }}>{towingAmount.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                                    </div>
+                                    <div style={{ borderTop:`1px dashed ${cc.sub}40`, margin:'6px 0' }}/>
+                                  </>
+                                )}
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm" style={{ color:cc.sub }}>{isRtl ? 'إجمالي عرض السعر:' : 'Quotation Total:'}</span>
+                                  <span className="text-lg font-black" style={{ color:cc.fg }}>{grandTotal.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
+                                </div>
+                              </div>
+                            );
+                          })()}
                           {/* Paid / Remaining */}
                           {(relOrd.order_items?.length > 0) && (() => {
                             const paidFromPayments = (relOrd.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
