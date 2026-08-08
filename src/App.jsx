@@ -411,6 +411,12 @@ const downloadMedia = async (url, filename) => {
   }
 };
 
+const copyText = (text, isRtl) => {
+  (navigator.clipboard?.writeText(text) || Promise.reject()).catch(() => {
+    window.prompt(isRtl ? 'انسخ النص:' : 'Copy the text:', text);
+  });
+};
+
 const JobStatusVideoBlock = ({ videos, isRtl, jcId, videoKeyPrefix, openVideoId, setOpenVideoId, fg, txt }) => {
   if (!videos.length) return null;
   return (
@@ -1914,9 +1920,17 @@ function PaymentMethodModal({ orderId, types, amount, user, customerName, isRtl,
           {needsReceipt && (
             <div className="pt-1">
               {(isRtl ? chosenMethod?.notes_ar : (chosenMethod?.notes_en || chosenMethod?.notes_ar)) && (
-                <p className="text-xs font-bold mb-2 p-2.5 rounded-lg" style={{ color:mc.txt, background:'rgba(0,0,0,0.08)' }}>
-                  {isRtl ? chosenMethod.notes_ar : (chosenMethod.notes_en || chosenMethod.notes_ar)}
-                </p>
+                <div className="flex items-start gap-2 mb-2 p-2.5 rounded-lg" style={{ color:mc.txt, background:'rgba(0,0,0,0.08)' }}>
+                  <p className="text-xs font-bold flex-1">
+                    {isRtl ? chosenMethod.notes_ar : (chosenMethod.notes_en || chosenMethod.notes_ar)}
+                  </p>
+                  <button type="button"
+                    onClick={() => copyText(isRtl ? chosenMethod.notes_ar : (chosenMethod.notes_en || chosenMethod.notes_ar), isRtl)}
+                    className="flex-shrink-0 text-[10px] font-black px-2 py-1 rounded-lg transition-all active:scale-95"
+                    style={{ background:mc.fg, color:'#111111' }}>
+                    {isRtl?'نسخ':'Copy'}
+                  </button>
+                </div>
               )}
               <input ref={receiptFileRef} type="file" accept="image/*,application/pdf" className="hidden"
                 onChange={e => setReceiptFile(e.target.files?.[0] || null)}/>
@@ -2122,9 +2136,17 @@ function PartOrderPaymentModal({ partOrderId, amount, requestNumber, customerNam
           {needsReceipt && (
             <div className="pt-1">
               {(isRtl ? chosenMethod?.notes_ar : (chosenMethod?.notes_en || chosenMethod?.notes_ar)) && (
-                <p className="text-xs font-bold mb-2 p-2.5 rounded-lg" style={{ color:mc.txt, background:'rgba(0,0,0,0.08)' }}>
-                  {isRtl ? chosenMethod.notes_ar : (chosenMethod.notes_en || chosenMethod.notes_ar)}
-                </p>
+                <div className="flex items-start gap-2 mb-2 p-2.5 rounded-lg" style={{ color:mc.txt, background:'rgba(0,0,0,0.08)' }}>
+                  <p className="text-xs font-bold flex-1">
+                    {isRtl ? chosenMethod.notes_ar : (chosenMethod.notes_en || chosenMethod.notes_ar)}
+                  </p>
+                  <button type="button"
+                    onClick={() => copyText(isRtl ? chosenMethod.notes_ar : (chosenMethod.notes_en || chosenMethod.notes_ar), isRtl)}
+                    className="flex-shrink-0 text-[10px] font-black px-2 py-1 rounded-lg transition-all active:scale-95"
+                    style={{ background:mc.fg, color:'#111111' }}>
+                    {isRtl?'نسخ':'Copy'}
+                  </button>
+                </div>
               )}
               <input ref={receiptFileRef} type="file" accept="image/*,application/pdf" className="hidden"
                 onChange={e => setReceiptFile(e.target.files?.[0] || null)}/>
