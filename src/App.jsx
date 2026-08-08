@@ -1306,7 +1306,7 @@ export default function App() {
             {page==='profile' && user && <ProfileView lang={lang} tr={tr} isRtl={isRtl} profile={profile} user={user} onBook={(car)=>bookFromProfile(car)} goServices={goServices} goOrders={goOrders} onProfileUpdated={()=>fetchProfile(user.id)} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories}/>}
             {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount} theme={theme} highlightJobNumber={deepLinkJobNumber}/>}
             {page==='contact' && <ContactView isRtl={isRtl}/>}
-            {page==='parts'   && <PartsFlowView lang={lang} isRtl={isRtl} user={user} profile={profile} goHome={goHome}/>}
+            {page==='parts'   && <PartsFlowView lang={lang} isRtl={isRtl} user={user} profile={profile} goHome={goHome} carBrands={carBrands} carCategories={carCategories}/>}
             {page==='booking' && step===2 && <DetailsStep {...shared} prevStep={()=>setPage('home')}/>}
             {page==='booking' && step===3 && <ScheduleStep {...shared} prevStep={()=>setStep(2)}/>}
             {page==='booking' && step===4 && <ReviewStep   {...shared} prevStep={()=>setStep(formData.isQuoteOnly ? 2 : 3)} loading={loading} setLoading={setLoading}/>}
@@ -3046,7 +3046,7 @@ function PartTreeRow({ part, depth, childrenOf, expandedIds, toggleExpanded, car
   );
 }
 
-function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
+function PartsFlowView({ lang, isRtl, user, profile, goHome, carBrands, carCategories }) {
   const [step, setStep] = useState('carGate'); // 'carGate'|'categories'|'parts'|'confirm'
   const [cars, setCars] = useState([]);
   const [carsLoading, setCarsLoading] = useState(true);
@@ -3170,7 +3170,7 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
                   style={{ background:C.panel, border:`1px solid ${C.border}` }}>
                   <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background:`${C.gold}15` }}><Car size={18} style={{ color:C.gold }}/></div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-bold text-sm truncate" style={{ color:C.text }}>{[car.car_type, car.car_category, car.production_year].filter(Boolean).join(' · ')}</p>
+                    <p className="font-bold text-sm truncate" style={{ color:C.text }}>{[carTypeLabel(car, carBrands, lang), carCategoryLabel(car, carCategories, lang), car.production_year].filter(Boolean).join(' · ')}</p>
                     {car.plate_number && <p className="text-xs mt-0.5" style={{ color:C.muted }}>{car.plate_number}</p>}
                   </div>
                 </button>
@@ -3254,7 +3254,7 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome }) {
             {selectedCar && (
               <div className="flex items-center gap-2 text-sm px-3 py-2 rounded-xl" style={{ background:`${C.gold}10`, color:C.text }}>
                 <Car size={14} style={{ color:C.gold }}/>
-                {[selectedCar.car_type, selectedCar.car_category, selectedCar.production_year].filter(Boolean).join(' · ')}
+                {[carTypeLabel(selectedCar, carBrands, lang), carCategoryLabel(selectedCar, carCategories, lang), selectedCar.production_year].filter(Boolean).join(' · ')}
               </div>
             )}
             <div className="space-y-2">
