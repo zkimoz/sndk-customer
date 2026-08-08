@@ -3881,16 +3881,36 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                         <div className="flex-1 min-w-0">
                           {(() => {
                             const svcs = parseServices(a.service_type);
-                            return svcs ? (
-                              <div className="flex flex-wrap gap-1 mb-1">
-                                {svcs.map((s, i) => (
-                                  <span key={i} className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
-                                    style={{ background:'rgba(0,0,0,0.10)', color:cc.txt }}>
-                                    {s.name || s}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : <p className="text-base font-bold mb-0.5" style={{ color:cc.txt }}>{a.service_type||'—'}</p>;
+                            if (svcs) {
+                              return (
+                                <div className="flex flex-wrap gap-1 mb-1">
+                                  {svcs.map((s, i) => (
+                                    <span key={i} className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                                      style={{ background:'rgba(0,0,0,0.10)', color:cc.txt }}>
+                                      {s.name || s}
+                                    </span>
+                                  ))}
+                                </div>
+                              );
+                            }
+                            // Walk-in appointments store the literal Arabic placeholder
+                            // "استقبال مباشر" as service_type since there's no formal service
+                            // list yet — once staff build the quotation, the real approved
+                            // service names live on the order's items instead, and are both a
+                            // truer title and correctly bilingual (the raw placeholder isn't).
+                            const approvedServiceNames = relOrd?.order_items?.length ? [...new Set(
+                              relOrd.order_items
+                                .filter(it => {
+                                  if (!relOrd.customer_approved && !relOrd.customer_rejected) return true;
+                                  const decisions = relOrd.service_decisions || {};
+                                  const k = it.service_name?.group_id || it.service_name?.ar || it.service_name?.en;
+                                  return !k || decisions[k] !== 'rejected';
+                                })
+                                .map(it => (isRtl ? it.service_name?.ar : it.service_name?.en) || it.service_name?.ar || it.service_name?.en)
+                                .filter(Boolean)
+                            )] : [];
+                            const svcLabel = approvedServiceNames.length ? approvedServiceNames.join(' · ') : (a.service_type || '—');
+                            return <p className="text-base font-bold mb-0.5" style={{ color:cc.txt }}>{svcLabel}</p>;
                           })()}
                           {car && (
                             <p className="text-sm flex items-center gap-1.5" style={{ color:cc.sub }}>
