@@ -368,6 +368,17 @@ const PARTS_STATUS_LABEL = {
 };
 const PARTS_STATUS_COLOR = { pending:'#60a5fa', sourcing:'#eab308', unavailable:'#f97316', ready:'#22c55e' };
 
+// A fully-rejected quotation (whether the customer rejected everything
+// themselves in the app, or staff recorded a phone rejection) leaves
+// job_status frozen wherever it happened to be — misleading, since e.g.
+// "At Workshop" no longer describes what actually happened. Every status
+// display checks this and shows a dedicated label instead, same override
+// pattern already used for "Unavailable parts".
+const REJECTED_ALL_LABEL = { ar:'العميل رفض كل الخدمات', en:'Customer rejected all services' };
+const REJECTED_ALL_COLOR = '#ef4444';
+const rejectedAllOverride = (order) => !!(order?.customer_rejected &&
+  (Number(order?.total_parts_price || 0) + Number(order?.total_labor_price || 0)) <= 0.001);
+
 const getStatusTimes = (history, statusKey) => {
   if (!Array.isArray(history)) return null;
   const idx = history.findIndex(h => h.status === statusKey);
@@ -442,9 +453,20 @@ const JobStatusVideoBlock = ({ videos, isRtl, jcId, videoKeyPrefix, openVideoId,
   );
 };
 
-const JobStatusTimeline = ({ jobCard, isRtl, tr, textColor, mutedColor, fg, receptionVideos = [], workshopVideos = [], openVideoId, setOpenVideoId, partsOverride = false }) => {
+const JobStatusTimeline = ({ jobCard, isRtl, tr, textColor, mutedColor, fg, receptionVideos = [], workshopVideos = [], openVideoId, setOpenVideoId, partsOverride = false, rejectedOverride = false }) => {
   const currentIdx = JOB_STATUS_ORDER.indexOf(jobCard.job_status);
   const fmtDT = iso => iso ? new Date(iso).toLocaleString(isRtl?'ar-QA':'en-QA', { dateStyle:'short', timeStyle:'short' }) : '';
+  // A full rejection takes precedence over every other override — nothing
+  // else about the quotation's progress matters once there's nothing left
+  // to do it on.
+  if (rejectedOverride) {
+    return (
+      <div className="flex items-start gap-2.5 px-2 py-1.5 rounded-lg" style={{ background:`${REJECTED_ALL_COLOR}18` }}>
+        <span className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background:REJECTED_ALL_COLOR }}/>
+        <span className="block text-sm font-bold" style={{ color:REJECTED_ALL_COLOR }}>{isRtl ? REJECTED_ALL_LABEL.ar : REJECTED_ALL_LABEL.en}</span>
+      </div>
+    );
+  }
   // "Unavailable parts ordered" takes over as the whole displayed status —
   // this replaces the step timeline entirely instead of just highlighting a
   // step in it. Reverts to the normal timeline the moment the order's
@@ -3806,8 +3828,9 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                   // normal job status) — it's a bigger deal than the other
                   // parts statuses, which stay as a badge next to it.
                   const partsOverride = relOrd?.status === 'unavailable';
-                  const jcColor = partsOverride ? PARTS_STATUS_COLOR.unavailable : (JC_STATUS_COLOR[jc.job_status] || '#94a3b8');
-                  const jcLabel = partsOverride ? (isRtl ? PARTS_STATUS_LABEL.unavailable.ar : PARTS_STATUS_LABEL.unavailable.en) : (tr[`jc_${jc.job_status}`] || jc.job_status);
+                  const rejectedOverride = rejectedAllOverride(relOrd);
+                  const jcColor = rejectedOverride ? REJECTED_ALL_COLOR : partsOverride ? PARTS_STATUS_COLOR.unavailable : (JC_STATUS_COLOR[jc.job_status] || '#94a3b8');
+                  const jcLabel = rejectedOverride ? (isRtl ? REJECTED_ALL_LABEL.ar : REJECTED_ALL_LABEL.en) : partsOverride ? (isRtl ? PARTS_STATUS_LABEL.unavailable.ar : PARTS_STATUS_LABEL.unavailable.en) : (tr[`jc_${jc.job_status}`] || jc.job_status);
                   return (
                     <div key={a.id} className="rounded-2xl overflow-hidden"
                       style={{ background:cc.bg, border:`1px solid ${cc.fg}30` }}>
@@ -3855,7 +3878,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                         {/* Job status + number */}
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
                           <div className="flex items-center gap-1.5">
-                            {relOrd && relOrd.sent_to_customer && !partsOverride && PARTS_STATUS_LABEL[relOrd.status] && (
+                            {relOrd && relOrd.sent_to_customer && !partsOverride && !rejectedOverride && PARTS_STATUS_LABEL[relOrd.status] && (
                               <span className="flex flex-col items-end text-[10px] font-bold px-2 py-1 rounded-full text-white leading-tight text-end"
                                 style={{ background:PARTS_STATUS_COLOR[relOrd.status] }}>
                                 <span>{isRtl ? PARTS_STATUS_LABEL[relOrd.status].ar : PARTS_STATUS_LABEL[relOrd.status].en}</span>
@@ -3885,7 +3908,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme }) 
                           return (
                             <JobStatusTimeline jobCard={jc} isRtl={isRtl} tr={tr} textColor={cc.txt} mutedColor={cc.sub} fg={cc.fg}
                               receptionVideos={receptionVideos} workshopVideos={workshopVideos}
-                              openVideoId={openVideoId} setOpenVideoId={setOpenVideoId} partsOverride={partsOverride}/>
+                              openVideoId={openVideoId} setOpenVideoId={setOpenVideoId} partsOverride={partsOverride} rejectedOverride={rejectedOverride}/>
                           );
                         })()}
                       </div>
@@ -5026,7 +5049,7 @@ function HistoryOrderDetail({ jobCard, order, car, appt, profile, isRtl, tr, ope
       <div className="pt-3">
         <JobStatusTimeline jobCard={jobCard} isRtl={isRtl} tr={tr} textColor={C.text} mutedColor={C.muted} fg={C.gold}
           receptionVideos={receptionVideos} workshopVideos={workshopVideos}
-          openVideoId={openVideoId} setOpenVideoId={setOpenVideoId} partsOverride={order?.status === 'unavailable'}/>
+          openVideoId={openVideoId} setOpenVideoId={setOpenVideoId} partsOverride={order?.status === 'unavailable'} rejectedOverride={rejectedAllOverride(order)}/>
       </div>
 
       {grandTotal > 0 && (
@@ -5953,8 +5976,9 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                               cancelled: isRtl ? 'ملغي'              : 'Cancelled',
                             };
                             const ORD_COLOR = { draft:'#94a3b8', pending:'#60a5fa', sourcing:'#eab308', ready:'#22c55e', delivered:'#a855f7', completed:'#22c55e', cancelled:'#ef4444' };
-                            const jcColor = jobCard ? (JC_STATUS_COLOR[jobCard.job_status] || '#94a3b8') : null;
-                            const jcLabel = jobCard ? (tr[`jc_${jobCard.job_status}`] || jobCard.job_status) : null;
+                            const rejectedOverride = rejectedAllOverride(order);
+                            const jcColor = rejectedOverride ? REJECTED_ALL_COLOR : jobCard ? (JC_STATUS_COLOR[jobCard.job_status] || '#94a3b8') : null;
+                            const jcLabel = rejectedOverride ? (isRtl ? REJECTED_ALL_LABEL.ar : REJECTED_ALL_LABEL.en) : jobCard ? (tr[`jc_${jobCard.job_status}`] || jobCard.job_status) : null;
                             const isHistOpen = expandedHistoryId === appt.id;
                             const RowTag = jobCard ? 'button' : 'div';
                             return (
