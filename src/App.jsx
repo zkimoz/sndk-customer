@@ -1927,7 +1927,7 @@ function PaymentMethodModal({ orderId, types, amount, user, customerName, isRtl,
                   <button type="button"
                     onClick={() => copyText(isRtl ? chosenMethod.notes_ar : (chosenMethod.notes_en || chosenMethod.notes_ar), isRtl)}
                     className="flex-shrink-0 text-[10px] font-black px-2 py-1 rounded-lg transition-all active:scale-95"
-                    style={{ background:mc.fg, color:'#111111' }}>
+                    style={{ background:'#8A1538', color:'#fff' }}>
                     {isRtl?'نسخ':'Copy'}
                   </button>
                 </div>
@@ -2143,7 +2143,7 @@ function PartOrderPaymentModal({ partOrderId, amount, requestNumber, customerNam
                   <button type="button"
                     onClick={() => copyText(isRtl ? chosenMethod.notes_ar : (chosenMethod.notes_en || chosenMethod.notes_ar), isRtl)}
                     className="flex-shrink-0 text-[10px] font-black px-2 py-1 rounded-lg transition-all active:scale-95"
-                    style={{ background:mc.fg, color:'#111111' }}>
+                    style={{ background:'#8A1538', color:'#fff' }}>
                     {isRtl?'نسخ':'Copy'}
                   </button>
                 </div>
