@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
+import { useJsApiLoader, GoogleMap, Marker, Polyline } from '@react-google-maps/api';
 import {
   Settings, Search, ShieldCheck, PackageSearch, Sparkles, Car, Cog, Droplets,
   CheckCircle2, Loader2, Globe, Bell, Home, Plus, Phone,
@@ -530,6 +531,46 @@ const JobStatusTimeline = ({ jobCard, isRtl, tr, textColor, mutedColor, fg, rece
           </React.Fragment>
         );
       })}
+    </div>
+  );
+};
+
+// Live route for a driver/flatbed pickup or return leg — a driver's phone
+// (in sndk-admin's DriverPortal) pushes location pings into driver_locations
+// while tracking is active; this just reads them back and draws the route.
+// Renders nothing at all if the Maps key isn't configured yet or there's no
+// route to show, rather than showing a broken/empty map box.
+const LiveTrackingMap = ({ jobCardId, leg, isRtl, active }) => {
+  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  const { isLoaded } = useJsApiLoader({ id: 'sndk-google-maps', googleMapsApiKey: apiKey || '' });
+  const [pings, setPings] = useState([]);
+
+  const load = () => {
+    supabase.from('driver_locations').select('lat,lng,recorded_at')
+      .eq('job_card_id', jobCardId).eq('leg', leg)
+      .order('recorded_at', { ascending: true })
+      .then(({ data }) => setPings(data || []));
+  };
+  useEffect(() => { load(); }, [jobCardId, leg]);
+  useLiveTables(['driver_locations'], load);
+
+  if (!apiKey || !isLoaded || pings.length === 0) return null;
+
+  const path = pings.map(p => ({ lat: p.lat, lng: p.lng }));
+  const current = path[path.length - 1];
+
+  return (
+    <div className="rounded-xl overflow-hidden relative" style={{ height: 220 }}>
+      <GoogleMap mapContainerStyle={{ width:'100%', height:'100%' }} center={current} zoom={14}
+        options={{ disableDefaultUI: true, zoomControl: true, gestureHandling: 'cooperative' }}>
+        <Polyline path={path} options={{ strokeColor:'#D4AF37', strokeWeight:4 }}/>
+        <Marker position={current}/>
+      </GoogleMap>
+      <span className="absolute top-2 flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black text-white"
+        style={{ [isRtl?'right':'left']:8, background: active ? '#16a34a' : 'rgba(0,0,0,0.6)' }}>
+        <span className={`w-1.5 h-1.5 rounded-full bg-white ${active ? 'animate-pulse' : ''}`}/>
+        {active ? (isRtl?'مباشر':'Live') : (isRtl?'آخر مسار':'Last route')}
+      </span>
     </div>
   );
 };
@@ -3411,7 +3452,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
     if (!user) { setLoading(false); return; }
     loadPartOrders();
     const { data: apptData } = await supabase.from('appointments')
-      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, general_notes, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot)')
+      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, general_notes, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot, pickup_tracking_active, return_tracking_active)')
       .eq('profile_id', user.id)
       .order('appointment_date', { ascending: false });
     setAppts(apptData || []);
@@ -4516,6 +4557,12 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                                 />
                               )
                             )}
+                            {/* Renders nothing if there's no route yet for that leg — no gate
+                                needed on *_tracking_active here, since a still-active leg simply
+                                has more pings and a "Live" badge, while a finished one keeps
+                                showing its last route as a recap with a "Last route" badge. */}
+                            {jc && <LiveTrackingMap jobCardId={jc.id} leg="pickup" isRtl={isRtl} active={!!jc.pickup_tracking_active}/>}
+                            {jc && <LiveTrackingMap jobCardId={jc.id} leg="return" isRtl={isRtl} active={!!jc.return_tracking_active}/>}
                           </div>
                         );
                       })()}
@@ -5378,7 +5425,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
     if (history[carId]) return;
     const { data } = await supabase
       .from('appointments')
-      .select('*, orders(*, order_items(*), payments(*)), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, general_notes, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot)')
+      .select('*, orders(*, order_items(*), payments(*)), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, general_notes, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot, pickup_tracking_active, return_tracking_active)')
       .eq('car_id', carId)
       .order('appointment_date', { ascending: false });
     setHistory(p => ({ ...p, [carId]: data || [] }));
