@@ -54,7 +54,11 @@ function computeAmountDueQAR(order: any, types: string[]): number {
     const towingPaidSoFar = payments
       .filter((p) => p.purpose === "towing")
       .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-    return Math.max(Number(order.flatbed_price || 0) - towingPaidSoFar, 0);
+    // Outbound + return legs are billed together as one combined towing
+    // amount — mirrors App.jsx's PaymentRow/setPayMethodModal for 'towing'.
+    const pickupDue = order.pickup_method === "flatbed" ? Number(order.flatbed_price || 0) : 0;
+    const returnDue = order.return_pickup_method === "flatbed" ? Number(order.return_flatbed_price || 0) : 0;
+    return Math.max(pickupDue + returnDue - towingPaidSoFar, 0);
   }
 
   const items: any[] = order.order_items || [];
@@ -114,7 +118,7 @@ async function loadOwnedOrder(userClient: any, orderId: string) {
 
   const { data: order } = await adminClient
     .from("orders")
-    .select("id, appointment_id, service_decisions, flatbed_price, pickup_method, order_items(item_type, sell_price, quantity, discount_pct, service_name), payments(amount, purpose)")
+    .select("id, appointment_id, service_decisions, flatbed_price, pickup_method, return_flatbed_price, return_pickup_method, order_items(item_type, sell_price, quantity, discount_pct, service_name), payments(amount, purpose)")
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return { error: jsonResponse({ error: "Order not found" }, 404) };

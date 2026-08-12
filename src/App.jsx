@@ -2323,7 +2323,9 @@ function openQuotationPDF(order, linked, profile, jobCard, carBrands = []) {
   const laborItems = approvedItems.filter(i => i.item_type === 'labor');
   const totalParts = partItems.reduce((s,i)=>s+lineTotal(i),0);
   const totalLabor = laborItems.reduce((s,i)=>s+lineTotal(i),0);
-  const towingAmount = (order.towing_required && order.pickup_method === 'flatbed') ? Number(order.flatbed_price || 0) : 0;
+  const pickupTowingAmount = (order.towing_required && order.pickup_method === 'flatbed') ? Number(order.flatbed_price || 0) : 0;
+  const returnTowingAmount = (order.return_towing_required && order.return_pickup_method === 'flatbed') ? Number(order.return_flatbed_price || 0) : 0;
+  const towingAmount = pickupTowingAmount + returnTowingAmount;
   const grandTotal = totalParts + totalLabor + towingAmount;
   const totalPaid = (order.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
   const remainingDue = grandTotal - totalPaid;
@@ -2522,7 +2524,8 @@ ${(partItems.length > 0 || laborItems.length > 0 || towingAmount > 0) ? `
   <div class="totals">
     ${totalParts > 0 ? `<div class="totals-row"><span>قطع الغيار / Parts</span><span dir="ltr">${totalParts.toFixed(3)} ر.ق</span></div>` : ''}
     ${totalLabor > 0 ? `<div class="totals-row"><span>مصنعيات / Labor</span><span dir="ltr">${totalLabor.toFixed(3)} ر.ق</span></div>` : ''}
-    ${towingAmount > 0 ? `<div class="totals-row"><span>🚛 نقل السيارة بالساطحة / Flatbed Pickup</span><span dir="ltr">${towingAmount.toFixed(3)} ر.ق</span></div>` : ''}
+    ${pickupTowingAmount > 0 ? `<div class="totals-row"><span>🚛 ساطحة الذهاب / Flatbed (Outbound)</span><span dir="ltr">${pickupTowingAmount.toFixed(3)} ر.ق</span></div>` : ''}
+    ${returnTowingAmount > 0 ? `<div class="totals-row"><span>🚛 ساطحة العودة / Flatbed (Return)</span><span dir="ltr">${returnTowingAmount.toFixed(3)} ر.ق</span></div>` : ''}
     <div class="totals-row totals-grand"><span>الإجمالي / Total</span><span dir="ltr">${grandTotal.toFixed(3)} QAR</span></div>
   </div>
 </div>` : ''}
@@ -2647,7 +2650,9 @@ function printCustomerInvoice(jobCard, appt, order, profile, brandsData = [], ca
   const dateEn = closedDate.toLocaleDateString('en-QA', { year:'numeric', month:'long', day:'numeric' });
   const totalParts  = Number(order?.total_parts_price||0);
   const totalLabor  = Number(order?.total_labor_price||0);
-  const towingAmount = (order?.towing_required && order?.pickup_method === 'flatbed') ? Number(order?.flatbed_price || 0) : 0;
+  const pickupTowingAmount = (order?.towing_required && order?.pickup_method === 'flatbed') ? Number(order?.flatbed_price || 0) : 0;
+  const returnTowingAmount = (order?.return_towing_required && order?.return_pickup_method === 'flatbed') ? Number(order?.return_flatbed_price || 0) : 0;
+  const towingAmount = pickupTowingAmount + returnTowingAmount;
   const grandTotal  = totalParts + totalLabor + towingAmount;
 
   const invLineTotal = item => {
@@ -2854,9 +2859,13 @@ function printCustomerInvoice(jobCard, appt, order, profile, brandsData = [], ca
         <div class="tot-lbl"><div class="ar">إجمالي أجور العمالة</div><div class="en">Labor Subtotal</div></div>
         <div class="tot-amt">${totalLabor.toFixed(3)} QAR</div>
       </div>`:''}
-      ${towingAmount>0?`<div class="tot-row">
-        <div class="tot-lbl"><div class="ar">🚛 نقل السيارة بالساطحة</div><div class="en">Flatbed Vehicle Pickup</div></div>
-        <div class="tot-amt">${towingAmount.toFixed(3)} QAR</div>
+      ${pickupTowingAmount>0?`<div class="tot-row">
+        <div class="tot-lbl"><div class="ar">🚛 ساطحة الذهاب</div><div class="en">Flatbed (Outbound)</div></div>
+        <div class="tot-amt">${pickupTowingAmount.toFixed(3)} QAR</div>
+      </div>`:''}
+      ${returnTowingAmount>0?`<div class="tot-row">
+        <div class="tot-lbl"><div class="ar">🚛 ساطحة العودة</div><div class="en">Flatbed (Return)</div></div>
+        <div class="tot-amt">${returnTowingAmount.toFixed(3)} QAR</div>
       </div>`:''}
       <div class="grand-row">
         <div class="grand-lbl">
@@ -3503,8 +3512,9 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
     // grand total, never the per-type ('part'/'labor') breakdown it's asked
     // for elsewhere, since towing is neither.
     if (itemType) return itemsTotal;
-    const towingAmount = (order?.towing_required && order?.pickup_method === 'flatbed') ? Number(order?.flatbed_price || 0) : 0;
-    return itemsTotal + towingAmount;
+    const pickupTowingAmount = (order?.towing_required && order?.pickup_method === 'flatbed') ? Number(order?.flatbed_price || 0) : 0;
+    const returnTowingAmount = (order?.return_towing_required && order?.return_pickup_method === 'flatbed') ? Number(order?.return_flatbed_price || 0) : 0;
+    return itemsTotal + pickupTowingAmount + returnTowingAmount;
   };
 
   // Each service needs an explicit 'approved' or 'rejected' decision — no
@@ -4229,8 +4239,16 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                           {relOrd.towing_required && relOrd.pickup_method === 'flatbed' && Number(relOrd.flatbed_price||0) > 0 && (
                             <div className="rounded-lg overflow-hidden p-3" style={{ background:'rgba(0,0,0,0.08)' }}>
                               <div className="flex items-center justify-between text-sm">
-                                <span style={{ color:cc.txt }}>{isRtl?'🚛 نقل السيارة بالساطحة':'🚛 Flatbed Vehicle Pickup'}</span>
+                                <span style={{ color:cc.txt }}>{isRtl?'🚛 ساطحة الذهاب':'🚛 Flatbed (Outbound)'}</span>
                                 <span className="font-bold" dir="ltr" style={{ color:cc.fg }}>{Number(relOrd.flatbed_price).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                              </div>
+                            </div>
+                          )}
+                          {relOrd.return_towing_required && relOrd.return_pickup_method === 'flatbed' && Number(relOrd.return_flatbed_price||0) > 0 && (
+                            <div className="rounded-lg overflow-hidden p-3" style={{ background:'rgba(0,0,0,0.08)' }}>
+                              <div className="flex items-center justify-between text-sm">
+                                <span style={{ color:cc.txt }}>{isRtl?'🚛 ساطحة العودة':'🚛 Flatbed (Return)'}</span>
+                                <span className="font-bold" dir="ltr" style={{ color:cc.fg }}>{Number(relOrd.return_flatbed_price).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
                               </div>
                             </div>
                           )}
@@ -4249,7 +4267,9 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                             // just a bare grand total — otherwise the flatbed fee (shown as its
                             // own line above) looks disconnected from this number, especially
                             // before any service is approved, when the total is towing-only.
-                            const towingAmount = (relOrd.towing_required && relOrd.pickup_method === 'flatbed') ? Number(relOrd.flatbed_price||0) : 0;
+                            const pickupTowingAmount = (relOrd.towing_required && relOrd.pickup_method === 'flatbed') ? Number(relOrd.flatbed_price||0) : 0;
+                            const returnTowingAmount = (relOrd.return_towing_required && relOrd.return_pickup_method === 'flatbed') ? Number(relOrd.return_flatbed_price||0) : 0;
+                            const towingAmount = pickupTowingAmount + returnTowingAmount;
                             const grandTotal = selectedQuotationTotal(relOrd);
                             const servicesTotal = grandTotal - towingAmount;
                             return (
@@ -4260,10 +4280,18 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                                       <span style={{ color:cc.sub }}>{isRtl?'إجمالي الخدمات':'Services Total'}</span>
                                       <span className="font-bold" dir="ltr" style={{ color:cc.txt }}>{servicesTotal.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
                                     </div>
-                                    <div className="flex items-center justify-between text-sm">
-                                      <span style={{ color:cc.sub }}>{isRtl?'🚛 نقل السيارة بالساطحة':'🚛 Flatbed Pickup'}</span>
-                                      <span className="font-bold" dir="ltr" style={{ color:cc.txt }}>{towingAmount.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
-                                    </div>
+                                    {pickupTowingAmount > 0 && (
+                                      <div className="flex items-center justify-between text-sm">
+                                        <span style={{ color:cc.sub }}>{isRtl?'🚛 ساطحة الذهاب':'🚛 Flatbed (Outbound)'}</span>
+                                        <span className="font-bold" dir="ltr" style={{ color:cc.txt }}>{pickupTowingAmount.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                                      </div>
+                                    )}
+                                    {returnTowingAmount > 0 && (
+                                      <div className="flex items-center justify-between text-sm">
+                                        <span style={{ color:cc.sub }}>{isRtl?'🚛 ساطحة العودة':'🚛 Flatbed (Return)'}</span>
+                                        <span className="font-bold" dir="ltr" style={{ color:cc.txt }}>{returnTowingAmount.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                                      </div>
+                                    )}
                                     <div style={{ borderTop:`1px dashed ${cc.sub}40`, margin:'6px 0' }}/>
                                   </>
                                 )}
@@ -4418,57 +4446,75 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                         </div>
                       ) : null}
 
-                      {/* ── نقل السيارة بالساطحة — يجب حسمها ودفعها (لو مطلوب دفع) قبل أي شيء تاني ── */}
-                      {relOrd && relOrd.towing_required && (() => {
+                      {/* ── نقل السيارة بالساطحة (ذهاب + عودة) — يجب حسمها ودفعها (لو مطلوب دفع) قبل أي شيء تاني ──
+                          Outbound is a decision the customer makes (team vs flatbed); return is
+                          staff-set (they know the car's ready and how it's getting back), so it's
+                          shown informationally only. Both legs' flatbed fees, if any, are paid
+                          together as one combined amount — payments aren't split per leg in the DB. */}
+                      {relOrd && (relOrd.towing_required || relOrd.return_towing_required) && (() => {
                         const towingPaidSoFar = (relOrd.payments || []).filter(p=>p.purpose==='towing').reduce((s,p)=>s+Number(p.amount||0),0);
-                        const flatbedPrice = Number(relOrd.flatbed_price || 0);
-                        const towingCoveredByPayments = flatbedPrice > 0 && towingPaidSoFar >= flatbedPrice - 0.001;
+                        const pickupFlatbedPrice = Number(relOrd.flatbed_price || 0);
+                        const returnFlatbedPrice = Number(relOrd.return_flatbed_price || 0);
+                        const pickupDue = (relOrd.towing_required && relOrd.pickup_method === 'flatbed') ? pickupFlatbedPrice : 0;
+                        const returnDue = (relOrd.return_towing_required && relOrd.return_pickup_method === 'flatbed') ? returnFlatbedPrice : 0;
+                        const totalTowingDue = pickupDue + returnDue;
+                        const towingRemaining = Math.max(totalTowingDue - towingPaidSoFar, 0);
+                        const towingCoveredByPayments = totalTowingDue > 0 && towingRemaining <= 0.001;
                         return (
                           <div className="px-4 py-3 space-y-2" style={{ borderTop:`1px solid ${C.border}`, background: cc ? `${cc.fg}0d` : undefined }}>
-                            <p className="text-sm font-black" style={{ color: cc?cc.fg:C.gold }}>{isRtl ? '🚛 نقل السيارة' : '🚛 Vehicle Pickup'}</p>
-                            {!relOrd.pickup_method ? (
-                              <>
-                                <p className="text-sm" style={{ color:cc?cc.txt:C.text }}>{isRtl ? 'كيف تحب استلام سيارتك؟' : 'How would you like your car picked up?'}</p>
-                                <div className="flex gap-2">
-                                  <button disabled={choosingPickup===relOrd.id} onClick={()=>choosePickupMethod(relOrd,'team')}
-                                    className="flex-1 py-2.5 rounded-xl text-sm font-black transition-all active:scale-95 disabled:opacity-50"
-                                    style={{ background: cc?cc.fg:C.gold, color: cc?cc.bg:C.btnTxt }}>
-                                    {isRtl ? 'أحد أفراد فريقنا (مجانًا)' : 'Our Team (Free)'}
-                                  </button>
-                                  <button disabled={choosingPickup===relOrd.id} onClick={()=>choosePickupMethod(relOrd,'flatbed')}
-                                    className="flex-1 py-2.5 rounded-xl text-sm font-black border transition-all active:scale-95 disabled:opacity-50"
-                                    style={{ borderColor: cc?cc.fg:C.gold, color: cc?cc.txt:C.text }}>
-                                    {isRtl ? 'ساطحة' : 'Flatbed Tow'}
-                                  </button>
-                                </div>
-                              </>
-                            ) : relOrd.pickup_method === 'team' ? (
-                              <p className="text-sm" style={{ color:cc?cc.txt:C.text }}>{isRtl ? '✅ سيتم استلام سيارتك بواسطة أحد أفراد فريقنا.' : '✅ Your car will be picked up by one of our team members.'}</p>
-                            ) : (
-                              <>
-                                {/* Once staff confirms pickup, this shows regardless of payment —
-                                    an unpaid flatbed fee no longer blocks anything below, it just
-                                    stays here as an outstanding amount like any other. */}
-                                {relOrd.towing_completed && (
-                                  <p className="text-sm font-bold" style={{ color:'#16a34a' }}>{isRtl ? '✅ تم نقل السيارة.' : '✅ Car has been picked up.'}</p>
-                                )}
-                                {flatbedPrice <= 0 ? (
-                                  !relOrd.towing_completed && (
+                            <p className="text-sm font-black" style={{ color: cc?cc.fg:C.gold }}>{isRtl ? '🚛 نقل السيارة' : '🚛 Vehicle Transport'}</p>
+                            {relOrd.towing_required && (
+                              !relOrd.pickup_method ? (
+                                <>
+                                  <p className="text-sm" style={{ color:cc?cc.txt:C.text }}>{isRtl ? 'كيف تحب استلام سيارتك؟' : 'How would you like your car picked up?'}</p>
+                                  <div className="flex gap-2">
+                                    <button disabled={choosingPickup===relOrd.id} onClick={()=>choosePickupMethod(relOrd,'team')}
+                                      className="flex-1 py-2.5 rounded-xl text-sm font-black transition-all active:scale-95 disabled:opacity-50"
+                                      style={{ background: cc?cc.fg:C.gold, color: cc?cc.bg:C.btnTxt }}>
+                                      {isRtl ? 'أحد أفراد فريقنا (مجانًا)' : 'Our Team (Free)'}
+                                    </button>
+                                    <button disabled={choosingPickup===relOrd.id} onClick={()=>choosePickupMethod(relOrd,'flatbed')}
+                                      className="flex-1 py-2.5 rounded-xl text-sm font-black border transition-all active:scale-95 disabled:opacity-50"
+                                      style={{ borderColor: cc?cc.fg:C.gold, color: cc?cc.txt:C.text }}>
+                                      {isRtl ? 'ساطحة' : 'Flatbed Tow'}
+                                    </button>
+                                  </div>
+                                </>
+                              ) : relOrd.pickup_method === 'team' ? (
+                                <p className="text-sm" style={{ color:cc?cc.txt:C.text }}>{isRtl ? '✅ سيتم استلام سيارتك بواسطة أحد أفراد فريقنا.' : '✅ Your car will be picked up by one of our team members.'}</p>
+                              ) : (
+                                <>
+                                  {relOrd.towing_completed && (
+                                    <p className="text-sm font-bold" style={{ color:'#16a34a' }}>{isRtl ? '✅ تم نقل السيارة.' : '✅ Car has been picked up.'}</p>
+                                  )}
+                                  {pickupFlatbedPrice <= 0 && !relOrd.towing_completed && (
                                     <p className="text-sm" style={{ color:cc?cc.txt:C.text }}>{isRtl ? 'سيتم التواصل معك من أحد أفراد فريقنا لتحديد الموقع والتكلفة.' : 'One of our team members will contact you to determine the location and cost.'}</p>
-                                  )
-                                ) : towingCoveredByPayments ? (
-                                  <p className="text-sm font-bold" style={{ color:'#16a34a' }}>{isRtl ? '✅ تم دفع تكلفة الساطحة.' : '✅ Flatbed fee paid.'}</p>
-                                ) : (
-                                  <PaymentRow
-                                    label={isRtl ? 'تكلفة الساطحة' : 'Flatbed Fee'}
-                                    amount={flatbedPrice - towingPaidSoFar}
-                                    status="unpaid"
-                                    canPay={true}
-                                    onPay={() => setPayMethodModal({ orderId: relOrd.id, types: ['towing'], amount: flatbedPrice - towingPaidSoFar })}
-                                    tr={tr} isRtl={isRtl} cc={cc}
-                                  />
-                                )}
-                              </>
+                                  )}
+                                </>
+                              )
+                            )}
+                            {relOrd.return_towing_required && relOrd.return_pickup_method === 'team' && (
+                              <p className="text-sm" style={{ color:cc?cc.txt:C.text }}>{isRtl ? '✅ سيتم توصيل سيارتك بواسطة أحد أفراد فريقنا عند التسليم.' : '✅ Your car will be delivered back by one of our team members.'}</p>
+                            )}
+                            {relOrd.return_towing_completed && (
+                              <p className="text-sm font-bold" style={{ color:'#16a34a' }}>{isRtl ? '✅ تم تسليم السيارة.' : '✅ Car has been delivered.'}</p>
+                            )}
+                            {/* Once staff confirms either leg complete, an unpaid fee no longer
+                                blocks anything below — it just stays here as an outstanding
+                                amount like any other, same as the old single-leg behavior. */}
+                            {totalTowingDue > 0 && (
+                              towingCoveredByPayments ? (
+                                <p className="text-sm font-bold" style={{ color:'#16a34a' }}>{isRtl ? '✅ تم دفع رسوم النقل بالساطحة.' : '✅ Flatbed fees paid.'}</p>
+                              ) : (
+                                <PaymentRow
+                                  label={isRtl ? 'رسوم النقل بالساطحة' : 'Flatbed Fees'}
+                                  amount={towingRemaining}
+                                  status="unpaid"
+                                  canPay={true}
+                                  onPay={() => setPayMethodModal({ orderId: relOrd.id, types: ['towing'], amount: towingRemaining })}
+                                  tr={tr} isRtl={isRtl} cc={cc}
+                                />
+                              )
                             )}
                           </div>
                         );
@@ -5161,7 +5207,9 @@ function HistoryOrderDetail({ jobCard, order, car, appt, profile, isRtl, tr, ope
   const rejectedItems = decided ? items.filter(it => { const k = groupKeyOf(it); return k && decisions[k] === 'rejected'; }) : [];
   const totalParts = approvedItems.filter(i=>i.item_type==='part').reduce((s,i)=>s+lineTotal(i),0);
   const totalLabor = approvedItems.filter(i=>i.item_type==='labor').reduce((s,i)=>s+lineTotal(i),0);
-  const towingAmount = (order?.towing_required && order?.pickup_method === 'flatbed') ? Number(order?.flatbed_price || 0) : 0;
+  const pickupTowingAmount = (order?.towing_required && order?.pickup_method === 'flatbed') ? Number(order?.flatbed_price || 0) : 0;
+  const returnTowingAmount = (order?.return_towing_required && order?.return_pickup_method === 'flatbed') ? Number(order?.return_flatbed_price || 0) : 0;
+  const towingAmount = pickupTowingAmount + returnTowingAmount;
   const grandTotal = totalParts + totalLabor + towingAmount;
   const totalPaid = (order?.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
   const remaining = grandTotal - totalPaid;
@@ -5190,10 +5238,16 @@ function HistoryOrderDetail({ jobCard, order, car, appt, profile, isRtl, tr, ope
               <span className="font-bold" style={{ color:C.text }}>{totalLabor.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
             </div>
           )}
-          {towingAmount > 0 && (
+          {pickupTowingAmount > 0 && (
             <div className="flex items-center justify-between text-xs">
-              <span style={{ color:C.muted }}>{isRtl?'🚛 نقل السيارة بالساطحة':'Flatbed Pickup'}</span>
-              <span className="font-bold" style={{ color:C.text }}>{towingAmount.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+              <span style={{ color:C.muted }}>{isRtl?'🚛 ساطحة الذهاب':'Flatbed (Outbound)'}</span>
+              <span className="font-bold" style={{ color:C.text }}>{pickupTowingAmount.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+            </div>
+          )}
+          {returnTowingAmount > 0 && (
+            <div className="flex items-center justify-between text-xs">
+              <span style={{ color:C.muted }}>{isRtl?'🚛 ساطحة العودة':'Flatbed (Return)'}</span>
+              <span className="font-bold" style={{ color:C.text }}>{returnTowingAmount.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
             </div>
           )}
           <div className="flex items-center justify-between text-sm pt-1.5 mt-1" style={{ borderTop:`1px dashed ${C.border}` }}>
