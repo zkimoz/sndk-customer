@@ -4127,6 +4127,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                                   key, name_ar: i.service_name.ar, name_en: i.service_name.en, priority: i.service_name.priority || 'low',
                                   category_ar: i.service_name.category_ar || '', category_en: i.service_name.category_en || '',
                                   notes_ar: i.service_name.notes_ar || i.service_name.notes || '', notes_en: i.service_name.notes_en || '',
+                                  is_warranty: !!i.service_name.is_warranty,
                                 });
                               }
                             });
@@ -4176,6 +4177,11 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                                             <p className="text-[10px] font-bold uppercase tracking-wider truncate" style={{ color:cc.sub }}>{isRtl?(s.category_ar||s.category_en):(s.category_en||s.category_ar)}</p>
                                           )}
                                           <span className="text-sm font-semibold" style={{ color:cc.txt }}>{isRtl?(s.name_ar||s.name_en):(s.name_en||s.name_ar)}{displaySuffixOf[s.key]}</span>
+                                          {s.is_warranty && (
+                                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ms-1.5" style={{background:'rgba(59,130,246,0.15)',color:'#3b82f6'}}>
+                                              🛡️ {isRtl?'ضمان':'Warranty'}
+                                            </span>
+                                          )}
                                           {s.notes_ar && <p className="text-[11px] mt-0.5 italic" style={{ color:cc.sub }}>{isRtl ? s.notes_ar : (s.notes_en || s.notes_ar)}</p>}
                                         </div>
                                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
