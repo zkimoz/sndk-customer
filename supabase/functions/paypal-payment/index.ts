@@ -18,10 +18,13 @@ const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 // this constant instead of calling a live FX API.
 const QAR_PER_USD = 3.65;
 
-// PayPal keeps ~3% of every captured payment — this never touches what the
-// customer paid or the order/job-card totals, it's purely an internal cost
-// logged to Finance > Expenses so profit reporting accounts for it.
-const PAYPAL_FEE_RATE = 0.03;
+// PayPal's cut never touches what the customer paid or the order/job-card
+// totals — it's purely an internal cost logged to Finance > Expenses so
+// profit reporting accounts for it. The real fee (which varies by currency/
+// cross-border rules — observed ~3.4% + a fixed $0.30, not a flat rate) comes
+// straight from the capture response's seller_receivable_breakdown; this
+// flat estimate is only a fallback for the rare case that field is missing.
+const PAYPAL_FEE_RATE_FALLBACK = 0.034;
 
 // `types` elements are 'parts'/'labor' (matching the *_payment_method order
 // columns), but order_items.item_type is singular 'part'/'labor' — easy to
@@ -138,8 +141,8 @@ async function loadOwnedOrder(userClient: any, orderId: string) {
 // Best-effort — logging PayPal's cut must never fail the payment response
 // itself. Recorded as a plain internal expense (not tied to the order/job
 // card in any way the customer or job card totals can see).
-function recordPaypalFee(amountQAR: number, jobNumber: string | undefined) {
-  const fee = Math.round(amountQAR * PAYPAL_FEE_RATE * 1000) / 1000;
+function recordPaypalFee(feeQAR: number, jobNumber: string | undefined, amountQAR: number) {
+  const fee = Math.round(feeQAR * 1000) / 1000;
   if (fee <= 0) return;
   adminClient.from("admin_expenses").insert({
     item_name: "رسوم باي بال",
@@ -186,7 +189,7 @@ serve(async (req) => {
       global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
     });
 
-    const { action, orderId, types, paypalOrderId } = await req.json();
+    const { action, orderId, types, paypalOrderId, returnUrl, cancelUrl } = await req.json();
     if (!orderId || !Array.isArray(types) || !types.length) {
       return jsonResponse({ error: "Missing orderId/types" }, 400);
     }
@@ -213,11 +216,25 @@ serve(async (req) => {
             description: `SNDK Qatar — ${types.map((t: string) => TYPE_TO_ITEM_TYPE[t] || t).join(" + ")}`,
             amount: { currency_code: "USD", value: amountUSD.toFixed(2) },
           }],
+          // Only set by the mobile app, which opens the approval link in an
+          // in-app browser and needs PayPal to redirect back to a custom URL
+          // scheme afterward — the web flow uses the JS SDK's popup instead,
+          // which never sends returnUrl/cancelUrl, so this stays a no-op there.
+          ...(returnUrl || cancelUrl ? {
+            application_context: {
+              ...(returnUrl ? { return_url: returnUrl } : {}),
+              ...(cancelUrl ? { cancel_url: cancelUrl } : {}),
+              user_action: "PAY_NOW",
+            },
+          } : {}),
         }),
       });
       const json = await resp.json();
       if (!resp.ok) return jsonResponse({ error: `PayPal order creation failed: ${JSON.stringify(json)}` }, 502);
-      return jsonResponse({ id: json.id, amountUSD, amountQAR });
+      // approveUrl is only consumed by the mobile app (opened in an in-app
+      // browser) — the web JS SDK builds its own popup from `id` alone.
+      const approveUrl = json.links?.find((l: any) => l.rel === "approve")?.href;
+      return jsonResponse({ id: json.id, amountUSD, amountQAR, approveUrl });
     }
 
     if (action === "capture") {
@@ -250,7 +267,15 @@ serve(async (req) => {
       });
       if (insErr) return jsonResponse({ error: `Payment captured but failed to record: ${insErr.message}` }, 500);
 
-      recordPaypalFee(amountQAR, jobNumber);
+      // PayPal reports the exact fee it kept on this specific capture — use
+      // that instead of estimating, so logged expenses always match what
+      // actually left the account (fee % varies by card/currency/country).
+      const feeUSD = Number(capture.seller_receivable_breakdown?.paypal_fee?.value);
+      const feeQAR = Number.isFinite(feeUSD) && feeUSD > 0
+        ? Math.round(feeUSD * QAR_PER_USD * 1000) / 1000
+        : Math.round(amountQAR * PAYPAL_FEE_RATE_FALLBACK * 1000) / 1000;
+
+      recordPaypalFee(feeQAR, jobNumber, amountQAR);
       notifyPaymentReceived(profileId!, jobNumber, amountQAR, isTowing);
       return jsonResponse({ success: true, amountQAR });
     }

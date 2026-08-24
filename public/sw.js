@@ -7,7 +7,7 @@ self.addEventListener('push', event => {
     badge: '/apple-touch-icon.png',
     dir: 'rtl',
     lang: 'ar',
-    tag: data.tag || 'sandak',
+    tag: data.tag || 'sndk',
     renotify: true,
     data: { url: data.url || '/' }
   };

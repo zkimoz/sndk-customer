@@ -928,9 +928,20 @@ const APPT_STATUS_LABELS = {
   en: { pending:'Pending', confirmed:'Confirmed', in_progress:'In Progress', completed:'Completed', cancelled:'Cancelled' },
 };
 
+// Picks the starting language: whatever the customer chose last time
+// (persisted in localStorage), or — the very first time they visit — the
+// language their browser/device is set to, so an English-configured phone
+// lands on the English UI instead of always defaulting to Arabic.
+function detectDefaultLang() {
+  const saved = localStorage.getItem('sndk_lang');
+  if (saved) return saved;
+  const browserLang = (navigator.language || navigator.languages?.[0] || 'ar').toLowerCase();
+  return browserLang.startsWith('ar') ? 'ar' : 'en';
+}
+
 // ── APP ────────────────────────────────────────────────────────────────
 export default function App() {
-  const [lang, setLang]         = useState(() => localStorage.getItem('sndk_lang') || 'ar');
+  const [lang, setLang]         = useState(detectDefaultLang);
   // Wraps setLang so a language switch also persists — to localStorage for
   // guests/before login resolves, and to the account's own profile row so it
   // follows the customer to any device the next time they log in.

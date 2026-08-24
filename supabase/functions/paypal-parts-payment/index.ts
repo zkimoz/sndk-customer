@@ -132,7 +132,7 @@ serve(async (req) => {
       global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
     });
 
-    const { action, partOrderId, paypalOrderId } = await req.json();
+    const { action, partOrderId, paypalOrderId, returnUrl, cancelUrl } = await req.json();
     if (!partOrderId) {
       return jsonResponse({ error: "Missing partOrderId" }, 400);
     }
@@ -159,11 +159,24 @@ serve(async (req) => {
             description: `SNDK Qatar — Spare Part Request #${partOrder.request_number}`,
             amount: { currency_code: "USD", value: amountUSD.toFixed(2) },
           }],
+          // Only set by the mobile app, which opens the approval link in an
+          // in-app browser and needs PayPal to redirect back to a custom URL
+          // scheme afterward — mirrors paypal-payment/index.ts.
+          ...(returnUrl || cancelUrl ? {
+            application_context: {
+              ...(returnUrl ? { return_url: returnUrl } : {}),
+              ...(cancelUrl ? { cancel_url: cancelUrl } : {}),
+              user_action: "PAY_NOW",
+            },
+          } : {}),
         }),
       });
       const json = await resp.json();
       if (!resp.ok) return jsonResponse({ error: `PayPal order creation failed: ${JSON.stringify(json)}` }, 502);
-      return jsonResponse({ id: json.id, amountUSD, amountQAR });
+      // approveUrl is only consumed by the mobile app (opened in an in-app
+      // browser) — the web JS SDK builds its own popup from `id` alone.
+      const approveUrl = json.links?.find((l: any) => l.rel === "approve")?.href;
+      return jsonResponse({ id: json.id, amountUSD, amountQAR, approveUrl });
     }
 
     if (action === "capture") {
