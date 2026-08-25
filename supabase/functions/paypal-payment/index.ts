@@ -82,9 +82,15 @@ function computeAmountDueQAR(order: any, types: string[]): number {
   const laborTotal = totalFor("labor");
   // Towing payments are tracked separately (purpose:'towing') and must never
   // be mistaken for parts/labor progress in this waterfall.
+  // A pending overpayment_credit wallet row (see loadOwnedOrder) is real
+  // money the customer already paid — must count here too, or a re-priced
+  // quotation could ask PayPal to charge again for it.
+  const pendingExcessForGating = ((order.wallet_transactions || []) as any[])
+    .filter((w) => w.type === "overpayment_credit" && w.status === "pending")
+    .reduce((s: number, w: any) => s + Number(w.amount || 0), 0);
   const paidSoFar = payments
     .filter((p) => p.purpose !== "towing")
-    .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+    .reduce((s: number, p: any) => s + Number(p.amount || 0), 0) + pendingExcessForGating;
 
   const partsRemaining = Math.max(partsTotal - paidSoFar, 0);
   const paidTowardLabor = Math.max(paidSoFar - partsTotal, 0);
@@ -134,6 +140,20 @@ async function loadOwnedOrder(userClient: any, orderId: string) {
   if (!appt || appt.profile_id !== user.id) {
     return { error: jsonResponse({ error: "Not authorized for this order" }, 403) };
   }
+
+  // A payment taken before all services were added can be sitting as a
+  // pending overpayment_credit wallet row — real money the customer already
+  // paid (see App.jsx's identical "Paid/Remaining" reconciliation). Attaching
+  // it here, in the same shape the client reads, is what lets
+  // computeAmountDueQAR below count it too, instead of asking PayPal to
+  // charge again for money that's already covered.
+  const { data: walletTxns } = await adminClient
+    .from("wallet_transactions")
+    .select("amount, type, status")
+    .eq("order_id", orderId)
+    .eq("type", "overpayment_credit")
+    .eq("status", "pending");
+  order.wallet_transactions = walletTxns || [];
 
   return { order, profileId: appt.profile_id, jobNumber: appt.job_cards?.job_number };
 }

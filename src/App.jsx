@@ -2016,7 +2016,7 @@ function PaymentMethodModal({ orderId, types, amount, user, customerName, isRtl,
               <div className="flex justify-center py-1"><Loader2 size={18} className="animate-spin" style={{ color:mc.fg }}/></div>
             )}
             <p className="text-[11px] text-center" style={{ color:mc.sub }}>
-              {isRtl ? 'سيتم تحويل المبلغ تلقائيًا لدولار أمريكي بسعر الصرف الثابت (٣.٦٤ ر.ق = ١$)' : 'The amount is automatically converted to US Dollars at the fixed exchange rate (3.64 QAR = $1)'}
+              {isRtl ? 'سيتم تحويل المبلغ تلقائيًا لدولار أمريكي بسعر الصرف الثابت (٣.٦٥ ر.ق = ١$)' : 'The amount is automatically converted to US Dollars at the fixed exchange rate (3.65 QAR = $1)'}
             </p>
           </div>
         ) : (
@@ -2236,7 +2236,7 @@ function PartOrderPaymentModal({ partOrderId, amount, requestNumber, customerNam
               <div className="flex justify-center py-1"><Loader2 size={18} className="animate-spin" style={{ color:mc.fg }}/></div>
             )}
             <p className="text-[11px] text-center" style={{ color:mc.sub }}>
-              {isRtl ? 'سيتم تحويل المبلغ تلقائيًا لدولار أمريكي بسعر الصرف الثابت (٣.٦٤ ر.ق = ١$)' : 'The amount is automatically converted to US Dollars at the fixed exchange rate (3.64 QAR = $1)'}
+              {isRtl ? 'سيتم تحويل المبلغ تلقائيًا لدولار أمريكي بسعر الصرف الثابت (٣.٦٥ ر.ق = ١$)' : 'The amount is automatically converted to US Dollars at the fixed exchange rate (3.65 QAR = $1)'}
             </p>
           </div>
         ) : (
@@ -4600,7 +4600,15 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                         // so if what's already been paid covers the parts total, parts are settled even if
                         // parts_payment_status wasn't flipped to 'paid' (e.g. a manually recorded payment).
                         // Towing payments are excluded — they're a separate bucket, never counted toward parts/labor.
-                        const paidSoFar = (relOrd.payments || []).filter(p=>p.purpose!=='towing').reduce((s,p)=>s+Number(p.amount||0),0);
+                        // A pending overpayment credit (see "Paid/Remaining" below) is real money the
+                        // customer already paid — without it here, re-pricing a quotation down after an
+                        // early payment could leave parts/labor showing as still payable even though the
+                        // Paid/Remaining summary already shows the order as settled, letting the customer
+                        // be charged again for money that's already sitting as wallet credit.
+                        const pendingExcessForGating = (relOrd.wallet_transactions || [])
+                          .filter(w => w.type === 'overpayment_credit' && w.status === 'pending')
+                          .reduce((s,w) => s + Number(w.amount || 0), 0);
+                        const paidSoFar = (relOrd.payments || []).filter(p=>p.purpose!=='towing').reduce((s,p)=>s+Number(p.amount||0),0) + pendingExcessForGating;
                         const partsCoveredByPayments = paidSoFar >= partsTotal - 0.001;
                         const partsRemaining = Math.max(partsTotal - paidSoFar, 0);
                         const partsIsPartial = paidSoFar > 0.001 && !partsCoveredByPayments;

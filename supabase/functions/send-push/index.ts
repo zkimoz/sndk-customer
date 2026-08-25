@@ -2,8 +2,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
+// Public by design (VAPID's whole point) — the customer web app ships this
+// same value client-side (App.jsx) to call PushManager.subscribe(), so it's
+// not a secret. Only the private key needs to stay out of source.
 const VAPID_PUBLIC_KEY  = "BI7jNwdDx9eYM2bVIWSytWhDiZcmYI_8HFYc4fqF97vbej-zxPIXfS0nP8mrjQJPzeGcO76tN26vBK8vvg3qPRE";
-const VAPID_PRIVATE_KEY = "_UhC-cUnE3HJW02_Y1j7Brw2i-3jYt-ieE4Eb2nihvA";
+const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY")!;
 
 webpush.setVapidDetails("mailto:karimfahmy255@gmail.com", VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
