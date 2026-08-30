@@ -4624,8 +4624,19 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                           finished one keeps showing its last route as a recap with a "Last route" badge. */}
                       {jc && (jc.pickup_driver_id || jc.return_driver_id) && (
                         <div className="px-4 py-3 space-y-2" style={{ borderTop:`1px solid ${C.border}`, background: cc ? `${cc.fg}0d` : undefined }}>
-                          {jc.pickup_driver_id && <LiveTrackingMap jobCardId={jc.id} leg="pickup" isRtl={isRtl} active={!!jc.pickup_tracking_active}/>}
-                          {jc.return_driver_id && <LiveTrackingMap jobCardId={jc.id} leg="return" isRtl={isRtl} active={!!jc.return_tracking_active}/>}
+                          <p className="text-sm font-black" style={{ color: cc?cc.fg:C.gold }}>{isRtl ? '📍 تتبع السائق' : '📍 Driver Tracking'}</p>
+                          {jc.pickup_driver_id && (
+                            <>
+                              {jc.return_driver_id && <p className="text-xs font-bold" style={{ color:cc?cc.sub:C.muted }}>{isRtl?'رحلة الذهاب':'Outbound'}</p>}
+                              <LiveTrackingMap jobCardId={jc.id} leg="pickup" isRtl={isRtl} active={!!jc.pickup_tracking_active}/>
+                            </>
+                          )}
+                          {jc.return_driver_id && (
+                            <>
+                              {jc.pickup_driver_id && <p className="text-xs font-bold" style={{ color:cc?cc.sub:C.muted }}>{isRtl?'رحلة العودة':'Return'}</p>}
+                              <LiveTrackingMap jobCardId={jc.id} leg="return" isRtl={isRtl} active={!!jc.return_tracking_active}/>
+                            </>
+                          )}
                         </div>
                       )}
 
