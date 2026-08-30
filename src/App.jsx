@@ -3470,7 +3470,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
     if (!user) { setLoading(false); return; }
     loadPartOrders();
     const { data: apptData } = await supabase.from('appointments')
-      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, general_notes, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot, pickup_tracking_active, return_tracking_active)')
+      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, general_notes, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot, pickup_tracking_active, return_tracking_active, pickup_driver_id, return_driver_id)')
       .eq('profile_id', user.id)
       .order('appointment_date', { ascending: false });
     setAppts(apptData || []);
@@ -4599,15 +4599,23 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                                 />
                               )
                             )}
-                            {/* Renders nothing if there's no route yet for that leg — no gate
-                                needed on *_tracking_active here, since a still-active leg simply
-                                has more pings and a "Live" badge, while a finished one keeps
-                                showing its last route as a recap with a "Last route" badge. */}
-                            {jc && <LiveTrackingMap jobCardId={jc.id} leg="pickup" isRtl={isRtl} active={!!jc.pickup_tracking_active}/>}
-                            {jc && <LiveTrackingMap jobCardId={jc.id} leg="return" isRtl={isRtl} active={!!jc.return_tracking_active}/>}
                           </div>
                         );
                       })()}
+
+                      {/* Independent of the towing block above — a driver can be assigned and
+                          tracked (job_cards.pickup_driver_id/tracking flags, written instantly)
+                          without staff ever having saved orders.towing_required, so this must
+                          not be gated on that flag. Renders nothing if there's no route yet for
+                          that leg — no gate needed on *_tracking_active here either, since a
+                          still-active leg simply has more pings and a "Live" badge, while a
+                          finished one keeps showing its last route as a recap with a "Last route" badge. */}
+                      {jc && (jc.pickup_driver_id || jc.return_driver_id) && (
+                        <div className="px-4 py-3 space-y-2" style={{ borderTop:`1px solid ${C.border}`, background: cc ? `${cc.fg}0d` : undefined }}>
+                          {jc.pickup_driver_id && <LiveTrackingMap jobCardId={jc.id} leg="pickup" isRtl={isRtl} active={!!jc.pickup_tracking_active}/>}
+                          {jc.return_driver_id && <LiveTrackingMap jobCardId={jc.id} leg="return" isRtl={isRtl} active={!!jc.return_tracking_active}/>}
+                        </div>
+                      )}
 
                       {/* ── الدفع (قطع أولاً ثم شغل اليد) — يعكس الخدمات المختارة/الموافق عليها فقط ── */}
                       {relOrd && (() => {
