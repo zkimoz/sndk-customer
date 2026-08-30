@@ -2379,6 +2379,7 @@ function openQuotationPDF(order, linked, profile, jobCard, carBrands = []) {
   const returnTowingAmount = (order.return_towing_required && order.return_pickup_method === 'flatbed') ? Number(order.return_flatbed_price || 0) : 0;
   const towingAmount = pickupTowingAmount + returnTowingAmount;
   const grandTotal = totalParts + totalLabor + towingAmount;
+  const totalDiscount = approvedItems.reduce((s,i) => s + Number(i.sell_price||0) * Number(i.quantity||1) * Math.min(Number(i.discount_pct||0),100)/100, 0);
   const totalPaid = (order.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
   const remainingDue = grandTotal - totalPaid;
   const rejectedNames = [];
@@ -2578,6 +2579,7 @@ ${(partItems.length > 0 || laborItems.length > 0 || towingAmount > 0) ? `
     ${totalLabor > 0 ? `<div class="totals-row"><span>مصنعيات / Labor</span><span dir="ltr">${totalLabor.toFixed(3)} ر.ق</span></div>` : ''}
     ${pickupTowingAmount > 0 ? `<div class="totals-row"><span>🚛 ساطحة الذهاب / Flatbed (Outbound)</span><span dir="ltr">${pickupTowingAmount.toFixed(3)} ر.ق</span></div>` : ''}
     ${returnTowingAmount > 0 ? `<div class="totals-row"><span>🚛 ساطحة العودة / Flatbed (Return)</span><span dir="ltr">${returnTowingAmount.toFixed(3)} ر.ق</span></div>` : ''}
+    ${totalDiscount > 0 ? `<div class="totals-row" style="color:#dc2626"><span>إجمالي الخصم / Total Discount</span><span dir="ltr">-${totalDiscount.toFixed(3)} ر.ق</span></div>` : ''}
     <div class="totals-row totals-grand"><span>الإجمالي / Total</span><span dir="ltr">${grandTotal.toFixed(3)} QAR</span></div>
   </div>
 </div>` : ''}
@@ -2706,6 +2708,7 @@ function printCustomerInvoice(jobCard, appt, order, profile, brandsData = [], ca
   const returnTowingAmount = (order?.return_towing_required && order?.return_pickup_method === 'flatbed') ? Number(order?.return_flatbed_price || 0) : 0;
   const towingAmount = pickupTowingAmount + returnTowingAmount;
   const grandTotal  = totalParts + totalLabor + towingAmount;
+  const totalDiscount = items.reduce((s,i) => s + Number(i.sell_price||0) * Number(i.quantity||1) * Math.min(Number(i.discount_pct||0),100)/100, 0);
 
   const invLineTotal = item => {
     const unitPrice = Number(item.sell_price||0);
@@ -2918,6 +2921,10 @@ function printCustomerInvoice(jobCard, appt, order, profile, brandsData = [], ca
       ${returnTowingAmount>0?`<div class="tot-row">
         <div class="tot-lbl"><div class="ar">🚛 ساطحة العودة</div><div class="en">Flatbed (Return)</div></div>
         <div class="tot-amt">${returnTowingAmount.toFixed(3)} QAR</div>
+      </div>`:''}
+      ${totalDiscount>0?`<div class="tot-row">
+        <div class="tot-lbl"><div class="ar">إجمالي الخصم</div><div class="en">Total Discount</div></div>
+        <div class="tot-amt" style="color:#dc2626">-${totalDiscount.toFixed(3)} QAR</div>
       </div>`:''}
       <div class="grand-row">
         <div class="grand-lbl">
@@ -3568,6 +3575,17 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
     const returnTowingAmount = (order?.return_towing_required && order?.return_pickup_method === 'flatbed') ? Number(order?.return_flatbed_price || 0) : 0;
     return itemsTotal + pickupTowingAmount + returnTowingAmount;
   };
+  // Same inclusion rule as selectedQuotationTotal above, but sums the
+  // discount amount taken off each included line instead of its net total.
+  const selectedQuotationDiscount = (order) => (order?.order_items || [])
+    .reduce((sum, it) => {
+      const discountAmt = Number(it.sell_price||0) * Number(it.quantity||1) * Math.min(Number(it.discount_pct||0),100)/100;
+      const key = it.service_name?.group_id || it.service_name?.ar || it.service_name?.en;
+      if (!key) return sum + discountAmt;
+      const locked = !!order?.service_decisions?.[key];
+      const included = locked ? order.service_decisions[key] === 'approved' : isServiceSelected(order.id, key);
+      return included ? sum + discountAmt : sum;
+    }, 0);
 
   // Each service needs an explicit 'approved' or 'rejected' decision — no
   // implicit default — so "Confirm & Sign" can require every service to be
@@ -4330,6 +4348,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                             const towingAmount = pickupTowingAmount + returnTowingAmount;
                             const grandTotal = selectedQuotationTotal(relOrd);
                             const servicesTotal = grandTotal - towingAmount;
+                            const totalDiscount = selectedQuotationDiscount(relOrd);
                             return (
                               <div className="rounded-xl px-3 py-2.5 space-y-1.5" style={{ background:'rgba(0,0,0,0.08)' }}>
                                 {towingAmount > 0 && (
@@ -4352,6 +4371,12 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                                     )}
                                     <div style={{ borderTop:`1px dashed ${cc.sub}40`, margin:'6px 0' }}/>
                                   </>
+                                )}
+                                {totalDiscount > 0 && (
+                                  <div className="flex items-center justify-between text-sm">
+                                    <span style={{ color:'#dc2626' }}>{isRtl?'إجمالي الخصم':'Total Discount'}</span>
+                                    <span className="font-bold" dir="ltr" style={{ color:'#dc2626' }}>-{totalDiscount.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                                  </div>
                                 )}
                                 <div className="flex items-center justify-between">
                                   <span className="text-sm" style={{ color:cc.sub }}>{isRtl ? 'إجمالي عرض السعر:' : 'Quotation Total:'}</span>
@@ -5283,6 +5308,7 @@ function HistoryOrderDetail({ jobCard, order, car, appt, profile, isRtl, tr, ope
   const returnTowingAmount = (order?.return_towing_required && order?.return_pickup_method === 'flatbed') ? Number(order?.return_flatbed_price || 0) : 0;
   const towingAmount = pickupTowingAmount + returnTowingAmount;
   const grandTotal = totalParts + totalLabor + towingAmount;
+  const totalDiscount = approvedItems.reduce((s,i) => s + Number(i.sell_price||0) * Number(i.quantity||1) * Math.min(Number(i.discount_pct||0),100)/100, 0);
   const totalPaid = (order?.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
   const remaining = grandTotal - totalPaid;
   const rejectedNames = [...new Set(rejectedItems.map(groupKeyOf).filter(Boolean))];
@@ -5320,6 +5346,12 @@ function HistoryOrderDetail({ jobCard, order, car, appt, profile, isRtl, tr, ope
             <div className="flex items-center justify-between text-xs">
               <span style={{ color:C.muted }}>{isRtl?'🚛 ساطحة العودة':'Flatbed (Return)'}</span>
               <span className="font-bold" style={{ color:C.text }}>{returnTowingAmount.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+            </div>
+          )}
+          {totalDiscount > 0 && (
+            <div className="flex items-center justify-between text-xs">
+              <span style={{ color:'#dc2626' }}>{isRtl?'إجمالي الخصم':'Total Discount'}</span>
+              <span className="font-bold" style={{ color:'#dc2626' }}>-{totalDiscount.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
             </div>
           )}
           <div className="flex items-center justify-between text-sm pt-1.5 mt-1" style={{ borderTop:`1px dashed ${C.border}` }}>
