@@ -554,7 +554,19 @@ const LiveTrackingMap = ({ jobCardId, leg, isRtl, active }) => {
   useEffect(() => { load(); }, [jobCardId, leg]);
   useLiveTables(['driver_locations'], load);
 
-  if (!apiKey || !isLoaded || pings.length === 0) return null;
+  if (!apiKey || !isLoaded) return null;
+  // Tracking is on but the driver's phone hasn't sent a GPS ping yet (no
+  // location permission granted, portal not open, etc.) — say so instead of
+  // silently showing nothing, which reads as "the feature is broken".
+  if (pings.length === 0) {
+    if (!active) return null;
+    return (
+      <div className="rounded-xl flex items-center justify-center gap-2 text-sm font-bold" style={{ height: 80, background: 'rgba(0,0,0,0.05)', color: '#64748b' }}>
+        <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#16a34a' }}/>
+        {isRtl ? 'بانتظار موقع السائق...' : 'Waiting for driver location...'}
+      </div>
+    );
+  }
 
   const path = pings.map(p => ({ lat: p.lat, lng: p.lng }));
   const current = path[path.length - 1];
