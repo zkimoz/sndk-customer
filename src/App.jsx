@@ -31,6 +31,18 @@ function useLiveTables(tables, onChange, enabled = true) {
   }, [enabled, key]);
 }
 
+// True transparent background (not a white box) — WebM/VP9 for Chrome,
+// Firefox, Edge; MOV/HEVC for Safari, which doesn't support alpha WebM.
+// Replaces the old logo-animated.gif everywhere it appeared.
+function AnimatedLogo({ className, style }) {
+  return (
+    <video className={className} style={style} autoPlay loop muted playsInline disablePictureInPicture>
+      <source src="/logo-alpha.webm" type="video/webm"/>
+      <source src="/logo-alpha.mov" type="video/mp4"/>
+    </video>
+  );
+}
+
 // ── Translations ───────────────────────────────────────────────────────
 const T = {
   ar: {
@@ -1199,7 +1211,7 @@ export default function App() {
         <aside className="hidden md:flex md:flex-col md:w-72 md:flex-shrink-0 md:h-full"
           style={{ background:C.panel, borderInlineEnd:`1px solid ${C.border}` }}>
           <div className="flex items-center justify-center px-2 py-1" style={{ borderBottom:`1px solid ${C.border}` }}>
-            <img src="/logo-animated.gif" alt="SNDK" style={{ width:'100%', height:'auto' }}/>
+            <AnimatedLogo style={{ width:'100%', height:'auto' }}/>
           </div>
           <nav className="flex-1 px-3 py-5 space-y-1">
             {[
@@ -1319,7 +1331,7 @@ export default function App() {
             <button onClick={()=>setMenuOpen(true)} className="p-2 rounded-lg transition-colors" style={{ color:C.gold }}>
               <Menu size={22}/>
             </button>
-            <img src="/logo-animated.gif" alt="SNDK" style={{ height:112, width:'auto' }}/>
+            <AnimatedLogo style={{ height:112, width:'auto' }}/>
             <div className="flex items-center gap-1">
               <button onClick={toggleTheme} className="p-2 rounded-lg transition-colors" style={{ color:C.gold }}>
                 {theme==='dark' ? <Sun size={17}/> : <Moon size={17}/>}
@@ -1492,7 +1504,7 @@ export default function App() {
           <div className="absolute inset-0" style={{ background:'rgba(0,0,0,0.65)', backdropFilter:'blur(4px)' }} onClick={()=>setMenuOpen(false)}/>
           <div className="relative w-72 h-full flex flex-col shadow-2xl" style={{ background:C.panel }}>
             <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom:`1px solid ${C.border}` }}>
-              <img src="/logo-animated.gif" alt="SNDK" style={{ height:96, width:'auto' }}/>
+              <AnimatedLogo style={{ height:96, width:'auto' }}/>
               <button onClick={()=>setMenuOpen(false)} style={{ color:C.muted }}><X size={20}/></button>
             </div>
             <nav className="flex-1 p-3 space-y-1">
@@ -7284,7 +7296,7 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
 
         {/* Header */}
         <div className="mx-auto -mb-2">
-          <img src="/logo-animated.gif" alt="SNDK" className="mx-auto w-full" style={{ height:'auto' }}/>
+          <AnimatedLogo className="mx-auto w-full" style={{ height:'auto' }}/>
         </div>
         <div className="flex items-center justify-between">
           <div>
