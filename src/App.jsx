@@ -31,14 +31,18 @@ function useLiveTables(tables, onChange, enabled = true) {
   }, [enabled, key]);
 }
 
-// True transparent background (not a white box) — WebM/VP9 for Chrome,
-// Firefox, Edge; MOV/HEVC for Safari, which doesn't support alpha WebM.
+// True transparent background (not a white box) — MOV/HEVC first for
+// Safari, which will otherwise pick the WebM source below (it has some
+// baseline VP9 playback but ignores its alpha channel, so the green
+// screen never gets removed) since <video> picks the first source it can
+// play at all, alpha or not. Chrome/Firefox/Edge can't play HEVC in
+// <video> and fall through to the WebM/VP9 source correctly.
 // Replaces the old logo-animated.gif everywhere it appeared.
 function AnimatedLogo({ className, style }) {
   return (
     <video className={className} style={style} autoPlay loop muted playsInline disablePictureInPicture>
+      <source src="/logo-alpha.mov" type="video/mp4; codecs=hvc1"/>
       <source src="/logo-alpha.webm" type="video/webm"/>
-      <source src="/logo-alpha.mov" type="video/mp4"/>
     </video>
   );
 }
