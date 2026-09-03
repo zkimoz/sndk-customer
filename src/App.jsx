@@ -795,12 +795,12 @@ const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;
 const sortByEn = arr => [...arr].sort((a, b) =>
   (a.name_en || a.name_ar || '').localeCompare(b.name_en || b.name_ar || '', 'en', { sensitivity: 'base' })
 );
-const brandLabel = (b, lang) => lang === 'en'
-  ? (b.name_en || b.name_ar || '')
-  : (b.name_en && b.name_ar ? `${b.name_en} · ${b.name_ar}` : (b.name_ar || b.name_en || ''));
-const catLabel = (c, lang) => lang === 'en'
-  ? (c.name_en || c.name_ar || '')
-  : (c.name_en && c.name_ar ? `${c.name_en} · ${c.name_ar}` : (c.name_ar || c.name_en || ''));
+// Always both languages together, regardless of UI language — a car type
+// name should read the same to whichever staff/customer looks at it next.
+// (lang kept as a no-op param so every existing call site — brandLabel(b, lang) —
+// still works unchanged.)
+const brandLabel = (b, _lang) => b.name_en && b.name_ar ? `${b.name_en} · ${b.name_ar}` : (b.name_ar || b.name_en || '');
+const catLabel = (c, _lang) => c.name_en && c.name_ar ? `${c.name_en} · ${c.name_ar}` : (c.name_ar || c.name_en || '');
 
 // A saved car's car_type/car_category (and formData's carBrandKey/carCategoryKey,
 // which is seeded from the same column) are stored as a single fixed string —
