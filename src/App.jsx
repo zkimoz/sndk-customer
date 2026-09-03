@@ -393,6 +393,10 @@ const PARTS_STATUS_COLOR = { pending:'#60a5fa', sourcing:'#eab308', unavailable:
 // pattern already used for "Unavailable parts".
 const REJECTED_ALL_LABEL = { ar:'العميل رفض كل الخدمات', en:'Customer rejected all services' };
 const REJECTED_ALL_COLOR = '#ef4444';
+// Set by staff on the admin side (replaces what used to be a hard delete —
+// see sndk-admin's rejectAndCloseJobCard) rather than anything the customer
+// did themselves, hence its own label instead of reusing REJECTED_ALL_LABEL.
+const JOB_REJECTED_CLOSED_LABEL = { ar:'تم إغلاق الطلب', en:'Request Closed' };
 const rejectedAllOverride = (order) => !!(order?.customer_rejected &&
   (Number(order?.total_parts_price || 0) + Number(order?.total_labor_price || 0)) <= 0.001);
 
@@ -489,6 +493,18 @@ const JobStatusVideoBlock = ({ videos, isRtl, jcId, videoKeyPrefix, openVideoId,
 const JobStatusTimeline = ({ jobCard, isRtl, tr, textColor, mutedColor, fg, receptionVideos = [], workshopVideos = [], openVideoId, setOpenVideoId, partsOverride = false, rejectedOverride = false }) => {
   const currentIdx = JOB_STATUS_ORDER.indexOf(jobCard.job_status);
   const fmtDT = iso => iso ? new Date(iso).toLocaleString(isRtl?'ar-QA':'en-QA', { dateStyle:'short', timeStyle:'short' }) : '';
+  // Staff rejected-and-closed this job card (see sndk-admin's
+  // rejectAndCloseJobCard) — job_status isn't one of JOB_STATUS_ORDER's
+  // steps, so without this it'd render as a blank, stuck timeline instead
+  // of explaining what happened.
+  if (jobCard.job_status === 'rejected_closed') {
+    return (
+      <div className="flex items-start gap-2.5 px-2 py-1.5 rounded-lg" style={{ background:`${REJECTED_ALL_COLOR}18` }}>
+        <span className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background:REJECTED_ALL_COLOR }}/>
+        <span className="block text-sm font-bold" style={{ color:REJECTED_ALL_COLOR }}>{isRtl ? JOB_REJECTED_CLOSED_LABEL.ar : JOB_REJECTED_CLOSED_LABEL.en}</span>
+      </div>
+    );
+  }
   // A full rejection takes precedence over every other override — nothing
   // else about the quotation's progress matters once there's nothing left
   // to do it on.
