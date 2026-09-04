@@ -31,46 +31,6 @@ function useLiveTables(tables, onChange, enabled = true) {
   }, [enabled, key]);
 }
 
-// Free-text the customer typed themselves (a booking complaint, a note) —
-// unlike staff-facing fields (general_notes, item_name, service_name),
-// which are saved as {ar, en} from the start, this only ever exists in
-// whichever language the customer happened to type in. Translates it to
-// match the current UI language via the translate-notes edge function
-// (Google Translate) — skipped entirely when the text's own script already
-// matches the current language, and cached in memory per tab session so
-// the same complaint text (genuinely common — "brake noise", "AC smell"...)
-// isn't re-translated (and re-billed) on every render or repeat visit.
-const translationCache = new Map();
-const hasArabicChars = (s) => /[؀-ۿ]/.test(s);
-function useTranslatedNote(text, lang) {
-  const [translated, setTranslated] = useState('');
-  useEffect(() => {
-    setTranslated('');
-    if (!text || !text.trim()) return;
-    const isArabic = hasArabicChars(text);
-    const needsTranslation = (lang === 'en' && isArabic) || (lang === 'ar' && !isArabic);
-    if (!needsTranslation) return;
-    const cacheKey = `${lang}:${text}`;
-    if (translationCache.has(cacheKey)) { setTranslated(translationCache.get(cacheKey)); return; }
-    let cancelled = false;
-    supabase.functions.invoke('translate-notes', { body: { text } }).then(({ data }) => {
-      if (cancelled || !data?.translated) return;
-      translationCache.set(cacheKey, data.translated);
-      setTranslated(data.translated);
-    }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [text, lang]);
-  return translated || text;
-}
-
-// Wraps useTranslatedNote for use inside a .map() — hooks can't be called
-// directly inside a loop body, so each row gets its own tiny component
-// instance instead, one hook call per instance instead of per iteration.
-function TranslatedNote({ text, lang, ...rest }) {
-  const shown = useTranslatedNote(text, lang);
-  return <p {...rest}>{shown}</p>;
-}
-
 // True transparent background (not a white box) — MOV/HEVC first for
 // Safari, which will otherwise pick the WebM source below (it has some
 // baseline VP9 playback but ignores its alpha channel, so the green
@@ -2418,7 +2378,7 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
           {po.customer_notes && (
             <div>
               <p className="text-xs font-bold mb-1" style={{ color:C.cardMuted }}>{isRtl?'ملاحظاتك':'Your notes'}</p>
-              <TranslatedNote text={po.customer_notes} lang={lang} className="text-sm" style={{ color:C.cardText }}/>
+              <p className="text-sm" style={{ color:C.cardText }}>{po.customer_notes}</p>
             </div>
           )}
 
@@ -4031,7 +3991,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                           {a.appointment_time && <span style={{ color:cc.sub }}>· {a.appointment_time}</span>}
                         </div>
                       )}
-                      {a.customer_notes && <TranslatedNote text={a.customer_notes} lang={lang} className="text-sm italic" style={{ color:cc.sub }}/>}
+                      {a.customer_notes && <p className="text-sm italic" style={{ color:cc.sub }}>{a.customer_notes}</p>}
                       {/* Cancel button (only if not cancelled and no job card) */}
                       {a.status !== 'cancelled' && a.status !== 'completed' && (
                         <div className="pt-1">
@@ -4131,7 +4091,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                             </p>
                           )}
                           {jc.customer_complaints && (
-                            <TranslatedNote text={jc.customer_complaints} lang={lang} className="text-base font-bold mt-1.5" style={{ color:cc.txt }}/>
+                            <p className="text-base font-bold mt-1.5" style={{ color:cc.txt }}>{jc.customer_complaints}</p>
                           )}
                           {jc.general_notes?.ar && (
                             <p className="text-sm mt-1.5" style={{ color:cc.sub }}>
