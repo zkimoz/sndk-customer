@@ -2412,7 +2412,7 @@ function openQuotationPDF(order, linked, profile, jobCard, carBrands = []) {
   const car = linked?.cars || {};
   const carBrandRec = carBrands.find(b => b.name_ar === car.car_type || b.name_en === car.car_type);
   const carLogoSrc = carBrandLogoUrl(carBrandRec?.name_en || car.car_type);
-  const items = (order.order_items || []).filter(it => it.visible_to_customer !== false);
+  const items = order.order_items || [];
   const approvedItems = decided ? items.filter(it => { const k = groupKeyOf(it); return !k || decisions[k] !== 'rejected'; }) : items;
   const rejectedItems = decided ? items.filter(it => { const k = groupKeyOf(it); return k && decisions[k] === 'rejected'; }) : [];
   const partItems = approvedItems.filter(i => i.item_type === 'part');
@@ -2719,7 +2719,7 @@ ${isApproved ? `
 // is the same document staff see — same layout, colors, grouping and stamp.
 function printCustomerInvoice(jobCard, appt, order, profile, brandsData = [], catsData = []) {
   const car     = appt?.cars || {};
-  const allItems = (order?.order_items || []).filter(it => it.visible_to_customer !== false);
+  const allItems = order?.order_items || [];
   const decided  = !!order?.customer_approved || !!order?.customer_rejected;
   const decisions = order?.service_decisions || {};
   const groupKeyOf = it => it.service_name?.group_id || it.service_name?.ar || it.service_name?.en || null;
@@ -3599,7 +3599,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
   // narrow it to just that column's payment row.
   const selectedQuotationTotal = (order, itemType = null) => {
     const itemsTotal = (order?.order_items || [])
-      .filter(it => it.visible_to_customer !== false && (!itemType || it.item_type === itemType))
+      .filter(it => !itemType || it.item_type === itemType)
       .reduce((sum, it) => {
         const lt = Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
         const key = it.service_name?.group_id || it.service_name?.ar || it.service_name?.en;
@@ -3622,7 +3622,6 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
   // Same inclusion rule as selectedQuotationTotal above, but sums the
   // discount amount taken off each included line instead of its net total.
   const selectedQuotationDiscount = (order) => (order?.order_items || [])
-    .filter(it => it.visible_to_customer !== false)
     .reduce((sum, it) => {
       const discountAmt = Number(it.sell_price||0) * Number(it.quantity||1) * Math.min(Number(it.discount_pct||0),100)/100;
       const key = it.service_name?.group_id || it.service_name?.ar || it.service_name?.en;
@@ -3714,7 +3713,6 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
     // reads these columns directly.
     const lineTotal = it => Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
     const approvedItems = (order.order_items || []).filter(it => {
-      if (it.visible_to_customer === false) return false;
       const key = it.service_name?.group_id || it.service_name?.ar || it.service_name?.en;
       return !key || decisions[key] === 'approved';
     });
@@ -4238,7 +4236,6 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                                   const liveDecision = getServiceDecision(relOrd.id, s.key); // undefined | 'approved' | 'rejected' — before signing
                                   const decision = relOrd.service_decisions?.[s.key]; // locked-in decision — after signing
                                   const lineItems = (relOrd.order_items || []).filter(i =>
-                                    i.visible_to_customer !== false &&
                                     (i.service_name?.group_id || i.service_name?.ar || i.service_name?.en) === s.key);
                                   const originalLineTotal = it => Number(it.sell_price||0) * Number(it.quantity||1);
                                   const lineTotal = it => originalLineTotal(it) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
@@ -4340,7 +4337,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                               charged for something. Just a list, no approve/reject — there's
                               no service group to decide on. */}
                           {(() => {
-                            const generalItems = (relOrd.order_items || []).filter(i => i.visible_to_customer !== false && !(i.service_name?.group_id || i.service_name?.ar || i.service_name?.en));
+                            const generalItems = (relOrd.order_items || []).filter(i => !(i.service_name?.group_id || i.service_name?.ar || i.service_name?.en));
                             if (generalItems.length === 0) return null;
                             const lineTotal = it => Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
                             return (
@@ -4725,7 +4722,6 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                         // in one go, reusing the exact same request_payment mechanism.
                         const decisions = relOrd.service_decisions || {};
                         const approvedItems = (relOrd.order_items || []).filter(it => {
-                          if (it.visible_to_customer === false) return false;
                           const k = it.service_name?.group_id || it.service_name?.ar || it.service_name?.en || null;
                           return !k || decisions[k] !== 'rejected';
                         });
@@ -5364,7 +5360,7 @@ function HistoryOrderDetail({ jobCard, order, car, appt, profile, isRtl, tr, ope
 
   const groupKeyOf = it => it.service_name?.group_id || it.service_name?.ar || it.service_name?.en || null;
   const lineTotal = it => Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
-  const items = (order?.order_items || []).filter(it => it.visible_to_customer !== false);
+  const items = order?.order_items || [];
   const decided = !!order?.customer_approved || !!order?.customer_rejected;
   const decisions = order?.service_decisions || {};
   const approvedItems = decided ? items.filter(it => { const k = groupKeyOf(it); return !k || decisions[k] !== 'rejected'; }) : items;
