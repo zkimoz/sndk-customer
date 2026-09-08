@@ -5462,6 +5462,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
   const [history, setHistory]         = useState({});
   const [expandedCar, setExpandedCar] = useState(null);
   const [loadingCars, setLoadingCars] = useState(true);
+  const [carsWithHistory, setCarsWithHistory] = useState(new Set());
   // Shown in an in-app modal instead of a new tab/window — on mobile Safari
   // (especially the iPad/PWA case) opening a file with target="_blank" often
   // leaves no obvious way back to the app, since there's no browser chrome
@@ -5505,7 +5506,21 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
 
   const loadCars = () => {
     supabase.from('cars').select('*').eq('profile_id', user.id).order('created_at', { ascending:false })
-      .then(({ data }) => { setCars(data||[]); setLoadingCars(false); });
+      .then(async ({ data }) => {
+        setCars(data||[]);
+        // Which of these cars have ever had a job card — checked upfront
+        // (same rule deleteCar already enforced after the fact) so Edit can
+        // be disabled/hidden before the customer even tries, not just
+        // rejected on click.
+        if (data?.length) {
+          const { data: hist } = await supabase.from('job_cards').select('car_id')
+            .eq('profile_id', user.id).in('car_id', data.map(c=>c.id));
+          setCarsWithHistory(new Set((hist||[]).map(h=>h.car_id)));
+        } else {
+          setCarsWithHistory(new Set());
+        }
+        setLoadingCars(false);
+      });
   };
 
   useEffect(() => { if (user) loadCars(); }, [user]);
@@ -5683,6 +5698,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
   };
 
   const openEditCar = (car) => {
+    if (carsWithHistory.has(car.id)) return;
     const brand = carBrands.find(b => b.name_ar === car.car_type || b.name_en === car.car_type);
     setEditCarForm({
       car_type: car.car_type || '',
@@ -6114,13 +6130,20 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                         </button>
                       )
                     )}
-                    <button
-                      onClick={e => { e.stopPropagation(); if (!isOpen) setExpandedCar(car.id); openEditCar(car); }}
-                      className="p-2 rounded-xl flex-shrink-0 transition-all"
-                      style={{ background:'rgba(0,0,0,0.10)', color:cc.fg }}
-                      title={tr.prof_edit_car}>
-                      <Pencil size={14}/>
-                    </button>
+                    {carsWithHistory.has(car.id) ? (
+                      <div className="p-2 rounded-xl flex-shrink-0" style={{ background:'rgba(0,0,0,0.10)', color:cc.fg, opacity:0.4 }}
+                        title={isRtl?'لها سجل صيانة — تواصل مع خدمة العملاء للتعديل':'Has service history — contact customer service to edit'}>
+                        <Lock size={14}/>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={e => { e.stopPropagation(); if (!isOpen) setExpandedCar(car.id); openEditCar(car); }}
+                        className="p-2 rounded-xl flex-shrink-0 transition-all"
+                        style={{ background:'rgba(0,0,0,0.10)', color:cc.fg }}
+                        title={tr.prof_edit_car}>
+                        <Pencil size={14}/>
+                      </button>
+                    )}
                   </div>
 
                   {isOpen && (
@@ -6386,22 +6409,27 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                           })}
                         </div>
                       )}
-                      {/* Delete car button */}
-                      <div className="px-4 pb-4 pt-2">
-                        {carDeleteError && deletingCarId === null && expandedCar === car.id && (
-                          <p className="text-xs text-center mb-2" style={{ color:'rgba(248,113,113,0.9)' }}>{carDeleteError}</p>
-                        )}
-                        <button
-                          onClick={()=>deleteCar(car.id)}
-                          disabled={deletingCarId === car.id}
-                          className="w-full py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all disabled:opacity-40"
-                          style={{ border:'1px solid rgba(248,113,113,0.25)', color:'rgba(248,113,113,0.8)' }}>
-                          {deletingCarId === car.id
-                            ? <Loader2 size={12} className="animate-spin"/>
-                            : <X size={12}/>}
-                          {isRtl ? 'حذف هذه السيارة' : 'Remove This Car'}
-                        </button>
-                      </div>
+                      {/* Delete car button — hidden entirely once the car has
+                          any service history on record (deleteCar's own
+                          guard also re-checks live, this just avoids showing
+                          an action that would only fail). */}
+                      {!carsWithHistory.has(car.id) && (
+                        <div className="px-4 pb-4 pt-2">
+                          {carDeleteError && deletingCarId === null && expandedCar === car.id && (
+                            <p className="text-xs text-center mb-2" style={{ color:'rgba(248,113,113,0.9)' }}>{carDeleteError}</p>
+                          )}
+                          <button
+                            onClick={()=>deleteCar(car.id)}
+                            disabled={deletingCarId === car.id}
+                            className="w-full py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all disabled:opacity-40"
+                            style={{ border:'1px solid rgba(248,113,113,0.25)', color:'rgba(248,113,113,0.8)' }}>
+                            {deletingCarId === car.id
+                              ? <Loader2 size={12} className="animate-spin"/>
+                              : <X size={12}/>}
+                            {isRtl ? 'حذف هذه السيارة' : 'Remove This Car'}
+                          </button>
+                        </div>
+                      )}
                       </>
                       )}
                     </div>
