@@ -4024,8 +4024,9 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
 
           {/* ── قسم 2: الطلبات (مواعيد عندها أمر شغل) ── */}
           {tab==='orders' && (() => {
-            // Closed job cards move to the car's maintenance history under حسابي — not shown here
-            const jcAppts = appts.filter(a => a.job_cards?.length > 0 && !a.job_cards[0].closed_at && a.status !== 'cancelled');
+            // Closed job cards, and orders the customer rejected in full, move to
+            // the car's maintenance history under حسابي — not shown here.
+            const jcAppts = appts.filter(a => a.job_cards?.length > 0 && !a.job_cards[0].closed_at && a.status !== 'cancelled' && !rejectedAllOverride(orderByApptId[a.id]));
             return (
               <div className="space-y-3">
                 {jcAppts.length === 0 ? (
@@ -6105,7 +6106,16 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
             {cars.map((car, carIdx) => {
               const cc     = CARD_BG_CYCLE[1]; // always maroon
               const isOpen = expandedCar === car.id;
-              const carHistory = history[car.id];
+              // Same rule as the My Orders "orders" tab, mirrored: only a
+              // closed job card or a fully-rejected order belongs here —
+              // otherwise an active order would show in both places at
+              // once. `history[car.id]` itself stays undefined while
+              // loading (distinct from an empty filtered result), so the
+              // spinner below keeps working exactly as before.
+              const rawCarHistory = history[car.id];
+              const carHistory = rawCarHistory
+                ? rawCarHistory.filter(appt => appt.job_cards?.[0]?.closed_at || rejectedAllOverride(appt.orders?.[0]))
+                : rawCarHistory;
               return (
                 <div key={car.id} className="rounded-2xl overflow-hidden transition-all" style={{ background:cc.bg, border:`1px solid ${isOpen?`${cc.fg}50`:`${cc.fg}25`}` }}>
                   <div className="flex items-center gap-2 p-4">
