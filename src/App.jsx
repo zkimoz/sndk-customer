@@ -4069,7 +4069,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                         style={{ borderBottom: isExpanded ? `1px solid ${cc.div}` : 'none', textAlign: isRtl ? 'right' : 'left' }}>
                         <div className="flex-1 min-w-0">
                           {car && (
-                            <p className="text-sm font-bold truncate" style={{ color:cc.txt }}>
+                            <p className="text-sm font-bold" style={{ color:cc.txt }}>
                               {[carTypeLabel(car, carBrandsRef, lang), carCategoryLabel(car, carCatsRef, lang), car.production_year].filter(Boolean).join(' · ')}
                             </p>
                           )}
