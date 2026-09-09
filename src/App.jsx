@@ -3433,6 +3433,11 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
   const [openVideoId, setOpenVideoId] = useState(null);
   const [carBrandsRef, setCarBrandsRef] = useState([]);
   const [carCatsRef, setCarCatsRef]     = useState([]);
+  // Collapsed by default — with several orders on file, every one of them
+  // used to render its full body (map, timeline, quotation, payment...) all
+  // at once, making it hard to tell them apart at a glance. Only the id
+  // being deep-linked to (see highlightJobNumber below) starts open.
+  const [expandedOrderId, setExpandedOrderId] = useState(null);
   const seenIdsRef = useRef(new Set());
   // Scrolls to and highlights the job card a staff-shared signing link
   // pointed at (see App()'s highlightJobNumber/?jc= handling) — the ref
@@ -3444,6 +3449,11 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
     if (!highlightJobNumber || scrolledRef.current || !highlightRef.current) return;
     highlightRef.current.scrollIntoView({ behavior:'smooth', block:'center' });
     scrolledRef.current = true;
+  }, [highlightJobNumber, appts]);
+  useEffect(() => {
+    if (!highlightJobNumber) return;
+    const match = appts.find(a => publishedJobCard(a.job_cards?.[0] || {})?.job_number === highlightJobNumber);
+    if (match) setExpandedOrderId(match.id);
   }, [highlightJobNumber, appts]);
   // Must stay above the `if (!user) return` below — a session dropping while
   // this view is mounted (auth listener firing setUser(null) without
@@ -4037,13 +4047,18 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                   const jcColor = rejectedOverride ? REJECTED_ALL_COLOR : partsOverride ? PARTS_STATUS_COLOR.unavailable : (JC_STATUS_COLOR[jc.job_status] || '#94a3b8');
                   const jcLabel = rejectedOverride ? (isRtl ? REJECTED_ALL_LABEL.ar : REJECTED_ALL_LABEL.en) : partsOverride ? (isRtl ? PARTS_STATUS_LABEL.unavailable.ar : PARTS_STATUS_LABEL.unavailable.en) : (tr[`jc_${jc.job_status}`] || jc.job_status);
                   const isHighlighted = highlightJobNumber && jc.job_number === highlightJobNumber;
+                  const isExpanded = expandedOrderId === a.id;
                   return (
                     <div key={a.id} ref={isHighlighted ? highlightRef : null} className="rounded-2xl overflow-hidden"
                       style={{ background:cc.bg, border: isHighlighted ? `2px solid ${C.gold}` : `1px solid ${cc.fg}30`, boxShadow: isHighlighted ? `0 0 0 4px ${C.gold}30` : undefined }}>
 
-                      {/* ── Header ── */}
-                      <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3"
-                        style={{ borderBottom:`1px solid ${cc.div}` }}>
+                      {/* ── Header — always visible; tap to expand/collapse everything
+                          below (map, timeline, quotation, payment...), so several
+                          orders can be told apart at a glance instead of each one
+                          taking up a full screen of detail by default. ── */}
+                      <button type="button" onClick={() => setExpandedOrderId(isExpanded ? null : a.id)}
+                        className="w-full text-inherit px-4 pt-4 pb-3 flex items-start justify-between gap-3 transition-all"
+                        style={{ borderBottom: isExpanded ? `1px solid ${cc.div}` : 'none', textAlign: isRtl ? 'right' : 'left' }}>
                         <div className="flex-1 min-w-0">
                           {(() => {
                             const svcs = parseServices(a.service_type);
@@ -4120,9 +4135,12 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                             </span>
                           </div>
                           <span className="text-[11px] font-mono" style={{ color:cc.sub }}>{jc.job_number}</span>
+                          <ChevronDown size={16} style={{ color:cc.sub, transition:'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'none' }}/>
                         </div>
-                      </div>
+                      </button>
 
+                      {isExpanded && (
+                      <>
                       {/* ── الجدول الزمني لحالة أمر الشغل (وفيديوهات الاستلام والورشة تحت خطواتها) ── */}
                       <div className="px-4 pt-3 pb-1">
                         {(() => {
@@ -4779,6 +4797,8 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                           <Loader2 size={12} className="animate-spin"/>
                           <span className="text-sm font-bold">{isRtl ? 'جاري إعداد عرض السعر...' : 'Preparing quotation...'}</span>
                         </div>
+                      )}
+                      </>
                       )}
                     </div>
                   );
