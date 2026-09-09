@@ -4057,63 +4057,25 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                           below (map, timeline, quotation, payment...), so several
                           orders can be told apart at a glance instead of each one
                           taking up a full screen of detail by default. ── */}
+                      {/* Trimmed to just what's needed to tell orders apart at a
+                          glance (car, date, status) — service names, the
+                          complaint and staff notes moved into the expanded
+                          body below instead of always showing here, so the
+                          collapsed card stays compact regardless of how much
+                          text those happen to contain (matches the mobile
+                          app's compact card). */}
                       <button type="button" onClick={() => setExpandedOrderId(isExpanded ? null : a.id)}
-                        className="w-full text-inherit px-4 pt-4 pb-3 flex items-start justify-between gap-3 transition-all"
+                        className="w-full text-inherit px-4 py-3 flex items-center justify-between gap-3 transition-all"
                         style={{ borderBottom: isExpanded ? `1px solid ${cc.div}` : 'none', textAlign: isRtl ? 'right' : 'left' }}>
                         <div className="flex-1 min-w-0">
-                          {(() => {
-                            const svcs = parseServices(a.service_type);
-                            if (svcs) {
-                              return (
-                                <div className="flex flex-wrap gap-1 mb-1">
-                                  {svcs.map((s, i) => (
-                                    <span key={i} className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
-                                      style={{ background:'rgba(0,0,0,0.10)', color:cc.txt }}>
-                                      {s.name || s}
-                                    </span>
-                                  ))}
-                                </div>
-                              );
-                            }
-                            // Walk-in appointments store the literal Arabic placeholder
-                            // "استقبال مباشر" as service_type since there's no formal service
-                            // list yet — once staff build the quotation, the real approved
-                            // service names live on the order's items instead, and are both a
-                            // truer title and correctly bilingual (the raw placeholder isn't).
-                            const approvedServiceNames = relOrd?.order_items?.length ? [...new Set(
-                              relOrd.order_items
-                                .filter(it => {
-                                  if (!relOrd.customer_approved && !relOrd.customer_rejected) return true;
-                                  const decisions = relOrd.service_decisions || {};
-                                  const k = it.service_name?.group_id || it.service_name?.ar || it.service_name?.en;
-                                  return !k || decisions[k] !== 'rejected';
-                                })
-                                .map(it => (isRtl ? it.service_name?.ar : it.service_name?.en) || it.service_name?.ar || it.service_name?.en)
-                                .filter(Boolean)
-                            )] : [];
-                            const svcLabel = approvedServiceNames.length ? approvedServiceNames.join(' · ') : (a.service_type || '—');
-                            return <p className="text-base font-bold mb-0.5" style={{ color:cc.txt }}>{svcLabel}</p>;
-                          })()}
                           {car && (
-                            <p className="text-sm flex items-center gap-1.5" style={{ color:cc.sub }}>
-                              <img key={car.id} src={carLogoUrlFor(car, carBrandsRef)} alt=""
-                                onError={e => { e.target.style.display = 'none'; }}
-                                className="w-6 h-6 object-contain flex-shrink-0"/>
+                            <p className="text-sm font-bold truncate" style={{ color:cc.txt }}>
                               {[carTypeLabel(car, carBrandsRef, lang), carCategoryLabel(car, carCatsRef, lang), car.production_year].filter(Boolean).join(' · ')}
-                              {car.plate_number ? ` · ${car.plate_number}` : ''}
                             </p>
                           )}
                           {a.appointment_date && (
                             <p className="text-[11px] mt-0.5 flex items-center gap-1" style={{ color:cc.sub }}>
                               <Calendar size={9}/>{a.appointment_date}
-                            </p>
-                          )}
-                          {jc.customer_complaints && (
-                            <p className="text-base font-bold mt-1.5" style={{ color:cc.txt }}>{jc.customer_complaints}</p>
-                          )}
-                          {jc.general_notes?.ar && (
-                            <p className="text-sm mt-1.5" style={{ color:cc.sub }}>
-                              📝 {isRtl ? jc.general_notes.ar : (jc.general_notes.en || jc.general_notes.ar)}
                             </p>
                           )}
                         </div>
@@ -4142,6 +4104,55 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
 
                       {isExpanded && (
                       <>
+                      {/* ── العنوان (الخدمات المعتمدة) والشكوى وملاحظات الموظف — كانت جوه الهيدر الدايم الظهور، اتنقلت هنا عشان الهيدر يفضل صغير ── */}
+                      {(() => {
+                        const svcs = parseServices(a.service_type);
+                        let titleNode;
+                        if (svcs) {
+                          titleNode = (
+                            <div className="flex flex-wrap gap-1 mb-1">
+                              {svcs.map((s, i) => (
+                                <span key={i} className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                                  style={{ background:'rgba(0,0,0,0.10)', color:cc.txt }}>
+                                  {s.name || s}
+                                </span>
+                              ))}
+                            </div>
+                          );
+                        } else {
+                          // Walk-in appointments store the literal Arabic placeholder
+                          // "استقبال مباشر" as service_type since there's no formal service
+                          // list yet — once staff build the quotation, the real approved
+                          // service names live on the order's items instead, and are both a
+                          // truer title and correctly bilingual (the raw placeholder isn't).
+                          const approvedServiceNames = relOrd?.order_items?.length ? [...new Set(
+                            relOrd.order_items
+                              .filter(it => {
+                                if (!relOrd.customer_approved && !relOrd.customer_rejected) return true;
+                                const decisions = relOrd.service_decisions || {};
+                                const k = it.service_name?.group_id || it.service_name?.ar || it.service_name?.en;
+                                return !k || decisions[k] !== 'rejected';
+                              })
+                              .map(it => (isRtl ? it.service_name?.ar : it.service_name?.en) || it.service_name?.ar || it.service_name?.en)
+                              .filter(Boolean)
+                          )] : [];
+                          const svcLabel = approvedServiceNames.length ? approvedServiceNames.join(' · ') : (a.service_type || '—');
+                          titleNode = <p className="text-base font-bold" style={{ color:cc.txt }}>{svcLabel}</p>;
+                        }
+                        return (
+                          <div className="px-4 pt-3">
+                            {titleNode}
+                            {jc.customer_complaints && (
+                              <p className="text-base font-bold mt-1.5" style={{ color:cc.txt }}>{jc.customer_complaints}</p>
+                            )}
+                            {jc.general_notes?.ar && (
+                              <p className="text-sm mt-1.5" style={{ color:cc.sub }}>
+                                📝 {isRtl ? jc.general_notes.ar : (jc.general_notes.en || jc.general_notes.ar)}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
                       {/* ── الجدول الزمني لحالة أمر الشغل (وفيديوهات الاستلام والورشة تحت خطواتها) ── */}
                       <div className="px-4 pt-3 pb-1">
                         {(() => {
