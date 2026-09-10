@@ -4062,9 +4062,25 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                   const jcLabel = rejectedOverride ? (isRtl ? REJECTED_ALL_LABEL.ar : REJECTED_ALL_LABEL.en) : partsOverride ? (isRtl ? PARTS_STATUS_LABEL.unavailable.ar : PARTS_STATUS_LABEL.unavailable.en) : (tr[`jc_${jc.job_status}`] || jc.job_status);
                   const isHighlighted = highlightJobNumber && jc.job_number === highlightJobNumber;
                   const isExpanded = expandedOrderId === a.id;
+                  // Same per-service check the pending-count badge/Confirm
+                  // button use — customer_approved/rejected alone can't tell
+                  // a fully-decided order from one a staff follow-up
+                  // quotation just added new, still-undecided services to.
+                  const needsDecision = !!relOrd?.sent_to_customer && hasUndecidedService(relOrd);
                   return (
                     <div key={a.id} ref={isHighlighted ? highlightRef : null} className="rounded-2xl overflow-hidden"
                       style={{ background:cc.bg, border: isHighlighted ? `2px solid ${C.gold}` : `1px solid ${cc.fg}30`, boxShadow: isHighlighted ? `0 0 0 4px ${C.gold}30` : undefined }}>
+
+                      {needsDecision && (
+                        <button type="button" onClick={() => setExpandedOrderId(isExpanded ? null : a.id)}
+                          className="mx-4 mt-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full self-start w-fit"
+                          style={{ background:'rgba(239,68,68,0.14)', border:'1px solid rgba(239,68,68,0.45)' }}>
+                          <AlertCircle size={13} style={{ color:'#ef4444' }}/>
+                          <span className="text-[11px] font-bold" style={{ color:'#ef4444' }}>
+                            {isRtl ? 'بانتظار موافقتك' : 'Needs your approval'}
+                          </span>
+                        </button>
+                      )}
 
                       {/* ── Header — always visible; tap to expand/collapse everything
                           below (map, timeline, quotation, payment...), so several
