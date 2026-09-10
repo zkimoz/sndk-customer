@@ -3541,7 +3541,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
       }
       // auto-switch to orders tab if there are any active orders
       if (loaded.some(o => o.sent_to_customer)) setTab('orders');
-      const pending = loaded.filter(o => o.sent_to_customer && !o.customer_approved && !o.customer_rejected).length;
+      const pending = loaded.filter(o => o.sent_to_customer && hasUndecidedService(o)).length;
       onCountChange?.(pending);
     }
     setLoading(false);
@@ -3586,7 +3586,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
       });
       return updated;
     });
-    const pending = ordData.filter(o => !o.customer_approved && !o.customer_rejected).length;
+    const pending = ordData.filter(o => hasUndecidedService(o)).length;
     onCountChange?.(pending);
   };
   useLiveTables(['orders'], checkForNewQuotations, !!user);
@@ -3600,6 +3600,19 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
       if (key && !seen.has(key)) { seen.add(key); keys.push(key); }
     });
     return keys;
+  };
+  // Same "fresh work to decide on" rule the Confirm & Sign button below
+  // uses: an order with no per-service breakdown at all falls back to the
+  // plain order-level flags, but one that DOES have services is pending
+  // whenever any of them still lacks a locked-in decision — not just when
+  // the order was never decided at all. Without this, staff sending an
+  // additional quotation after the customer already approved an earlier
+  // round left the new services silently invisible to the pending-count
+  // badge, even though the customer still had something to act on.
+  const hasUndecidedService = (order) => {
+    const keys = serviceKeysOf(order);
+    if (keys.length === 0) return !order?.customer_approved && !order?.customer_rejected;
+    return keys.some(k => !order?.service_decisions?.[k]);
   };
 
   // Live total of only the services the customer has checked (or, once a
