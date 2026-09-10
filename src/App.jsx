@@ -4073,10 +4073,10 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
 
                       {needsDecision && (
                         <button type="button" onClick={() => setExpandedOrderId(isExpanded ? null : a.id)}
-                          className="mx-4 mt-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full self-start w-fit"
-                          style={{ background:'rgba(239,68,68,0.14)', border:'1px solid rgba(239,68,68,0.45)' }}>
-                          <AlertCircle size={13} style={{ color:'#ef4444' }}/>
-                          <span className="text-[11px] font-bold" style={{ color:'#ef4444' }}>
+                          className="mx-4 mt-3 mb-1.5 flex items-center gap-1.5 px-2.5 py-1 rounded-full w-fit"
+                          style={{ background:'#ef4444' }}>
+                          <AlertCircle size={13} style={{ color:'#fff' }}/>
+                          <span className="text-[11px] font-bold" style={{ color:'#fff' }}>
                             {isRtl ? 'بانتظار موافقتك' : 'Needs your approval'}
                           </span>
                         </button>
