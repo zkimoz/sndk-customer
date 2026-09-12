@@ -4093,8 +4093,12 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                           collapsed card stays compact regardless of how much
                           text those happen to contain (matches the mobile
                           app's compact card). */}
-                      <button type="button" onClick={() => setExpandedOrderId(isExpanded ? null : a.id)}
-                        className="w-full text-inherit px-4 py-3 flex items-center justify-between gap-3 transition-all"
+                      {/* Plain div, not a button — the "View Details" pill below is a
+                          real <button> of its own now (in the chevron's old spot), and
+                          a button can't nest inside a button. Clicking anywhere else on
+                          the row still toggles too. */}
+                      <div onClick={() => setExpandedOrderId(isExpanded ? null : a.id)}
+                        className="w-full text-inherit px-4 py-3 flex items-center justify-between gap-3 transition-all cursor-pointer"
                         style={{ borderBottom: isExpanded ? `1px solid ${cc.div}` : 'none', textAlign: isRtl ? 'right' : 'left' }}>
                         <div className="flex-1 min-w-0">
                           {car && (
@@ -4127,28 +4131,19 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                             </span>
                           </div>
                           <span className="text-[11px] font-mono" style={{ color:cc.sub }}>{jc.job_number}</span>
-                          <ChevronDown size={16} style={{ color:cc.sub, transition:'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'none' }}/>
+                          {/* Explicit "View Details" affordance, same idea as the mobile
+                              app's own button — right in the chevron's old spot instead of
+                              a full-width bar, so it stays a compact part of this column. */}
+                          <button type="button" onClick={e => { e.stopPropagation(); setExpandedOrderId(isExpanded ? null : a.id); }}
+                            className="flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-full transition-all active:scale-95 hover:brightness-110"
+                            style={{ background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.25)', color:'#fff' }}>
+                            {isExpanded ? (isRtl ? 'إخفاء' : 'Hide') : (isRtl ? 'عرض التفاصيل' : 'Details')}
+                            {isRtl
+                              ? <ChevronLeft size={12} style={{ transition:'transform 0.2s', transform: isExpanded ? 'rotate(-90deg)' : 'none' }}/>
+                              : <ChevronRight size={12} style={{ transition:'transform 0.2s', transform: isExpanded ? 'rotate(90deg)' : 'none' }}/>}
+                          </button>
                         </div>
-                      </button>
-
-                      {/* Explicit "View Details" affordance, same idea as the mobile
-                          app's own button — the whole header above is tappable too,
-                          but this makes it obvious rather than relying on a small
-                          chevron alone. Hidden once already expanded (nothing left to
-                          reveal). */}
-                      {!isExpanded && (
-                        <button type="button" onClick={() => setExpandedOrderId(a.id)}
-                          className="mx-4 mb-3 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95 hover:brightness-110"
-                          style={{
-                            background: 'linear-gradient(180deg, rgba(255,255,255,0.20), rgba(255,255,255,0.04))',
-                            border: '1px solid rgba(255,255,255,0.28)',
-                            boxShadow: '0 4px 10px rgba(0,0,0,0.25)',
-                            color: '#fff',
-                          }}>
-                          {isRtl ? 'عرض التفاصيل' : 'View Details'}
-                          {isRtl ? <ChevronLeft size={14}/> : <ChevronRight size={14}/>}
-                        </button>
-                      )}
+                      </div>
 
                       {isExpanded && (
                       <>
