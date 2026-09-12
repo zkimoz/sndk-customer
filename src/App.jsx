@@ -4401,16 +4401,23 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                           {(() => {
                             const generalItems = (relOrd.order_items || []).filter(i => i.visible_to_customer !== false && !(i.service_name?.group_id || i.service_name?.ar || i.service_name?.en));
                             if (generalItems.length === 0) return null;
-                            const lineTotal = it => Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
+                            const originalLineTotal = it => Number(it.sell_price||0) * Number(it.quantity||1);
+                            const lineTotal = it => originalLineTotal(it) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
                             return (
                               <div className="rounded-lg overflow-hidden p-3 space-y-1.5" style={{ background:'rgba(0,0,0,0.08)' }}>
                                 <p className="text-sm font-bold" style={{ color:cc.sub }}>{isRtl?'بنود عامة':'General Items'}</p>
-                                {generalItems.map(it => (
-                                  <div key={it.id} className="flex items-center justify-between text-sm">
-                                    <span style={{ color:cc.txt }}>{it.item_name?.[isRtl?'ar':'en'] || it.item_name?.ar || '—'}{Number(it.quantity||1) > 1 ? ` × ${it.quantity}` : ''}</span>
-                                    <span className="font-bold" dir="ltr" style={{ color:cc.fg }}>{lineTotal(it).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
-                                  </div>
-                                ))}
+                                {generalItems.map(it => {
+                                  const hasDiscount = Number(it.discount_pct||0) > 0;
+                                  return (
+                                    <div key={it.id} className="flex items-center justify-between text-sm">
+                                      <span style={{ color:cc.txt }}>{it.item_name?.[isRtl?'ar':'en'] || it.item_name?.ar || '—'}{Number(it.quantity||1) > 1 ? ` × ${it.quantity}` : ''}</span>
+                                      <span className="flex-shrink-0 flex items-center gap-1.5" dir="ltr">
+                                        {hasDiscount && <span className="line-through opacity-50" style={{ color:cc.sub }}>{originalLineTotal(it).toFixed(3)}</span>}
+                                        <span className="font-bold" style={{ color: hasDiscount ? '#22c55e' : cc.fg }}>{lineTotal(it).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                                      </span>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             );
                           })()}
