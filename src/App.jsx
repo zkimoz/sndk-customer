@@ -4131,6 +4131,25 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                         </div>
                       </button>
 
+                      {/* Explicit "View Details" affordance, same idea as the mobile
+                          app's own button — the whole header above is tappable too,
+                          but this makes it obvious rather than relying on a small
+                          chevron alone. Hidden once already expanded (nothing left to
+                          reveal). */}
+                      {!isExpanded && (
+                        <button type="button" onClick={() => setExpandedOrderId(a.id)}
+                          className="mx-4 mb-3 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95 hover:brightness-110"
+                          style={{
+                            background: 'linear-gradient(180deg, rgba(255,255,255,0.20), rgba(255,255,255,0.04))',
+                            border: '1px solid rgba(255,255,255,0.28)',
+                            boxShadow: '0 4px 10px rgba(0,0,0,0.25)',
+                            color: '#fff',
+                          }}>
+                          {isRtl ? 'عرض التفاصيل' : 'View Details'}
+                          {isRtl ? <ChevronLeft size={14}/> : <ChevronRight size={14}/>}
+                        </button>
+                      )}
+
                       {isExpanded && (
                       <>
                       {/* ── العنوان (الخدمات المعتمدة) والشكوى وملاحظات الموظف — كانت جوه الهيدر الدايم الظهور، اتنقلت هنا عشان الهيدر يفضل صغير ── */}
