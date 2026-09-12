@@ -4777,18 +4777,11 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                         const laborDisplayAmount = laborIsPartial ? laborRemaining : laborTotal;
                         const laborEffectiveStatus = laborCoveredByPayments ? 'paid' : (relOrd.labor_payment_status || 'unpaid');
                         const partsSettled = partsCoveredByPayments || relOrd.parts_payment_status === 'paid';
-                        // "Pay Remaining" — once every approved service is marked "تمت" by
-                        // staff (order_items.is_done, saved via their existing Save All —
-                        // already embedded in relOrd.order_items, nothing new to load), the
-                        // customer can pay off whatever of parts/labor is still outstanding
-                        // in one go, reusing the exact same request_payment mechanism.
-                        const decisions = relOrd.service_decisions || {};
-                        const approvedItems = (relOrd.order_items || []).filter(it => {
-                          if (it.visible_to_customer === false) return false;
-                          const k = it.service_name?.group_id || it.service_name?.ar || it.service_name?.en || null;
-                          return !k || decisions[k] !== 'rejected';
-                        });
-                        const allServicesDone = approvedItems.length > 0 && approvedItems.every(it => it.is_done);
+                        // Parts, Labor and the combined Total button all open the moment the
+                        // customer approves the quotation — no more waiting on job status or
+                        // on the other one being paid first (previously Labor needed the job
+                        // 'ready'/'delivered'/'completed' AND Parts already settled).
+                        const canPayBase = relOrd.customer_approved && relOrd.status !== 'draft' && !towingPending;
                         const outstandingTypes = [
                           ...(partsSettled ? [] : ['parts']),
                           ...(laborCoveredByPayments ? [] : ['labor']),
@@ -4800,10 +4793,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                               label={(isRtl ? 'قطع الغيار' : 'Parts') + (partsIsPartial ? (isRtl ? ' (المتبقي)' : ' (Remaining)') : '')}
                               amount={partsDisplayAmount}
                               status={partsEffectiveStatus}
-                              // Once every service is already done, paying parts on their own no
-                              // longer makes sense (the whole point was paying before work started) —
-                              // the combined "Pay Remaining" button below covers everything at once instead.
-                              canPay={relOrd.customer_approved && relOrd.status !== 'draft' && !partsCoveredByPayments && !towingPending && !allServicesDone}
+                              canPay={canPayBase && !partsCoveredByPayments}
                               onPay={() => setPayMethodModal({ orderId: relOrd.id, types: ['parts'], amount: partsDisplayAmount })}
                               tr={tr} isRtl={isRtl} cc={cc}
                             />
@@ -4813,18 +4803,18 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                               label={(isRtl ? 'شغل اليد' : 'Labor') + (laborIsPartial ? (isRtl ? ' (المتبقي)' : ' (Remaining)') : '')}
                               amount={laborDisplayAmount}
                               status={laborEffectiveStatus}
-                              canPay={['ready','delivered','completed'].includes(relOrd.status) && partsSettled && !laborCoveredByPayments && !towingPending}
-                              disabledHint={towingPending ? (isRtl ? 'ادفعي تكلفة الساطحة أولاً' : 'Pay the flatbed fee first') : (isRtl ? 'متاح بعد انتهاء الإصلاح ودفع القطع' : 'Available after repair & parts paid')}
+                              canPay={canPayBase && !laborCoveredByPayments}
+                              disabledHint={towingPending ? (isRtl ? 'ادفعي تكلفة الساطحة أولاً' : 'Pay the flatbed fee first') : undefined}
                               onPay={() => setPayMethodModal({ orderId: relOrd.id, types: ['labor'], amount: laborDisplayAmount })}
                               tr={tr} isRtl={isRtl} cc={cc}
                             />
                           )}
-                          {allServicesDone && outstandingTypes.length > 0 && !towingPending && (
+                          {canPayBase && outstandingTypes.length > 0 && (
                             <div className="px-4 py-3" style={{ borderTop:`1px solid ${cc?cc.div:C.border}` }}>
                               <button onClick={() => setPayMethodModal({ orderId: relOrd.id, types: outstandingTypes, amount: (outstandingTypes.includes('parts')?partsDisplayAmount:0) + (outstandingTypes.includes('labor')?laborDisplayAmount:0) })}
                                 className="w-full py-2.5 rounded-xl text-sm font-black transition-all active:scale-95 hover:brightness-110"
                                 style={{ background: cc?cc.fg:C.gold, color: cc?cc.bg:C.btnTxt }}>
-                                {tr.pmPayRemaining}
+                                {isRtl ? 'ادفع الإجمالي' : 'Pay Total'}
                               </button>
                             </div>
                           )}
