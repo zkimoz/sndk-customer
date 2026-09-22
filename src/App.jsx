@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from './supabaseClient';
 import { useJsApiLoader, GoogleMap, Marker, Polyline } from '@react-google-maps/api';
 import {
@@ -758,8 +758,14 @@ const COMING_SOON_CAT_NAMES = new Set([
   'إصلاح حوادث', 'Collision Repair',
   'عناية بالسيارات', 'Car Care',
   'إكسسوارات', 'Accessories',
-  'تجديد استمارة السيارة', 'Car Registration Renewal',
 ]);
+// Car registration renewal is its own flow (RenewalFlowView) — authorization
+// letter + two signatures + a fixed fee — not a sub-services accordion, so
+// its tile/row routes straight into that instead of expanding, same way
+// spare parts does.
+const RENEWAL_CAT_NAMES = new Set(['تجديد استمارة السيارة', 'Car Registration Renewal']);
+const RENEWAL_FEE = 250;
+const RENEWAL_FAIL_DISCOUNT = 50;
 const enrichCat = (cat, idx) => {
   const style = CAT_STYLE[cat.name?.ar] || CAT_STYLE[cat.name?.en]
     || DEFAULT_CAT_STYLES[idx % DEFAULT_CAT_STYLES.length];
@@ -843,6 +849,8 @@ const publishedJobCard = (jc) => {
     workshop_notes_videos: snap.workshop_notes_videos || '[]',
     computer_scan_urls: snap.computer_scan_urls || '[]',
     customer_complaints: snap.customer_complaints || null,
+    inspection_result: snap.inspection_result || null,
+    inspection_image_urls: snap.inspection_image_urls || '[]',
   };
 };
 
@@ -1201,6 +1209,10 @@ export default function App() {
     if (!user) { setAuthModal('signin'); return; }
     setPage('parts'); setMenuOpen(false);
   };
+  const goRenewal  = () => {
+    if (!user) { setAuthModal('signin'); return; }
+    setPage('renewal'); setMenuOpen(false);
+  };
   const goProfile  = () => {
     if (!user) { setAuthModal('signin'); return; }
     setPage('profile'); setMenuOpen(false);
@@ -1397,8 +1409,9 @@ export default function App() {
 
           {/* Page Content */}
           <main className="flex-1 overflow-y-auto pb-24 md:pb-8">
-            {page==='home'    && <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements} goOrders={goOrders} goParts={goParts} pendingQuotCount={pendingQuotCount}/>}
-            {page==='services'&& <ServicesView lang={lang} tr={tr} isRtl={isRtl} user={user} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} theme={theme} goParts={goParts}/>}
+            {page==='home'    && <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements} goOrders={goOrders} goParts={goParts} goRenewal={goRenewal} pendingQuotCount={pendingQuotCount}/>}
+            {page==='services'&& <ServicesView lang={lang} tr={tr} isRtl={isRtl} user={user} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} theme={theme} goParts={goParts} goRenewal={goRenewal}/>}
+            {page==='renewal' && user && <RenewalFlowView key="renewal" lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories} timeSlots={timeSlots} serviceCategories={serviceCategories} allSubServices={allSubServices} goHome={goHome} goOrders={goOrders}/>}
             {page==='profile' && user && <ProfileView lang={lang} tr={tr} isRtl={isRtl} profile={profile} user={user} onBook={(car)=>bookFromProfile(car)} goServices={goServices} goOrders={goOrders} onProfileUpdated={()=>fetchProfile(user.id)} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories}/>}
             {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount} theme={theme} highlightJobNumber={deepLinkJobNumber}/>}
             {page==='contact' && <ContactView isRtl={isRtl}/>}
@@ -1653,7 +1666,7 @@ const parseServices = (st) => {
   return null;
 };
 
-function SignatureModal({ isRtl, theme, hasParts, onConfirm, onClose }) {
+function SignatureModal({ isRtl, theme, hasParts, onConfirm, onClose, title, subtitle, confirmLabel }) {
   const canvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [mode, setMode] = useState('draw');
@@ -1743,8 +1756,8 @@ function SignatureModal({ isRtl, theme, hasParts, onConfirm, onClose }) {
         style={{ background:mc.bg, border:'1px solid rgba(138,21,56,0.45)', boxShadow:'0 25px 60px rgba(0,0,0,0.6)' }}>
         <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor:mc.div }}>
           <div>
-            <h3 className="font-black text-base" style={{ color:mc.txt }}>{isRtl ? 'توقيع الموافقة' : 'Approval Signature'}</h3>
-            <p className="text-xs mt-0.5" style={{ color:mc.sub }}>{isRtl ? 'وقّع للتأكيد على موافقتك' : 'Sign to confirm your approval'}</p>
+            <h3 className="font-black text-base" style={{ color:mc.txt }}>{title || (isRtl ? 'توقيع الموافقة' : 'Approval Signature')}</h3>
+            <p className="text-xs mt-0.5" style={{ color:mc.sub }}>{subtitle || (isRtl ? 'وقّع للتأكيد على موافقتك' : 'Sign to confirm your approval')}</p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg transition-all" style={{ color:mc.sub }}>
             <X size={18}/>
@@ -1809,7 +1822,7 @@ function SignatureModal({ isRtl, theme, hasParts, onConfirm, onClose }) {
           <button onClick={confirm} disabled={saving} className="w-full py-3.5 rounded-xl font-black text-sm transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60" style={{ background:'#8A1538', color:'#fff' }}>
             {saving
               ? <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"/>{isRtl ? 'جاري الحفظ...' : 'Saving...'}</>
-              : isRtl ? '✅ تأكيد الموافقة والتوقيع' : '✅ Confirm Approval & Sign'
+              : confirmLabel || (isRtl ? '✅ تأكيد الموافقة والتوقيع' : '✅ Confirm Approval & Sign')
             }
           </button>
         </div>
@@ -2460,7 +2473,7 @@ function openQuotationPDF(order, linked, profile, jobCard, carBrands = []) {
     return `<tr>
       <td style="color:#999;font-size:11px">${qRowIdx}</td>
       <td>
-        <span class="badge ${item.item_type==='labor'?'badge-labor':'badge-part'}">${item.item_type==='labor'?'عمالة / Labor':'قطعة / Part'}</span><br>
+        <span class="badge ${item.item_type==='labor'?'badge-labor':'badge-part'}">${item.item_name?.insurance?'تأمين / Insurance':item.item_type==='labor'?'عمالة / Labor':'قطعة / Part'}</span><br>
         <span style="font-weight:600">${nameAr}</span>
         ${nameEn && nameEn !== nameAr ? `<span style="font-size:11px;color:#666;margin-right:5px">(${nameEn})</span>` : ''}
         ${item.part_number ? `<span style="font-size:10px;color:#aaa;display:block;font-family:monospace">${item.part_number}</span>` : ''}
@@ -2646,7 +2659,7 @@ ${rejectedItems.length > 0 ? `
         return `<tr>
           <td style="color:#999;font-size:11px">${i+1}</td>
           <td>
-            <span class="badge ${item.item_type==='labor'?'badge-labor':'badge-part'}">${item.item_type==='labor'?'عمالة / Labor':'قطعة / Part'}</span><br>
+            <span class="badge ${item.item_type==='labor'?'badge-labor':'badge-part'}">${item.item_name?.insurance?'تأمين / Insurance':item.item_type==='labor'?'عمالة / Labor':'قطعة / Part'}</span><br>
             <span style="font-weight:600;text-decoration:line-through;color:#94a3b8">${nameAr}</span>
             ${nameEn && nameEn !== nameAr ? `<span style="font-size:11px;color:#94a3b8;margin-right:5px;text-decoration:line-through">(${nameEn})</span>` : ''}
           </td>
@@ -2777,8 +2790,8 @@ function printCustomerInvoice(jobCard, appt, order, profile, brandsData = [], ca
       </td>
       <td style="padding:10px 14px;text-align:center">
         <span style="display:inline-flex;flex-direction:column;align-items:center;gap:1px">
-          <span style="padding:1px 7px;border-radius:999px;font-size:9px;font-weight:700;background:${isPart?'#dbeafe':'#dcfce7'};color:${isPart?'#1d4ed8':'#166534'}">${isPart?'قطعة':'عمالة'}</span>
-          <span style="font-size:9px;color:#94a3b8">${isPart?'Part':'Labor'}</span>
+          <span style="padding:1px 7px;border-radius:999px;font-size:9px;font-weight:700;background:${isPart?'#dbeafe':'#dcfce7'};color:${isPart?'#1d4ed8':'#166534'}">${isPart?'قطعة':(item.item_name?.insurance?'تأمين':'عمالة')}</span>
+          <span style="font-size:9px;color:#94a3b8">${isPart?'Part':(item.item_name?.insurance?'Insurance':'Labor')}</span>
         </span>
       </td>
       <td style="padding:10px 14px;text-align:center;font-weight:600">${qty}</td>
@@ -4245,6 +4258,36 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                         );
                       })()}
 
+                      {/* ── تجديد الاستمارة: التفويض + نتيجة الفحص الفني ── */}
+                      {(a.renewal_request?.authorization || jc.inspection_result) && (() => {
+                        let inspectionPhotos = [];
+                        try { inspectionPhotos = JSON.parse(jc.inspection_image_urls || '[]'); } catch {}
+                        return (
+                          <div className="px-4 pb-1 space-y-1.5">
+                            {a.renewal_request?.authorization && (
+                              <button onClick={() => openAuthorizationLetter(a.renewal_request.authorization)}
+                                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold transition-all active:scale-[0.98]"
+                                style={{ background:'rgba(0,0,0,0.10)', color:cc.txt }}>
+                                <FileImage size={14}/>{isRtl ? 'عرض خطاب التفويض' : 'View authorization letter'}
+                              </button>
+                            )}
+                            {jc.inspection_result && (
+                              <div className="rounded-xl px-3 py-2 text-sm font-bold" style={{ background:'rgba(0,0,0,0.10)', color:cc.txt }}>
+                                <span>{isRtl ? 'نتيجة الفحص الفني: ' : 'Technical inspection: '}</span>
+                                <span style={{ color: jc.inspection_result === 'passed' ? '#4ade80' : '#f87171' }}>
+                                  {jc.inspection_result === 'passed' ? (isRtl ? 'نجحت ✅' : 'Passed ✅') : (isRtl ? 'رسبت ❌' : 'Failed ❌')}
+                                </span>
+                                {inspectionPhotos.map((url, i) => (
+                                  <a key={i} href={url} target="_blank" rel="noreferrer" className="block mt-1.5 underline font-semibold" style={{ color:cc.fg }}>
+                                    🖼️ {isRtl ? `صورة الفحص الفني ${inspectionPhotos.length > 1 ? i + 1 : ''}` : `Inspection photo ${inspectionPhotos.length > 1 ? i + 1 : ''}`}
+                                  </a>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
                       {/* ── احجز موعد الآن — طلب عرض سعر تمت الموافقة عليه ولسه من غير موعد ── */}
                       {a.is_quote_request && !a.appointment_date && relOrd?.customer_approved && (
                         <div className="mx-4 mb-3 p-3 rounded-xl flex items-center justify-between gap-3 flex-wrap" style={{ background:`${C.gold}18`, border:`1px solid ${C.gold}50` }}>
@@ -4386,7 +4429,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                                             return (
                                             <div key={`l-${i}`} className="flex items-center justify-between gap-2 text-xs">
                                               <span style={{ color:cc.sub }}>
-                                                <span className="opacity-70">{isRtl?'عمالة —':'Labor —'}</span> {isRtl?(it.item_name?.ar||it.item_name?.en):(it.item_name?.en||it.item_name?.ar)}
+                                                <span className="opacity-70">{it.item_name?.insurance ? (isRtl?'تأمين —':'Insurance —') : (isRtl?'عمالة —':'Labor —')}</span> {isRtl?(it.item_name?.ar||it.item_name?.en):(it.item_name?.en||it.item_name?.ar)}
                                               </span>
                                               <span className="flex-shrink-0 flex items-center gap-1.5">
                                                 {hasDiscount && <span className="line-through opacity-50" style={{ color:cc.sub }}>{originalLineTotal(it).toFixed(3)}</span>}
@@ -5108,13 +5151,14 @@ const ANN_PRESETS = {
 // cart/booking flow.
 const PARTS_CAT_NAMES = new Set(['توفير قطع غيار', 'Spare Parts']);
 
-function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, serviceCategories, homeAnnouncements, user, goOrders, goParts, pendingQuotCount }) {
+function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, serviceCategories, homeAnnouncements, user, goOrders, goParts, goRenewal, pendingQuotCount }) {
   const cats = serviceCategories.map(enrichCat);
   const goToCat = (cat) => {
     // Only routes into the real parts flow once staff have turned off
     // "Coming Soon" for this category — until then it behaves exactly like
     // the other not-yet-live tiles (still visually shows the overlay).
     if (!cat.comingSoon && (PARTS_CAT_NAMES.has(cat.ar) || PARTS_CAT_NAMES.has(cat.en))) { goParts?.(); return; }
+    if (RENEWAL_CAT_NAMES.has(cat.ar) || RENEWAL_CAT_NAMES.has(cat.en)) { goRenewal?.(); return; }
     setFormData(p => ({ ...p, serviceKey: cat.id, serviceName: cat.ar }));
     goServices?.();
   };
@@ -5269,7 +5313,7 @@ function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, service
 }
 
 // ── SERVICES VIEW ──────────────────────────────────────────────────────
-function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCategories, allSubServices, cart, addToCart, removeFromCart, theme, goParts }) {
+function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCategories, allSubServices, cart, addToCart, removeFromCart, theme, goParts, goRenewal }) {
   const btnAccent = theme === 'light' ? '#8A1538' : C.gold;
   const loading = serviceCategories.length === 0;
   const [unsureOpenFor, setUnsureOpenFor] = useState(null); // category id whose "describe your fault" box is open
@@ -5316,8 +5360,10 @@ function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCat
           // instead of expanding, same as the home page tile.
           const isPartsCat = PARTS_CAT_NAMES.has(cat.name?.ar) || PARTS_CAT_NAMES.has(cat.name?.en);
           const isComingSoon = COMING_SOON_CAT_NAMES.has(cat.name?.ar) || COMING_SOON_CAT_NAMES.has(cat.name?.en);
+          const isRenewalCat = RENEWAL_CAT_NAMES.has(cat.name?.ar) || RENEWAL_CAT_NAMES.has(cat.name?.en);
           const onRowClick = () => {
             if (isPartsCat && !isComingSoon) { goParts?.(); return; }
+            if (isRenewalCat) { goRenewal?.(); return; }
             setExpanded(isOpen?null:cat.id);
           };
           return (
@@ -5336,12 +5382,14 @@ function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCat
                   <p className="text-xs mt-0.5" style={{ color:cc.sub }}>
                     {isPartsCat
                       ? (isRtl ? 'تصفّح القطع واطلب عرض سعر أو القطعة' : 'Browse parts and request a quote or the part')
+                      : isRenewalCat
+                      ? (isRtl ? `نجدد استمارتك نيابةً عنك — ${RENEWAL_FEE} ر.ق` : `We renew your registration for you — QAR ${RENEWAL_FEE}`)
                       : <>{subs.length} {isRtl?'خدمة فرعية':'sub-services'}
                           {catInCartCount > 0 && <span style={{ color:cc.fg }}> · {catInCartCount} {isRtl?'مضافة':'added'}</span>}
                         </>}
                   </p>
                 </div>
-                <div className="transition-transform" style={{ transform:(isOpen&&!isPartsCat)?'rotate(90deg)':'', color:cc.sub }}>
+                <div className="transition-transform" style={{ transform:(isOpen&&!isPartsCat&&!isRenewalCat)?'rotate(90deg)':'', color:cc.sub }}>
                   {isRtl?<ChevronLeft size={18}/>:<ChevronRight size={18}/>}
                 </div>
               </button>
@@ -6688,7 +6736,7 @@ function RejectedServiceFollowupModal({ service, isRtl, tr, onClose, onAdd }) {
   );
 }
 
-function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user, carBrands, carCategories, brandCategories, isRtl, addToCart }) {
+function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user, carBrands, carCategories, brandCategories, isRtl, addToCart, skipFollowup = false }) {
   const [userCars, setUserCars]       = useState([]);
   const [carsLoading, setCarsLoading] = useState(false);
   const [addingNew, setAddingNew]     = useState(false);
@@ -6719,7 +6767,10 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
       carCategoryKey: car.car_category || '',
       carModel: car.production_year?.toString() || '',
     }));
-    findRejectedServiceFollowup(car.id).then(setRejectedFollowup);
+    // The registration-renewal flow reuses this step just to pick a car —
+    // it has no cart to carry a rejected service into, so don't surface (and
+    // silently mark as already-asked) that follow-up prompt there.
+    if (!skipFollowup) findRejectedServiceFollowup(car.id).then(setRejectedFollowup);
   };
 
   // Marks the rejection as followed-up regardless of which of the three
@@ -6935,6 +6986,456 @@ function DetailsStep({ lang, tr, formData, setFormData, setStep, prevStep, user,
         onClose={closeRejectedFollowup} onAdd={addRejectedFollowupToCart}/>
     )}
     </>
+  );
+}
+
+// ── CAR REGISTRATION RENEWAL (تجديد الاستمارة) ────────────────────────────
+// The customer authorizes SNDK to deal with the Traffic Department on their
+// behalf for this one procedure. Everything they enter/sign lives on the
+// appointment's `renewal_request` jsonb until staff open a job card:
+//   { fee, failed_inspection_discount,
+//     authorization: { full_name, id_number, phone, plate_number,
+//                      chassis_number, car_label, signature_data|signed_by, signed_at },
+//     price_approval: { amount, signature_data|signed_by, signed_at } }
+
+// The letter itself — printed on SNDK's letterhead (main logo header, company
+// stamp at the end), same look as the tax invoice. `preview` drops the
+// print/close bar so it can sit inside an iframe on the page.
+function buildAuthorizationLetterHtml(a, { stampFile = 'company-stamp.jpg', preview = false } = {}) {
+  const origin = window.location.origin;
+  const e = escapeHtml;
+  const d = a.signed_at ? new Date(a.signed_at) : null;
+  const dAr = d ? d.toLocaleDateString('ar-QA', { dateStyle: 'long' }) : '';
+  const dEn = d ? d.toLocaleDateString('en-QA', { dateStyle: 'long' }) : '';
+  const blank = '<span style="display:inline-block;min-width:170px;border-bottom:1px dotted #94a3b8">&nbsp;</span>';
+  const v = x => (x ? `<b>${e(x)}</b>` : blank);
+  const vLtr = x => (x ? `<b dir="ltr" style="unicode-bidi:embed">${e(x)}</b>` : blank);
+  const sig = a.signature_data
+    ? `<img src="${e(a.signature_data)}" alt="signature" style="max-width:190px;max-height:80px;background:#fff;display:block"/>`
+    : a.signed_by
+      ? `<div style="font-family:Georgia,serif;font-style:italic;font-size:20px;color:#1e293b">${e(a.signed_by)}</div>`
+      : '<div style="height:56px;border-bottom:1px dotted #94a3b8;width:190px"></div>';
+  return `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">
+  <title>خطاب تفويض – Authorization Letter</title>
+  <style>
+    @page{size:A4;margin:8mm}
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:${preview ? '#fff' : '#f0f2f5'};padding:${preview ? '0' : '28px'};color:#1e293b;font-size:13px}
+    .page{background:#fff;max-width:800px;margin:0 auto;border-radius:${preview ? '0' : '12px'};overflow:hidden;${preview ? '' : 'box-shadow:0 4px 24px rgba(0,0,0,.1)'}}
+    .header{background:linear-gradient(135deg,#8A1538 0%,#3D0818 100%);padding:18px 30px;display:flex;justify-content:space-between;align-items:center}
+    .tagline{font-size:11px;color:rgba(255,255,255,.65);margin-top:6px;line-height:1.5;text-align:center}
+    .title-ar{font-size:20px;font-weight:900;color:#fff;text-align:left}
+    .title-en{font-size:13px;font-weight:700;color:#D4AF37;margin-top:2px;text-align:left;direction:ltr}
+    .body{padding:22px 34px 8px}
+    .lead{font-weight:800;color:#8A1538;margin-bottom:10px;font-size:14px}
+    .row{margin:7px 0;line-height:1.9}
+    .row .k{color:#64748b;font-size:12px}
+    p.para{line-height:2;margin:14px 0 10px;font-size:13.5px}
+    .box{background:#fafbfc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 16px;margin:8px 0 12px}
+    ul{margin:6px 22px 0 0;line-height:2}
+    .limit{margin:14px 0;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e;line-height:1.8}
+    .sigs{display:flex;justify-content:space-between;gap:20px;margin-top:22px;align-items:flex-end}
+    .sig-box{flex:1}
+    .sig-lbl{font-size:11px;color:#64748b;margin-bottom:6px;font-weight:700}
+    .sig-date{font-size:11px;color:#94a3b8;margin-top:6px}
+    .en{direction:ltr;text-align:left;font-size:11.5px;color:#475569;line-height:1.7;border-top:1px solid #e2e8f0;margin-top:16px;padding-top:12px}
+    .stamp{text-align:left;margin:6px 0 0}
+    .footer{padding:10px 30px;text-align:center;background:#fafbfc;border-top:1px solid #e2e8f0}
+    .footer .co{font-size:10px;color:#94a3b8;line-height:1.8}
+    .action-bar{position:fixed;top:14px;left:14px;right:14px;display:flex;justify-content:space-between;z-index:999}
+    .action-btn{border:none;padding:10px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+    .print-btn{background:#8A1538;color:#fff}.close-btn{background:#fff;color:#8A1538;border:1.5px solid #8A1538}
+    @media print{body{background:#fff;padding:0}.page{box-shadow:none;border-radius:0;max-width:100%}.action-bar{display:none}}
+  </style></head><body>
+  ${preview ? '' : `<div class="action-bar">
+    <button class="action-btn close-btn" onclick="window.close()">✕ إغلاق / Close</button>
+    <button class="action-btn print-btn" onclick="window.print()">🖨️ طباعة / Save as PDF</button>
+  </div>`}
+  <div class="page">
+    <div class="header">
+      <div>
+        <div style="background:#fff;border-radius:8px;padding:6px 14px;display:inline-block"><img src="${origin}/logo-static.png" alt="SNDK" style="height:64px;display:block;margin:0 auto"/></div>
+        <div class="tagline"><div>منصتك لخدمات السيارات</div><div style="direction:ltr">Your Platform for Car Services</div></div>
+      </div>
+      <div><div class="title-ar">خطاب تفويض</div><div class="title-en">Authorization Letter</div></div>
+    </div>
+
+    <div class="body">
+      <div class="lead">أنا الموقّع أدناه:</div>
+      <div class="row"><span class="k">الاسم / Name:</span> ${v(a.full_name)}</div>
+      <div class="row"><span class="k">الرقم الشخصي / ID No.:</span> ${vLtr(a.id_number)}</div>
+      <div class="row"><span class="k">رقم الجوال / Mobile:</span> ${vLtr(a.phone)}</div>
+
+      <p class="para">
+        أفوّض بموجب هذا الخطاب شركة <b>سندك الرقمي لوساطة الخدمات والتجارة الإلكترونية</b> (سجل تجاري رقم 244788)
+        بالتعامل مع الإدارة العامة للمرور بدولة قطر نيابةً عني، وذلك حصرًا لغرض تخليص إجراءات
+        <b>تجديد استمارة (تسجيل) المركبة</b> التالية بياناتها:
+      </p>
+      <div class="box">
+        <div class="row"><span class="k">رقم اللوحة / Plate No.:</span> ${vLtr(a.plate_number)}</div>
+        <div class="row"><span class="k">رقم الشاصية / VIN:</span> ${vLtr(a.chassis_number)}</div>
+        <div class="row"><span class="k">نوع / موديل المركبة / Vehicle:</span> ${v(a.car_label)}</div>
+      </div>
+
+      <div style="font-weight:800;color:#8A1538;margin-top:4px">ويشمل هذا التفويض:</div>
+      <ul>
+        <li>تقديم المستندات اللازمة لتجديد استمارة المركبة المذكورة أعلاه.</li>
+        <li>سداد الرسوم الحكومية المستحقة عن هذا الإجراء.</li>
+        <li>استلام استمارة (بطاقة تسجيل) المركبة بعد تجديدها.</li>
+        <li>التوقيع على أي أوراق أو نماذج رسمية تخص إجراء تجديد الاستمارة فقط دون غيره.</li>
+      </ul>
+      <div class="limit">هذا التفويض مقتصر على إجراء تجديد استمارة المركبة المذكورة أعلاه فقط، ولا يخوّل شركة سندك أي صلاحية أخرى كنقل الملكية أو البيع أو أي تصرف قانوني آخر بالمركبة.</div>
+
+      <div class="sigs">
+        <div class="sig-box">
+          <div class="sig-lbl">توقيع المفوِّض (العميل) / Customer Signature</div>
+          ${sig}
+          <div class="sig-date">${d ? `${dAr} · ${dEn}` : 'التاريخ / Date: ____ / ____ / ________'}</div>
+        </div>
+      </div>
+
+      <div class="en">
+        <b>English Summary.</b> I, the undersigned customer, authorize SNDK Digital Platform for Service Brokerage and
+        E-Commerce (C.R. 244788) to deal with Qatar's General Directorate of Traffic on my behalf, solely to complete the
+        registration (Istimara) renewal of the vehicle above — submitting the required documents, paying the applicable
+        government fees, receiving the renewed registration card and signing forms strictly related to this renewal.
+        This authorization grants no other power, such as ownership transfer, sale or any other legal disposition of the vehicle.
+      </div>
+      <div class="stamp">
+        <img src="${origin}/${stampFile}" alt="SNDK Stamp" style="width:170px;height:170px;object-fit:contain"/>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="co">
+        <div style="font-weight:700;color:#64748b">سندك الرقمي لوساطة الخدمات والتجارة الإلكترونية · SNDK Digital Platform for Service Brokerage and E-Commerce</div>
+        <div>منطقة ٥٥، شارع ٣٤٠، مبنى ٣٩٤، وحدة ٣ · Zone 55, Street 340, Building 394, Unit 3</div>
+        <div>طريق سلوى · Salwa Road</div>
+        <div dir="ltr">📞 66284656 &nbsp;·&nbsp; ✉️ info@sndkqa.com</div>
+        <div style="margin-top:2px">سجل تجاري C.R. : 244788 &nbsp;·&nbsp; رخصة تجارية Commercial License : 336567 &nbsp;·&nbsp; رقم قيد المنشأة Establishment Card : 17-3166-21</div>
+      </div>
+    </div>
+  </div>
+  </body></html>`;
+}
+
+function openAuthorizationLetter(authorization) {
+  const w = window.open('', '_blank');
+  if (w) { w.document.write(buildAuthorizationLetterHtml(authorization)); w.document.close(); }
+}
+
+function RenewalFlowView({ lang, tr, isRtl, user, profile, carBrands, carCategories, brandCategories, timeSlots, serviceCategories, allSubServices, goHome, goOrders }) {
+  // 'car' → 'auth' (authorization letter + signature 1) → 'price' (fee +
+  // signature 2) → 'schedule' → 'review' → 'done'
+  const [stage, setStage] = useState('car');
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    name: profile?.full_name || '', phone: profile?.phone_number || '',
+    carBrandKey:'', carBrandId:null, carCategoryKey:'', carModel:'', carId:null, carPlateNumber:'', carChassisNumber:'',
+    carRegistrationFile:null, carRegistrationFile2:null, serviceKey:'', serviceName:'', subServiceKey:'', subServiceName:'',
+    date:'', timeKey:'', notes:'', isQuoteOnly:false,
+  });
+  const [selectedCar, setSelectedCar] = useState(null); // full cars row when an existing car was picked
+  const [auth, setAuth] = useState({ full_name: profile?.full_name || '', id_number: '', phone: profile?.phone_number || '', plate_number: '', chassis_number: '' });
+  const [authSig, setAuthSig] = useState(null);   // { signature_data, signed_by, signed_at }
+  const [priceSig, setPriceSig] = useState(null); // same shape
+  const [sigModal, setSigModal] = useState(null); // 'auth' | 'price' | null
+  const [regImages, setRegImages] = useState([]); // [{ url, isPdf }]
+  const [openImg, setOpenImg] = useState(null);
+
+  // profile can land a moment after this mounts — fill in whatever's still empty
+  useEffect(() => {
+    if (!profile) return;
+    setAuth(p => ({ ...p, full_name: p.full_name || profile.full_name || '', phone: p.phone || profile.phone_number || '' }));
+  }, [profile]);
+
+  const noop = () => {};
+  const carLabel = [
+    resolveLangName(formData.carBrandKey, carBrands, lang),
+    resolveLangName(formData.carCategoryKey, carCategories, lang),
+    formData.carModel,
+  ].filter(Boolean).join(' · ');
+
+  // The renewal service row from the catalog (exists once the SQL ran) —
+  // used just for its id/name on the appointment; the fee is fixed here.
+  const renewalCat = serviceCategories.find(c => RENEWAL_CAT_NAMES.has(c.name?.ar) || RENEWAL_CAT_NAMES.has(c.name?.en));
+  const renewalSvc = renewalCat ? allSubServices.find(s => s.category_id === renewalCat.id) : null;
+  const renewalName = renewalSvc?.name?.[lang] || renewalSvc?.name?.ar || (isRtl ? 'تجديد استمارة السيارة' : 'Car Registration Renewal');
+  const renewalCatName = renewalCat?.name?.[lang] || renewalCat?.name?.ar || (isRtl ? 'تجديد استمارة السيارة' : 'Car Registration Renewal');
+
+  // Prefill the authorization form once a car is chosen (plate/chassis from
+  // the car's own record, or whatever was typed while adding a new one).
+  const goToAuth = async () => {
+    let car = null;
+    if (formData.carId) {
+      const { data } = await supabase.from('cars').select('*').eq('id', formData.carId).maybeSingle();
+      car = data || null;
+    }
+    setSelectedCar(car);
+    setAuth(p => ({
+      ...p,
+      plate_number: car?.plate_number || formData.carPlateNumber || p.plate_number || '',
+      chassis_number: car?.chassis_number || formData.carChassisNumber || p.chassis_number || '',
+    }));
+    // Registration card photos: the saved ones from the car's record, or a
+    // local preview of the ones just picked (not uploaded until submit).
+    const imgs = [];
+    const push = (url, type) => { if (url) imgs.push({ url, isPdf: /\.pdf($|\?)/i.test(url) || type === 'application/pdf' }); };
+    if (car?.registration_image_url) push(car.registration_image_url);
+    if (car?.registration_image_url_2) push(car.registration_image_url_2);
+    if (formData.carRegistrationFile) push(URL.createObjectURL(formData.carRegistrationFile), formData.carRegistrationFile.type);
+    if (formData.carRegistrationFile2) push(URL.createObjectURL(formData.carRegistrationFile2), formData.carRegistrationFile2.type);
+    setRegImages(imgs);
+    setStage('auth');
+  };
+
+  const authComplete = !!(auth.full_name.trim() && auth.id_number.trim() && auth.phone.trim() && auth.plate_number.trim() && auth.chassis_number.trim());
+  const authorization = {
+    full_name: auth.full_name.trim(), id_number: auth.id_number.trim(), phone: auth.phone.trim(),
+    plate_number: auth.plate_number.trim(), chassis_number: auth.chassis_number.trim(), car_label: carLabel,
+    signature_data: authSig?.signature_data || null, signed_by: authSig?.signed_by || null, signed_at: authSig?.signed_at || null,
+  };
+  const letterHtml = useMemo(() => buildAuthorizationLetterHtml(authorization, { preview: true }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [auth, authSig, carLabel]);
+
+  const onSignature = (which) => async (sigData, sigName) => {
+    const rec = { signature_data: sigData || null, signed_by: sigName || null, signed_at: new Date().toISOString() };
+    if (which === 'auth') setAuthSig(rec); else setPriceSig(rec);
+    setSigModal(null);
+  };
+
+  const submit = async () => {
+    if (!user || loading) return;
+    const today = new Date().toISOString().split('T')[0];
+    if (!formData.date || formData.date < today) { alert(isRtl ? 'من فضلك اختر تاريخ صحيح' : 'Please pick a valid date'); return; }
+    setLoading(true);
+    try {
+      const plateKey = sanitizeForPath(auth.plate_number) || `${Date.now()}`;
+      const uploadSide = async (file, suffix) => {
+        if (!file) return null;
+        const ext = file.name.split('.').pop();
+        const path = `${user.id}/${plateKey}${suffix}.${ext}`;
+        const { error: upErr } = await supabase.storage.from('car-registration').upload(path, file, { upsert: true });
+        if (upErr) throw new Error((isRtl ? 'فشل رفع صورة الاستمارة: ' : 'Failed to upload registration image: ') + upErr.message);
+        const { data: { publicUrl } } = supabase.storage.from('car-registration').getPublicUrl(path);
+        return publicUrl;
+      };
+      let carId = formData.carId;
+      if (!carId) {
+        const registration_image_url = await uploadSide(formData.carRegistrationFile, '');
+        const registration_image_url_2 = await uploadSide(formData.carRegistrationFile2, '-back');
+        const { data: carData, error: carErr } = await supabase.from('cars').insert([{
+          profile_id: user.id, car_type: formData.carBrandKey, car_category: formData.carCategoryKey || null,
+          production_year: parseInt(formData.carModel) || null,
+          plate_number: auth.plate_number.trim() || null, chassis_number: auth.chassis_number.trim() || null,
+          registration_image_url, registration_image_url_2,
+        }]).select('id').single();
+        if (carErr) throw carErr;
+        carId = carData.id;
+      } else if (formData.carRegistrationFile) {
+        const registration_image_url = await uploadSide(formData.carRegistrationFile, '');
+        const registration_image_url_2 = await uploadSide(formData.carRegistrationFile2, '-back');
+        await supabase.from('cars').update({ registration_image_url, ...(registration_image_url_2 ? { registration_image_url_2 } : {}) }).eq('id', carId);
+      }
+      const renewal_request = {
+        version: 1, fee: RENEWAL_FEE, failed_inspection_discount: RENEWAL_FAIL_DISCOUNT,
+        authorization,
+        price_approval: { amount: RENEWAL_FEE, ...priceSig },
+      };
+      const serviceType = JSON.stringify([{ id: renewalSvc?.id || 'car-registration-renewal', name: renewalName, catName: renewalCatName }]);
+      const { error: apptErr } = await supabase.from('appointments').insert([{
+        profile_id: user.id, car_id: carId,
+        appointment_date: formData.date, appointment_time: formData.timeKey,
+        is_quote_request: false, service_type: serviceType,
+        customer_notes: formData.notes, status: 'pending', renewal_request,
+      }]);
+      if (apptErr) throw apptErr;
+      supabase.functions.invoke('clever-endpoint', {
+        body: {
+          event: 'new_booking', customerName: profile?.full_name || auth.full_name,
+          serviceLabel: renewalName, carLabel, appointmentDate: formData.date, appointmentTime: formData.timeKey,
+        },
+      }).then(({ error }) => { if (error) console.error('notify-staff failed:', error); }).catch(e => console.error('notify-staff failed:', e));
+      setStage('done');
+    } catch (err) { alert(tr.errorMsg + ': ' + err.message); }
+    finally { setLoading(false); }
+  };
+
+  const slot = timeSlots.find(s => s.slot_key === formData.timeKey);
+  const inputStyle = { background: C.input, border: `1px solid ${C.border}`, textAlign: isRtl ? 'right' : 'left' };
+  const stepLabels = isRtl
+    ? { car:'السيارة', auth:'التفويض', price:'المبلغ', schedule:'الموعد', review:'المراجعة' }
+    : { car:'Car', auth:'Authorization', price:'Amount', schedule:'Time', review:'Review' };
+  const order = ['car', 'auth', 'price', 'schedule', 'review'];
+  const idx = order.indexOf(stage);
+
+  if (stage === 'done') {
+    return <SuccessStep tr={tr} isRtl={isRtl} name={profile?.full_name || auth.full_name} isQuoteOnly={false} resetAll={goHome} goOrders={goOrders}/>;
+  }
+
+  const SigStatus = ({ rec }) => rec ? (
+    <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold" style={{ background:'rgba(34,197,94,0.12)', color:'#16a34a', border:'1px solid rgba(34,197,94,0.3)' }}>
+      <CheckCircle2 size={14}/>{isRtl ? 'تم التوقيع' : 'Signed'}
+    </div>
+  ) : null;
+
+  return (
+    <div>
+      {/* Step indicator */}
+      <div className="px-4 md:px-8 pt-4 max-w-lg md:mx-auto flex items-center gap-1.5 overflow-x-auto">
+        {order.map((k, i) => (
+          <React.Fragment key={k}>
+            <span className="text-[10px] font-black px-2.5 py-1 rounded-full whitespace-nowrap"
+              style={i === idx ? { background:C.gold, color:C.btnTxt } : i < idx ? { background:`${C.gold}25`, color:C.gold } : { background:'rgba(255,255,255,0.06)', color:C.dim }}>
+              {i < idx ? '✓ ' : ''}{stepLabels[k]}
+            </span>
+            {i < order.length - 1 && <span className="w-3 h-px flex-shrink-0" style={{ background:C.border }}/>}
+          </React.Fragment>
+        ))}
+      </div>
+
+      {stage === 'car' && (
+        <DetailsStep lang={lang} tr={tr} formData={formData} setFormData={setFormData} setStep={() => goToAuth()} prevStep={goHome}
+          user={user} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories} isRtl={isRtl}
+          addToCart={noop} skipFollowup/>
+      )}
+
+      {stage === 'auth' && (
+        <FormShell title={isRtl ? 'التفويض بتجديد الاستمارة' : 'Registration Renewal Authorization'}>
+          <div className="rounded-2xl p-4" style={{ background:C.card, border:`1px solid ${C.gold}40` }}>
+            <p className="font-black text-sm" style={{ color:C.cardText }}>{carLabel || '—'}</p>
+          </div>
+
+          {/* The registration card photos already on this car's record */}
+          <div>
+            <p className="text-xs font-bold mb-2" style={{ color:C.muted }}>{isRtl ? 'صور استمارة السيارة' : 'Vehicle registration card'}</p>
+            {regImages.length === 0 ? (
+              <p className="text-xs" style={{ color:'#f87171' }}>{isRtl ? 'لا توجد صورة استمارة لهذه السيارة' : 'No registration photo on this car'}</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {regImages.map((im, i) => im.isPdf ? (
+                  <a key={i} href={im.url} target="_blank" rel="noreferrer" className="rounded-xl p-6 text-center text-xs font-bold" style={{ background:C.card, border:`1px solid ${C.border}`, color:C.cardText }}>
+                    📄 {isRtl ? 'عرض الملف' : 'View file'}
+                  </a>
+                ) : (
+                  <button key={i} type="button" onClick={() => setOpenImg(im.url)} className="rounded-xl overflow-hidden" style={{ border:`1px solid ${C.border}`, background:C.card }}>
+                    <img src={im.url} alt="" className="w-full h-32 object-cover"/>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <p className="text-xs leading-relaxed" style={{ color:C.muted }}>
+            {isRtl ? 'أدخل البيانات التالية وسيظهر لك خطاب التفويض كاملًا لتوقّع عليه.' : 'Enter the details below and the full authorization letter will appear for you to sign.'}
+          </p>
+          {[
+            { k:'full_name', ar:'الاسم الكامل', en:'Full name', ltr:false },
+            { k:'id_number', ar:'الرقم الشخصي (البطاقة)', en:'ID number (QID)', ltr:true, num:true },
+            { k:'phone', ar:'رقم الجوال', en:'Mobile number', ltr:true, num:true },
+            { k:'plate_number', ar:'رقم لوحة السيارة', en:'Plate number', ltr:true },
+            { k:'chassis_number', ar:'رقم الشاصية (VIN)', en:'Chassis number (VIN)', ltr:true },
+          ].map(f => (
+            <Field key={f.k} label={<>{isRtl ? f.ar : f.en} <span style={{ color:'#f87171' }}>*</span></>}>
+              <input type="text" dir={f.ltr ? 'ltr' : undefined} inputMode={f.num ? 'numeric' : undefined} value={auth[f.k]}
+                onChange={e => setAuth(p => ({ ...p, [f.k]: f.k === 'chassis_number' ? e.target.value.toUpperCase() : e.target.value }))}
+                className={C.inputCls} style={inputStyle}
+                onFocus={e => e.target.style.borderColor = C.borderFocus} onBlur={e => e.target.style.borderColor = C.border}/>
+            </Field>
+          ))}
+
+          {authComplete && (
+            <div className="space-y-3">
+              <p className="text-xs font-bold" style={{ color:C.muted }}>{isRtl ? 'خطاب التفويض' : 'Authorization letter'}</p>
+              <iframe title="authorization" srcDoc={letterHtml} className="w-full rounded-xl" style={{ height:'62vh', minHeight:420, background:'#fff', border:`1px solid ${C.border}` }}/>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => openAuthorizationLetter(authorization)}
+                  className="flex-1 py-2.5 rounded-xl text-xs font-bold" style={{ border:`1px solid ${C.border}`, color:C.muted }}>
+                  {isRtl ? 'عرض بحجم كامل / طباعة' : 'Full view / Print'}
+                </button>
+                <button type="button" onClick={() => setSigModal('auth')}
+                  className="flex-1 py-2.5 rounded-xl text-xs font-black" style={{ background:'#8A1538', color:'#fff' }}>
+                  ✍️ {authSig ? (isRtl ? 'تعديل التوقيع' : 'Re-sign') : (isRtl ? 'وقّع على التفويض' : 'Sign the authorization')}
+                </button>
+              </div>
+              <SigStatus rec={authSig}/>
+            </div>
+          )}
+          <NavBtns tr={tr} onBack={() => setStage('car')} onNext={() => setStage('price')} canNext={authComplete && !!authSig}/>
+        </FormShell>
+      )}
+
+      {stage === 'price' && (
+        <FormShell title={isRtl ? 'المبلغ والموافقة' : 'Amount & approval'}>
+          <div className="rounded-2xl overflow-hidden" style={{ background:C.card, border:`1px solid ${C.border}` }}>
+            <div className="px-5 py-4 flex items-center justify-between gap-3" style={{ borderBottom:`1px solid ${C.cardText}14` }}>
+              <div>
+                <p className="font-black text-sm" style={{ color:C.cardText }}>{renewalName}</p>
+                <p className="text-xs mt-0.5" style={{ color:C.cardMuted }}>{carLabel}</p>
+              </div>
+              <p className="font-black text-lg" dir="ltr" style={{ color:C.cardText }}>{RENEWAL_FEE.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</p>
+            </div>
+            <div className="px-5 py-3 text-xs leading-relaxed" style={{ color:C.cardMuted }}>
+              {isRtl
+                ? `في حالة رسوب السيارة في الفحص الفني وطلبك من سندك إصلاح أسباب الرسوب، يُخصم ${RENEWAL_FAIL_DISCOUNT} ر.ق من تكلفة الإصلاح.`
+                : `If the car fails the technical inspection and you ask SNDK to fix the failure reasons, QAR ${RENEWAL_FAIL_DISCOUNT} is deducted from the repair cost.`}
+            </div>
+          </div>
+          <button type="button" onClick={() => setSigModal('price')}
+            className="w-full py-3.5 rounded-xl text-sm font-black" style={{ background:'#8A1538', color:'#fff' }}>
+            ✍️ {priceSig ? (isRtl ? 'تعديل التوقيع' : 'Re-sign') : (isRtl ? 'أوافق على المبلغ — وقّع' : 'I approve the amount — sign')}
+          </button>
+          <SigStatus rec={priceSig}/>
+          <NavBtns tr={tr} onBack={() => setStage('auth')} onNext={() => setStage('schedule')} canNext={!!priceSig}/>
+        </FormShell>
+      )}
+
+      {stage === 'schedule' && (
+        <ScheduleStep lang={lang} tr={tr} formData={formData} setFormData={setFormData} setStep={() => setStage('review')} prevStep={() => setStage('price')} timeSlots={timeSlots}/>
+      )}
+
+      {stage === 'review' && (
+        <FormShell title={tr.reviewTitle}>
+          <div className="rounded-2xl overflow-hidden" style={{ background:C.card, border:`1px solid ${C.border}` }}>
+            {[
+              { label: tr.service, value: `${renewalName} — ${RENEWAL_FEE.toFixed(3)} ${isRtl ? 'ر.ق' : 'QAR'}` },
+              { label: tr.customer, value: `${auth.full_name}  ·  +974 ${auth.phone}` },
+              { label: tr.car, value: carLabel || '—' },
+              { label: isRtl ? 'رقم اللوحة' : 'Plate', value: auth.plate_number },
+              { label: tr.apptLabel, value: `${formData.date}  ·  ${slot ? (isRtl ? slot.label_ar : (slot.label_en || slot.label_ar)) : ''}` },
+              { label: isRtl ? 'التوقيعات' : 'Signatures', value: isRtl ? 'تفويض + موافقة على المبلغ ✓' : 'Authorization + amount approval ✓' },
+              ...(formData.notes ? [{ label: tr.notes, value: formData.notes }] : []),
+            ].map((row, i, arr) => (
+              <div key={i} className="flex items-start justify-between gap-4 px-5 py-4" style={{ borderBottom: i < arr.length - 1 ? `1px solid ${C.cardText}14` : 'none' }}>
+                <span className="text-sm flex-shrink-0" style={{ color:C.cardMuted }}>{row.label}</span>
+                <span className="text-sm font-semibold text-end" style={{ color:C.cardText }}>{row.value}</span>
+              </div>
+            ))}
+          </div>
+          <button onClick={submit} disabled={loading}
+            className="w-full py-4 rounded-xl font-black text-[15px] tracking-wide transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+            style={{ background:C.gold, color:C.btnTxt, boxShadow:`0 0 28px ${C.gold}50` }}>
+            {loading ? <><Loader2 size={17} className="animate-spin"/>{tr.confirming}</> : tr.confirm}
+          </button>
+          <button onClick={() => setStage('schedule')} className="w-full py-3.5 rounded-xl font-medium text-sm" style={{ border:`1px solid ${C.border}`, color:C.muted }}>{tr.edit}</button>
+        </FormShell>
+      )}
+
+      {openImg && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background:'rgba(0,0,0,0.85)' }} onClick={() => setOpenImg(null)}>
+          <img src={openImg} alt="" className="max-w-full max-h-full rounded-xl"/>
+        </div>
+      )}
+      {sigModal && (
+        <SignatureModal isRtl={isRtl} theme="dark" hasParts={false} onClose={() => setSigModal(null)} onConfirm={onSignature(sigModal)}
+          title={sigModal === 'auth' ? (isRtl ? 'توقيع التفويض' : 'Sign the authorization') : (isRtl ? 'توقيع الموافقة على المبلغ' : 'Sign the amount approval')}
+          subtitle={sigModal === 'auth'
+            ? (isRtl ? 'وقّع لتفوّض سندك بتجديد استمارة سيارتك' : 'Sign to authorize SNDK to renew your registration')
+            : (isRtl ? `وقّع للموافقة على مبلغ ${RENEWAL_FEE} ر.ق` : `Sign to approve the QAR ${RENEWAL_FEE} amount`)}
+          confirmLabel={isRtl ? '✅ تأكيد التوقيع' : '✅ Confirm signature'}/>
+      )}
+    </div>
   );
 }
 
