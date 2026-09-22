@@ -766,6 +766,10 @@ const COMING_SOON_CAT_NAMES = new Set([
 const RENEWAL_CAT_NAMES = new Set(['تجديد استمارة السيارة', 'Car Registration Renewal']);
 const RENEWAL_FEE = 250;
 const RENEWAL_FAIL_DISCOUNT = 50;
+// Informational only — shown to the customer during booking so they know
+// the insurance cost upfront if the car passes; staff still type the real
+// price on the insurance line by hand once they actually add it.
+const RENEWAL_INSURANCE_PRICES = { 4: 401, 6: 601, 8: 801 };
 // True for an order_item's service_name — used to detect staff having added
 // the renewal service straight onto a job card (walk-in) rather than the
 // customer having booked it through RenewalFlowView above, which is the
@@ -7527,6 +7531,13 @@ function RenewalFlowView({ lang, tr, isRtl, user, profile, carBrands, carCategor
               {isRtl
                 ? `في حالة رسوب السيارة في الفحص الفني وطلبك من سندك إصلاح أسباب الرسوب، يُخصم ${RENEWAL_FAIL_DISCOUNT} ر.ق من تكلفة الإصلاح.`
                 : `If the car fails the technical inspection and you ask SNDK to fix the failure reasons, QAR ${RENEWAL_FAIL_DISCOUNT} is deducted from the repair cost.`}
+            </div>
+            {/* Insurance cost note — always shown in both languages together
+                (not just the current UI language), same as every other
+                bilingual "item — Insurance" label in the app. */}
+            <div className="px-5 py-3 text-xs leading-relaxed space-y-1" style={{ color:C.cardMuted, borderTop:`1px solid ${C.cardText}14` }}>
+              <p>🛡️ ملاحظة: في حالة نجاح السيارة في الفحص الفني، تكون تكلفة التأمين: {RENEWAL_INSURANCE_PRICES[4]} ر.ق للمركبات ٤ سلندر، {RENEWAL_INSURANCE_PRICES[6]} ر.ق للمركبات ٦ سلندر، {RENEWAL_INSURANCE_PRICES[8]} ر.ق للمركبات ٨ سلندر.</p>
+              <p>🛡️ Note: If the car passes the technical inspection, insurance cost is QAR {RENEWAL_INSURANCE_PRICES[4]} for 4-cylinder vehicles, QAR {RENEWAL_INSURANCE_PRICES[6]} for 6-cylinder, QAR {RENEWAL_INSURANCE_PRICES[8]} for 8-cylinder.</p>
             </div>
           </div>
           <button type="button" onClick={() => setSigModal('price')}
