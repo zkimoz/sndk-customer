@@ -766,6 +766,11 @@ const COMING_SOON_CAT_NAMES = new Set([
 const RENEWAL_CAT_NAMES = new Set(['تجديد استمارة السيارة', 'Car Registration Renewal']);
 const RENEWAL_FEE = 250;
 const RENEWAL_FAIL_DISCOUNT = 50;
+// True for an order_item's service_name — used to detect staff having added
+// the renewal service straight onto a job card (walk-in) rather than the
+// customer having booked it through RenewalFlowView above, which is the
+// only other place an appointment's renewal_request normally comes from.
+const isRenewalServiceName = (sn) => sn?.en === 'Car Registration Renewal' || sn?.ar === 'تجديد استمارة السيارة';
 const enrichCat = (cat, idx) => {
   const style = CAT_STYLE[cat.name?.ar] || CAT_STYLE[cat.name?.en]
     || DEFAULT_CAT_STYLES[idx % DEFAULT_CAT_STYLES.length];
@@ -3540,7 +3545,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
     if (!user) { setLoading(false); return; }
     loadPartOrders();
     const { data: apptData } = await supabase.from('appointments')
-      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, general_notes, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot, pickup_tracking_active, return_tracking_active, pickup_driver_id, return_driver_id)')
+      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number, registration_image_url, registration_image_url_2), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, general_notes, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot, pickup_tracking_active, return_tracking_active, pickup_driver_id, return_driver_id)')
       .eq('profile_id', user.id)
       .order('appointment_date', { ascending: false });
     setAppts(apptData || []);
@@ -4068,6 +4073,14 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                   const jc     = publishedJobCard(a.job_cards[0]);
                   const car    = a.cars;
                   const relOrd = orderByApptId[a.id];
+                  // Staff added "Car Registration Renewal" straight onto the job card
+                  // (walk-in) instead of the customer booking it through the app's own
+                  // renewal flow — there's a priced line item but no authorization on
+                  // file yet, so it must be collected here before the order can be
+                  // confirmed/paid, same two-step idea (authorization, then approve the
+                  // amount) as the dedicated flow, just inline.
+                  const needsRenewalAuth = !!relOrd?.sent_to_customer && !a.renewal_request?.authorization
+                    && (relOrd.order_items || []).some(it => isRenewalServiceName(it.service_name));
                   // "Unavailable parts ordered" fully takes over as the
                   // displayed status (instead of showing alongside the
                   // normal job status) — it's a bigger deal than the other
@@ -4507,6 +4520,13 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                             style={{ background:cc.fg, color:'#111111' }}>
                             <FileImage size={16}/>{isRtl ? 'فتح أمر الشغل PDF' : 'Open Job Card PDF'}
                           </button>
+                          {/* Staff added the renewal service by hand — no authorization on
+                              file yet, collect it right here before anything can be confirmed. */}
+                          {needsRenewalAuth && (
+                            <RenewalAuthCard a={a} car={car} relOrd={relOrd} cc={cc} isRtl={isRtl} lang={lang}
+                              carBrandsRef={carBrandsRef} carCatsRef={carCatsRef}
+                              onSaved={(renewal_request) => setAppts(prev => prev.map(x => x.id === a.id ? { ...x, renewal_request } : x))}/>
+                          )}
                           {/* Total — reflects only the services currently checked (0 until the customer picks any).
                               Gated on there being a quotation at all (order_items present), not on the total
                               being positive — a single free/fully-discounted service has a real total of 0
@@ -4642,7 +4662,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                               ? !relOrd.customer_approved && !relOrd.customer_rejected
                               : undecidedServiceKeys(relOrd.id).length > 0;
                             if (!hasNewWork) return null;
-                            const canConfirm = allServicesDecided(relOrd.id);
+                            const canConfirm = allServicesDecided(relOrd.id) && !needsRenewalAuth;
                             return (
                               <div>
                                 <button onClick={() => canConfirm && setSigModal({ open:true, orderId:relOrd.id })} disabled={!canConfirm}
@@ -4652,7 +4672,9 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                                 </button>
                                 {!canConfirm && (
                                   <p className="text-[11px] text-center mt-1.5" style={{ color:cc.sub }}>
-                                    {isRtl ? 'حدد "موافق" أو "رفض" لكل خدمة قبل التأكيد' : 'Approve or reject every service before confirming'}
+                                    {needsRenewalAuth
+                                      ? (isRtl ? 'أكملي ووقّعي تفويض تجديد الاستمارة أعلاه أولًا' : 'Complete and sign the registration renewal authorization above first')
+                                      : (isRtl ? 'حدد "موافق" أو "رفض" لكل خدمة قبل التأكيد' : 'Approve or reject every service before confirming')}
                                   </p>
                                 )}
                               </div>
@@ -7122,6 +7144,124 @@ function buildAuthorizationLetterHtml(a, { stampFile = 'company-stamp.jpg', prev
 function openAuthorizationLetter(authorization) {
   const w = window.open('', '_blank');
   if (w) { w.document.write(buildAuthorizationLetterHtml(authorization)); w.document.close(); }
+}
+
+// Inline version of RenewalFlowView's "auth" stage, embedded directly in an
+// order card — for when staff add "Car Registration Renewal" by hand onto a
+// job card (walk-in) instead of the customer booking it through the
+// dedicated flow above, so there's a priced line item but no authorization
+// on file yet. Same fields, same letter preview, same signature — just
+// scoped to this one order instead of its own multi-step page.
+function RenewalAuthCard({ a, car, relOrd, cc, isRtl, lang, carBrandsRef, carCatsRef, onSaved }) {
+  const carLabel = [carTypeLabel(car, carBrandsRef, lang), carCategoryLabel(car, carCatsRef, lang), car?.production_year].filter(Boolean).join(' · ');
+  const [auth, setAuth] = useState({
+    full_name: '', id_number: '', phone: '',
+    plate_number: car?.plate_number || '', chassis_number: car?.chassis_number || '',
+  });
+  const [sig, setSig] = useState(null);
+  const [sigOpen, setSigOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [openImg, setOpenImg] = useState(null);
+
+  const complete = !!(auth.full_name.trim() && auth.id_number.trim() && auth.phone.trim() && auth.plate_number.trim() && auth.chassis_number.trim());
+  const authorization = {
+    full_name: auth.full_name.trim(), id_number: auth.id_number.trim(), phone: auth.phone.trim(),
+    plate_number: auth.plate_number.trim(), chassis_number: auth.chassis_number.trim(), car_label: carLabel,
+    signature_data: sig?.signature_data || null, signed_by: sig?.signed_by || null, signed_at: sig?.signed_at || null,
+  };
+  const letterHtml = useMemo(() => buildAuthorizationLetterHtml(authorization, { preview: true }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [auth, sig, carLabel]);
+  const regImages = [car?.registration_image_url, car?.registration_image_url_2].filter(Boolean);
+
+  const save = async () => {
+    if (!complete || !sig) return;
+    setSaving(true);
+    const renewalItems = (relOrd?.order_items || []).filter(it => isRenewalServiceName(it.service_name));
+    const fee = renewalItems.length
+      ? renewalItems.reduce((s, it) => s + Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100), 0)
+      : RENEWAL_FEE;
+    const renewal_request = { version: 1, fee, failed_inspection_discount: RENEWAL_FAIL_DISCOUNT, authorization };
+    const { error } = await supabase.from('appointments').update({ renewal_request }).eq('id', a.id);
+    setSaving(false);
+    if (error) { alert((isRtl?'خطأ: ':'Error: ') + error.message); return; }
+    onSaved(renewal_request);
+  };
+
+  return (
+    <div className="rounded-xl p-3 space-y-3" style={{ background:'rgba(0,0,0,0.12)', border:'1px solid rgba(255,255,255,0.15)' }}>
+      <p className="text-sm font-black flex items-center gap-1.5" style={{ color:cc.txt }}>
+        🪪 {isRtl ? 'مطلوب: تفويض تجديد الاستمارة' : 'Required: Registration Renewal Authorization'}
+      </p>
+      <p className="text-xs leading-relaxed" style={{ color:cc.sub }}>
+        {isRtl
+          ? 'أضاف فريق سندك خدمة تجديد الاستمارة إلى طلبك — من فضلك أدخل بياناتك ووقّع على التفويض قبل المتابعة.'
+          : "SNDK's team added the registration renewal service to your order — please fill in your details and sign the authorization before continuing."}
+      </p>
+
+      {regImages.length > 0 && (
+        <div className="grid grid-cols-2 gap-2">
+          {regImages.map((u, i) => (
+            <button key={i} type="button" onClick={() => setOpenImg(u)} className="rounded-lg overflow-hidden" style={{ border:'1px solid rgba(255,255,255,0.15)' }}>
+              <img src={u} alt="" className="w-full h-20 object-cover"/>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {[
+        { k:'full_name', ar:'الاسم الكامل', en:'Full name', ltr:false },
+        { k:'id_number', ar:'الرقم الشخصي (البطاقة)', en:'ID number (QID)', ltr:true, num:true },
+        { k:'phone', ar:'رقم الجوال', en:'Mobile number', ltr:true, num:true },
+        { k:'plate_number', ar:'رقم لوحة السيارة', en:'Plate number', ltr:true },
+        { k:'chassis_number', ar:'رقم الشاصية (VIN)', en:'Chassis number (VIN)', ltr:true },
+      ].map(f => (
+        <div key={f.k}>
+          <label className="text-[11px] font-bold" style={{ color:cc.sub }}>{isRtl ? f.ar : f.en}</label>
+          <input type="text" dir={f.ltr ? 'ltr' : undefined} inputMode={f.num ? 'numeric' : undefined} value={auth[f.k]}
+            onChange={e => setAuth(p => ({ ...p, [f.k]: f.k === 'chassis_number' ? e.target.value.toUpperCase() : e.target.value }))}
+            className="w-full mt-1 px-3 py-2 rounded-lg text-sm outline-none"
+            style={{ background:'rgba(0,0,0,0.15)', border:'1px solid rgba(255,255,255,0.15)', color:cc.txt, textAlign: isRtl && !f.ltr ? 'right' : 'left' }}/>
+        </div>
+      ))}
+
+      {complete && (
+        <div className="space-y-2">
+          <p className="text-[11px] font-bold" style={{ color:cc.sub }}>{isRtl ? 'خطاب التفويض' : 'Authorization letter'}</p>
+          <iframe title="authorization" srcDoc={letterHtml} className="w-full rounded-lg" style={{ height:320, background:'#fff', border:'1px solid rgba(255,255,255,0.15)' }}/>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => openAuthorizationLetter(authorization)}
+              className="flex-1 py-2 rounded-lg text-xs font-bold" style={{ border:'1px solid rgba(255,255,255,0.25)', color:cc.sub }}>
+              {isRtl ? 'عرض بحجم كامل' : 'Full view'}
+            </button>
+            <button type="button" onClick={() => setSigOpen(true)}
+              className="flex-1 py-2 rounded-lg text-xs font-black" style={{ background:'#8A1538', color:'#fff' }}>
+              ✍️ {sig ? (isRtl?'تعديل التوقيع':'Re-sign') : (isRtl?'وقّع على التفويض':'Sign the authorization')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <button type="button" disabled={!complete || !sig || saving} onClick={save}
+        className="w-full py-2.5 rounded-lg text-sm font-black disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-[0.98]"
+        style={{ background: (complete && sig) ? '#16a34a' : 'rgba(148,163,184,0.25)', color:'#fff' }}>
+        {saving ? (isRtl?'جارٍ الحفظ...':'Saving...') : (isRtl ? 'حفظ التفويض' : 'Save Authorization')}
+      </button>
+
+      {sigOpen && (
+        <SignatureModal isRtl={isRtl} theme="dark" hasParts={false} onClose={() => setSigOpen(false)}
+          onConfirm={(sigData, sigName) => { setSig({ signature_data: sigData || null, signed_by: sigName || null, signed_at: new Date().toISOString() }); setSigOpen(false); }}
+          title={isRtl ? 'توقيع التفويض' : 'Sign the authorization'}
+          subtitle={isRtl ? 'وقّع لتفوّض سندك بتجديد استمارة سيارتك' : 'Sign to authorize SNDK to renew your registration'}
+          confirmLabel={isRtl ? '✅ تأكيد التوقيع' : '✅ Confirm signature'}/>
+      )}
+      {openImg && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background:'rgba(0,0,0,0.85)' }} onClick={() => setOpenImg(null)}>
+          <img src={openImg} alt="" className="max-w-full max-h-full rounded-xl"/>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function RenewalFlowView({ lang, tr, isRtl, user, profile, carBrands, carCategories, brandCategories, timeSlots, serviceCategories, allSubServices, goHome, goOrders }) {
