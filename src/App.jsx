@@ -7536,7 +7536,7 @@ function RenewalFlowView({ lang, tr, isRtl, user, profile, carBrands, carCategor
                 (not just the current UI language), same as every other
                 bilingual "item — Insurance" label in the app. */}
             <div className="px-5 py-3 text-xs leading-relaxed space-y-1" style={{ color:C.cardMuted, borderTop:`1px solid ${C.cardText}14` }}>
-              <p>🛡️ ملاحظة: في حالة نجاح السيارة في الفحص الفني، تكون تكلفة التأمين: {RENEWAL_INSURANCE_PRICES[4]} ر.ق للمركبات ٤ سلندر، {RENEWAL_INSURANCE_PRICES[6]} ر.ق للمركبات ٦ سلندر، {RENEWAL_INSURANCE_PRICES[8]} ر.ق للمركبات ٨ سلندر.</p>
+              <p>🛡️ في حالة نجاح السيارة في الفحص الفني سوف يكون سعر تآمين المركبة: {RENEWAL_INSURANCE_PRICES[4]} ر.ق للمركبات ٤ سلندر، {RENEWAL_INSURANCE_PRICES[6]} ر.ق للمركبات ٦ سلندر، {RENEWAL_INSURANCE_PRICES[8]} ر.ق للمركبات ٨ سلندر.</p>
               <p>🛡️ Note: If the car passes the technical inspection, insurance cost is QAR {RENEWAL_INSURANCE_PRICES[4]} for 4-cylinder vehicles, QAR {RENEWAL_INSURANCE_PRICES[6]} for 6-cylinder, QAR {RENEWAL_INSURANCE_PRICES[8]} for 8-cylinder.</p>
             </div>
           </div>
