@@ -4524,7 +4524,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                               file yet, collect it right here before anything can be confirmed. */}
                           {needsRenewalAuth && (
                             <RenewalAuthCard a={a} car={car} relOrd={relOrd} cc={cc} isRtl={isRtl} lang={lang}
-                              carBrandsRef={carBrandsRef} carCatsRef={carCatsRef}
+                              carBrandsRef={carBrandsRef} carCatsRef={carCatsRef} profile={profile}
                               onSaved={(renewal_request) => setAppts(prev => prev.map(x => x.id === a.id ? { ...x, renewal_request } : x))}/>
                           )}
                           {/* Total — reflects only the services currently checked (0 until the customer picks any).
@@ -7152,16 +7152,23 @@ function openAuthorizationLetter(authorization) {
 // dedicated flow above, so there's a priced line item but no authorization
 // on file yet. Same fields, same letter preview, same signature — just
 // scoped to this one order instead of its own multi-step page.
-function RenewalAuthCard({ a, car, relOrd, cc, isRtl, lang, carBrandsRef, carCatsRef, onSaved }) {
+function RenewalAuthCard({ a, car, relOrd, cc, isRtl, lang, carBrandsRef, carCatsRef, profile, onSaved }) {
   const carLabel = [carTypeLabel(car, carBrandsRef, lang), carCategoryLabel(car, carCatsRef, lang), car?.production_year].filter(Boolean).join(' · ');
   const [auth, setAuth] = useState({
-    full_name: '', id_number: '', phone: '',
+    full_name: profile?.full_name || '', id_number: '', phone: profile?.phone_number || '',
     plate_number: car?.plate_number || '', chassis_number: car?.chassis_number || '',
   });
   const [sig, setSig] = useState(null);
   const [sigOpen, setSigOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [openImg, setOpenImg] = useState(null);
+
+  // profile can land a moment after this mounts — fill in whatever's still
+  // empty, same fallback RenewalFlowView's own auth stage uses.
+  useEffect(() => {
+    if (!profile) return;
+    setAuth(p => ({ ...p, full_name: p.full_name || profile.full_name || '', phone: p.phone || profile.phone_number || '' }));
+  }, [profile]);
 
   const complete = !!(auth.full_name.trim() && auth.id_number.trim() && auth.phone.trim() && auth.plate_number.trim() && auth.chassis_number.trim());
   const authorization = {
