@@ -3077,11 +3077,221 @@ const SnapchatIcon = ({ size = 18, color = '#111111' }) => (
   </svg>
 );
 
+// ── LEGAL POLICIES (Terms & Conditions, Warranty, Parts Return) ──────────
+// Bilingual content shown from the "Contact & About Us" tab. Kept as plain
+// data (not a fetched CMS doc) since these change rarely and staff aren't
+// meant to edit legal text without review.
+const LEGAL_CONTENT = {
+  terms: {
+    title: { ar: 'الشروط والأحكام العامة لاستخدام منصة سندك', en: 'SNDK Platform — General Terms & Conditions' },
+    intro: {
+      ar: 'هذه الشروط والأحكام ("الشروط") تحكم استخدامك لمنصة سندك الرقمي لوساطة الخدمات والتجارة الإلكترونية، سواء عبر الموقع الإلكتروني sndkqa.com أو تطبيق الهاتف المحمول ("المنصة")، وتشكّل اتفاقية ملزمة بينك ("العميل" أو "أنت") وبين سندك ("سندك" أو "نحن" أو "الشركة"). باستخدامك للمنصة أو حجزك لأي خدمة من خلالها، فإنك تقرّ بأنك قرأت هذه الشروط وفهمتها ووافقت على الالتزام بها.',
+      en: 'These Terms & Conditions ("Terms") govern your use of the SNDK Digital Platform for Service Brokerage and E-Commerce, whether through the website sndkqa.com or the mobile app ("the Platform"), and form a binding agreement between you ("the Customer" or "you") and SNDK ("SNDK", "we" or "the Company"). By using the Platform or booking any service through it, you acknowledge that you have read, understood and agreed to be bound by these Terms.',
+    },
+    sections: [
+      { title: { ar: 'تعريفات', en: 'Definitions' }, bullets: [
+        { ar: 'المنصة: تطبيق وموقع سندك الإلكتروني المستخدم لحجز خدمات صيانة وإصلاح السيارات وما يتصل بها.', en: 'The Platform: SNDK\'s website and mobile app used to book car maintenance, repair and related services.' },
+        { ar: 'الخدمة / الخدمات: أي من الخدمات المعروضة عبر المنصة (الصيانة الدورية، توفير قطع الغيار، إصلاح وتشخيص الأعطال، تجديد استمارة السيارة، وغيرها مما يُضاف مستقبلًا).', en: 'The Service(s): any service offered through the Platform (periodic maintenance, spare parts, fault diagnosis & repair, car registration renewal, and any others added in the future).' },
+        { ar: 'أمر الشغل: السجل الذي تفتحه سندك بعد استلام السيارة لتوثيق الخدمة المطلوبة وحالة تنفيذها.', en: 'Job Card: the record SNDK opens after receiving the car to document the requested service and its progress.' },
+        { ar: 'عرض السعر: التفصيل الذي تُعده سندك لتكلفة القطع والعمالة المطلوبة، ويُعرض على العميل للموافقة أو الرفض قبل التنفيذ.', en: 'Quotation: the itemized breakdown of parts and labor cost SNDK prepares and presents to the Customer for approval or rejection before work begins.' },
+        { ar: 'الحساب: الحساب الذي ينشئه العميل على المنصة لحجز واستخدام الخدمات.', en: 'Account: the account the Customer creates on the Platform to book and use the Services.' },
+      ] },
+      { title: { ar: 'نطاق الخدمات', en: 'Scope of Services' }, body: [
+        { ar: 'تقدّم سندك من خلال المنصة خدمات صيانة وإصلاح السيارات، منها على سبيل المثال لا الحصر: الصيانة الدورية، توفير قطع الغيار، إصلاح وتشخيص الأعطال، وتجديد استمارة (تسجيل) السيارة لدى الإدارة العامة للمرور نيابةً عن العميل وبموجب تفويض موقّع منه (انظر بند خدمة تجديد الاستمارة أدناه للشروط الخاصة بهذه الخدمة).', en: 'Through the Platform, SNDK offers car maintenance and repair services including, without limitation: periodic maintenance, spare parts, fault diagnosis & repair, and car registration renewal at the Traffic Department on the Customer\'s behalf under a signed authorization (see the dedicated Registration Renewal clause below).' },
+        { ar: 'قد تُضاف خدمات أخرى مستقبلًا (مثل العناية بالسيارات، إصلاح الحوادث، الإكسسوارات) وتُعلن عنها سندك عبر المنصة عند توفّرها فعليًا؛ ولا يُعدّ ظهور خدمة على المنصة بوصف "قريبًا" التزامًا من سندك بتقديمها في تاريخ معيّن.', en: 'Other services (such as Car Care, Collision Repair, Accessories) may be added in the future and will be announced on the Platform once actually available; a service listed as "Coming Soon" is not a commitment by SNDK to launch it by any particular date.' },
+      ] },
+      { title: { ar: 'التسجيل والحساب', en: 'Registration & Account' }, bullets: [
+        { ar: 'لاستخدام المنصة، يجب على العميل إنشاء حساب ببيانات صحيحة ومحدّثة (الاسم، رقم الجوال، البريد الإلكتروني).', en: 'To use the Platform, the Customer must create an account with accurate, up-to-date information (name, mobile number, email).' },
+        { ar: 'العميل مسؤول عن سرّية بيانات دخوله وعن كل نشاط يتم من خلال حسابه.', en: 'The Customer is responsible for keeping their login credentials confidential and for all activity under their account.' },
+        { ar: 'يحق لسندك تعليق أو إغلاق أي حساب يُستخدم بشكل مخالف لهذه الشروط أو للقوانين المعمول بها في دولة قطر.', en: 'SNDK may suspend or close any account used in violation of these Terms or applicable Qatari law.' },
+      ] },
+      { title: { ar: 'الحجز وأمر الشغل', en: 'Booking & the Job Card' }, bullets: [
+        { ar: 'يقوم العميل بحجز موعد لخدمة معيّنة عبر المنصة، مع تحديد بيانات السيارة (الماركة والفئة وسنة الصنع ورقم اللوحة ورقم الشاصية عند الحاجة) ووصف الأعطال أو الطلب.', en: 'The Customer books an appointment for a specific service through the Platform, providing the car\'s details (make, model, year, plate number and chassis number where needed) and a description of the issue or request.' },
+        { ar: 'عند استلام السيارة، تفتح سندك "أمر شغل" يوثّق حالة السيارة والخدمة المطلوبة، ويمكن للعميل متابعة حالته لحظيًا عبر المنصة.', en: 'Upon receiving the car, SNDK opens a Job Card documenting its condition and the requested service, and the Customer can track its status live through the Platform.' },
+        { ar: 'تحتفظ سندك بحقها في رفض أو تأجيل أي حجز لأسباب تشغيلية (مثل عدم توفر موعد أو عدم توفر قطعة الغيار المطلوبة)، وتُبلغ العميل بذلك في أقرب وقت ممكن.', en: 'SNDK reserves the right to decline or reschedule a booking for operational reasons (e.g. no available slot or a required part being unavailable), and will notify the Customer as soon as possible.' },
+      ] },
+      { title: { ar: 'عرض السعر والموافقة عليه', en: 'Quotation & Approval' }, bullets: [
+        { ar: 'بعد فحص السيارة، تُعدّ سندك عرض سعر مفصّل يوضح بنود القطع والعمالة لكل خدمة على حدة.', en: 'After inspecting the car, SNDK prepares a detailed quotation showing parts and labor line items for each service separately.' },
+        { ar: 'لا يبدأ تنفيذ أي بند إلا بعد موافقة صريحة من العميل عليه عبر المنصة (بالتوقيع الإلكتروني)، وللعميل الحق في الموافقة على بعض البنود ورفض غيرها دون أن يؤثر ذلك على البنود الموافق عليها.', en: 'No line item is carried out without the Customer\'s explicit approval on the Platform (via e-signature); the Customer may approve some items and reject others without this affecting the approved ones.' },
+        { ar: 'أي عمل إضافي يظهر أثناء التنفيذ (ولم يكن ضمن الفحص الأولي) يُعرض على العميل كعرض سعر منفصل للموافقة عليه قبل تنفيذه.', en: 'Any additional work discovered during execution (not part of the initial inspection) is presented to the Customer as a separate quotation for approval before it is carried out.' },
+        { ar: 'الأسعار المعروضة تشمل تكلفة القطع والعمالة كما هي موضحة في عرض السعر، وقد تُضاف إليها رسوم أخرى (كرسوم النقل/الساطحة) إن وُجدت وتم توضيحها للعميل قبل الموافقة.', en: 'Quoted prices cover the parts and labor shown in the quotation; other fees (such as towing/flatbed) may be added where applicable and will be disclosed to the Customer before approval.' },
+      ] },
+      { title: { ar: 'الدفع', en: 'Payment' }, bullets: [
+        { ar: 'يمكن للعميل الدفع نقدًا أو عبر البطاقة البنكية أو التحويل الفوري أو من خلال محفظة سندك الرقمية، وفق وسائل الدفع المتاحة عبر المنصة وقت الحجز.', en: 'The Customer may pay in cash, by card, via instant transfer, or through the SNDK digital wallet — per whichever payment methods are available on the Platform at the time.' },
+        { ar: 'يجوز فصل دفع تكلفة القطع عن تكلفة العمالة بحسب اختيار العميل، حيثما يسمح النظام بذلك.', en: 'Parts and labor may be paid separately at the Customer\'s choice, where the system allows it.' },
+        { ar: 'أي مبلغ يُدفع دون وجود عمل يقابله (نتيجة تعديل لاحق في عرض السعر) يُضاف كرصيد في محفظة العميل داخل المنصة، ويمكن استخدامه في طلبات لاحقة أو استرداده وفق سياسة سندك المتّبعة.', en: 'Any amount paid without corresponding work (due to a later change to the quotation) is credited to the Customer\'s in-app wallet and may be used on future orders or refunded per SNDK\'s standard practice.' },
+        { ar: 'لا تُسلَّم السيارة، ولا تُصدَر الفاتورة الضريبية النهائية، إلا بعد سداد كامل المبلغ المستحق على الخدمات الموافق عليها.', en: 'The car is not released, and the final tax invoice is not issued, until the full amount due on the approved services has been paid.' },
+      ] },
+      { title: { ar: 'الإلغاء والتأجيل', en: 'Cancellation & Rescheduling' }, bullets: [
+        { ar: 'يمكن للعميل إلغاء أو تعديل موعد الحجز قبل بدء العمل الفعلي على السيارة دون أي رسوم، وذلك عبر المنصة أو بالتواصل مع سندك.', en: 'The Customer may cancel or reschedule a booking free of charge before actual work on the car begins, either through the Platform or by contacting SNDK.' },
+        { ar: 'في حال إلغاء الحجز بعد بدء العمل أو بعد طلب/تركيب قطع غيار خاصة بالسيارة (طلب خاص)، يحق لسندك خصم تكلفة ما تم تنفيذه بالفعل أو ما تم طلبه من قطع، من أي مبلغ مدفوع مقدمًا.', en: 'If a booking is cancelled after work has begun, or after special-order parts have been ordered/installed, SNDK may deduct the cost of work already done or parts already ordered from any amount paid in advance.' },
+      ] },
+      { title: { ar: 'القطع القديمة / المستبدلة', en: 'Old / Replaced Parts' }, bullets: [
+        { ar: 'عند استبدال أي قطعة، يُخيَّر العميل صراحةً (عبر المنصة أو أمر الشغل) بين استلام القطعة القديمة المستبدلة أو تركها لدى سندك.', en: 'Whenever a part is replaced, the Customer is explicitly asked (via the Platform or the Job Card) whether to take the old replaced part or leave it with SNDK.' },
+        { ar: 'في حال اختيار العميل عدم استلام القطعة القديمة، يحق لسندك التصرف فيها وفق سياستها الداخلية (بما يشمل إعادة التدوير أو التخلص منها)، دون أي التزام مالي تجاه العميل عن قيمتها.', en: 'If the Customer chooses not to take the old part, SNDK may dispose of it per its internal policy (including recycling or disposal), with no financial obligation to the Customer for its value.' },
+        { ar: 'القطع القديمة، إن تم تسليمها للعميل، تُسلَّم "كما هي" دون أي ضمان من سندك عليها.', en: 'Old parts, if handed to the Customer, are given "as is" with no warranty from SNDK.' },
+      ] },
+      { title: { ar: 'خدمة تجديد استمارة (تسجيل) السيارة — شروط خاصة', en: 'Car Registration Renewal Service — Special Terms' }, body: [
+        { ar: 'تخضع هذه الخدمة، بالإضافة إلى الشروط العامة أعلاه، للشروط الخاصة التالية:', en: 'In addition to the general Terms above, this service is subject to the following special terms:' },
+      ], bullets: [
+        { ar: 'يلتزم العميل، قبل حجز الخدمة، باختيار سيارة من سياراته المسجّلة في المنصة أو إضافة سيارة جديدة مع رفع صورة واضحة لاستمارة السيارة السارية.', en: 'Before booking, the Customer must select a registered car or add a new one, with a clear photo of the car\'s current registration card.' },
+        { ar: 'يوقّع العميل إلكترونيًا على خطاب تفويض صريح يخوّل سندك بالتعامل مع الإدارة العامة للمرور بدولة قطر نيابةً عنه، حصرًا لغرض إجراءات تجديد استمارة السيارة المذكورة، ولا يُعدّ هذا التفويض توكيلًا عامًا لأي غرض آخر.', en: 'The Customer e-signs an explicit authorization letter empowering SNDK to deal with Qatar\'s Traffic Department on their behalf, strictly for the purpose of renewing that car\'s registration — not a general power of attorney for any other purpose.' },
+        { ar: 'رسوم الخدمة الأساسية 250 ريالًا قطريًا (مائتان وخمسون ريالًا)، وتشمل إجراءات التجديد لدى إدارة المرور.', en: 'The base service fee is QAR 250 (two hundred and fifty riyals), covering the renewal procedure at the Traffic Department.' },
+        { ar: 'في حال رسوب السيارة في الفحص الفني وطلب العميل من سندك إصلاح أسباب الرسوب، يُمنح العميل خصمًا قدره 50 ريالًا قطريًا على تكلفة إصلاح تلك الأسباب تحديدًا.', en: 'If the car fails the technical inspection and the Customer asks SNDK to fix the failure reasons, a QAR 50 discount is applied specifically to the cost of fixing those reasons.' },
+        { ar: 'في حال نجاح السيارة في الفحص الفني، يكون على العميل سداد تكلفة تأمين المركبة (إلزامي لإتمام التسجيل وفق أنظمة إدارة المرور)، وتُحدَّد تكلفتها وفق عدد أسطوانات السيارة: 401 ريال قطري للسيارات ذات 4 أسطوانات، 601 ريال قطري للسيارات ذات 6 أسطوانات، 801 ريال قطري للسيارات ذات 8 أسطوانات، كتقدير أولي قابل للتعديل بحسب ما تُقرره شركة التأمين وقت الإصدار.', en: 'If the car passes the technical inspection, the Customer must pay for vehicle insurance (mandatory to complete registration under Traffic Department rules), priced by cylinder count: QAR 401 for 4-cylinder vehicles, QAR 601 for 6-cylinder, QAR 801 for 8-cylinder — an initial estimate that may be adjusted by the insurer at the time of issuance.' },
+        { ar: 'يوقّع العميل توقيعين منفصلين لإتمام هذه الخدمة: الأول على خطاب التفويض، والثاني موافقةً على المبلغ الإجمالي المستحق.', en: 'The Customer signs twice to complete this service: once on the authorization letter, and once approving the total amount due.' },
+        { ar: 'لا تتحمّل سندك مسؤولية أي تأخير في إجراءات التجديد ناتج عن جهات حكومية خارج سيطرتها، أو عن مخالفات/رسوم مستحقة على السيارة أو على العميل لدى إدارة المرور قبل تاريخ التفويض.', en: 'SNDK is not responsible for delays caused by government bodies outside its control, or for any fines/fees owed on the car or the Customer at the Traffic Department predating the authorization.' },
+      ] },
+      { title: { ar: 'الفواتير', en: 'Invoicing' }, body: [
+        { ar: 'تُصدر سندك فاتورة ضريبية نهائية بعد تمام سداد قيمة الخدمة، وتُتاح للعميل عبر المنصة، وتُعدّ المستند الرسمي الوحيد المعتمد لأغراض المحاسبة والضمان.', en: 'SNDK issues a final tax invoice once the service is fully paid, made available to the Customer on the Platform — the only official document recognized for accounting and warranty purposes.' },
+      ] },
+      { title: { ar: 'الضمان', en: 'Warranty' }, body: [
+        { ar: 'تخضع خدمات سندك لسياسة ضمان منفصلة ("سياسة الضمان") تُعدّ جزءًا لا يتجزأ من هذه الشروط.', en: "SNDK's services are subject to a separate Warranty Policy, which forms an integral part of these Terms." },
+      ] },
+      { title: { ar: 'استرجاع القطع', en: 'Parts Return' }, body: [
+        { ar: 'يخضع استرجاع أو استبدال قطع الغيار لسياسة منفصلة ("سياسة استرجاع واستبدال القطع") تُعدّ جزءًا لا يتجزأ من هذه الشروط.', en: 'Returning or exchanging spare parts is subject to a separate Parts Return & Exchange Policy, which forms an integral part of these Terms.' },
+      ] },
+      { title: { ar: 'التزامات العميل', en: 'Customer Obligations' }, body: [{ ar: 'يلتزم العميل بـ:', en: 'The Customer must:' }], bullets: [
+        { ar: 'تقديم بيانات صحيحة عن سيارته والعطل المُبلَّغ عنه.', en: 'Provide accurate information about their car and the reported issue.' },
+        { ar: 'استلام السيارة خلال مدة معقولة من إبلاغه بجاهزيتها؛ وتحتفظ سندك بحقها في تحصيل رسوم انتظار/تخزين معقولة عن أي تأخير غير مبرر يتجاوز 7 أيام من تاريخ الإبلاغ، بعد إشعار العميل بذلك.', en: 'Collect the car within a reasonable time of being notified it is ready; SNDK may charge a reasonable waiting/storage fee for any unjustified delay beyond 7 days from that notice, after informing the Customer.' },
+        { ar: 'عدم استخدام المنصة لأي غرض مخالف للقانون.', en: 'Not use the Platform for any unlawful purpose.' },
+      ] },
+      { title: { ar: 'مسؤولية سندك وحدود المسؤولية', en: "SNDK's Liability & Its Limits" }, bullets: [
+        { ar: 'تلتزم سندك ببذل عناية الحرفي المعتاد في تنفيذ الخدمات المتفق عليها.', en: 'SNDK undertakes to exercise the ordinary skill of a competent tradesman in carrying out the agreed services.' },
+        { ar: 'لا تتحمل سندك مسؤولية عن أي أعطال أو أضرار سابقة على استلام السيارة ولم تكن جزءًا من نطاق العمل المتفق عليه في عرض السعر.', en: 'SNDK is not liable for any faults or damage that predate receiving the car and were not part of the agreed scope of work in the quotation.' },
+        { ar: 'لا تتحمل سندك مسؤولية عن أي أضرار غير مباشرة أو تبعية (مثل خسارة الاستخدام أو الدخل) ما لم ينص القانون القطري على خلاف ذلك بشكل قطعي.', en: 'SNDK is not liable for any indirect or consequential damages (such as loss of use or income), unless Qatari law conclusively provides otherwise.' },
+        { ar: 'لا تتحمل سندك أي مسؤولية عن فقدان أو تلف أي متعلقات شخصية يتركها العميل داخل السيارة أثناء تنفيذ الخدمة، وينصح العميل بإخراج أي أغراض شخصية أو ثمينة من السيارة قبل تسليمها لسندك.', en: 'SNDK bears no responsibility for the loss of or damage to any personal belongings left inside the car during the service, and the Customer is advised to remove any personal or valuable items from the car before handing it over to SNDK.' },
+        { ar: 'لا يحدّ أي بند في هذه الشروط من حقوق العميل المقررة بموجب قانون حماية المستهلك القطري رقم (8) لسنة 2008 وتعديلاته.', en: "No clause in these Terms limits any right the Customer holds under Qatar's Consumer Protection Law No. (8) of 2008, as amended." },
+      ] },
+      { title: { ar: 'الخصوصية وحماية البيانات', en: 'Privacy & Data Protection' }, body: [
+        { ar: 'تُعالج سندك بيانات العميل الشخصية وفق سياسة الخصوصية الخاصة بها وبما يتوافق مع القانون رقم (13) لسنة 2016 بشأن حماية البيانات الشخصية في دولة قطر.', en: "SNDK processes the Customer's personal data per its own Privacy Policy and in line with Qatar's Personal Data Privacy Protection Law No. (13) of 2016." },
+      ] },
+      { title: { ar: 'الملكية الفكرية', en: 'Intellectual Property' }, body: [
+        { ar: 'جميع الحقوق المتعلقة بالمنصة (بما في ذلك الاسم التجاري "سندك" والشعار والتصميم والمحتوى) مملوكة لسندك، ولا يجوز نسخها أو استخدامها دون إذن كتابي مسبق.', en: 'All rights related to the Platform (including the "SNDK" trade name, logo, design and content) belong to SNDK and may not be copied or used without prior written permission.' },
+      ] },
+      { title: { ar: 'التعديلات على الشروط', en: 'Amendments to These Terms' }, body: [
+        { ar: 'يحق لسندك تعديل هذه الشروط من وقت لآخر، ويُعمل بالتعديل من تاريخ نشره على المنصة. واستمرار العميل في استخدام المنصة بعد النشر يُعدّ قبولًا منه بالتعديل.', en: "SNDK may amend these Terms from time to time; an amendment takes effect once published on the Platform, and the Customer's continued use of the Platform after publication constitutes acceptance of it." },
+      ] },
+      { title: { ar: 'القانون الواجب التطبيق وتسوية المنازعات', en: 'Governing Law & Dispute Resolution' }, body: [
+        { ar: 'تخضع هذه الشروط وتُفسَّر وفقًا لقوانين دولة قطر. وتختص محاكم دولة قطر (أو الجهة المختصة بتسوية منازعات حماية المستهلك التابعة لوزارة التجارة والصناعة كخطوة أولى وديّة) بالفصل في أي نزاع ينشأ عن هذه الشروط أو عن استخدام المنصة.', en: "These Terms are governed by and construed in accordance with the laws of the State of Qatar. The courts of Qatar (or, as a first amicable step, the consumer-protection dispute body of the Ministry of Commerce and Industry) have jurisdiction over any dispute arising from these Terms or the use of the Platform." },
+      ] },
+    ],
+  },
+  warranty: {
+    title: { ar: 'سياسة الضمان', en: 'Warranty Policy' },
+    sections: [
+      { title: { ar: 'عام', en: 'General' }, body: [
+        { ar: 'تلتزم سندك بضمان جودة العمالة (الصنعة) التي تنفذها على الخدمات الموافق عليها من العميل، وذلك وفق الشروط الموضحة أدناه.', en: "SNDK warrants the quality of its own workmanship on services the Customer has approved, subject to the conditions below." },
+      ] },
+      { title: { ar: 'مدة الضمان', en: 'Warranty Period' }, body: [
+        { ar: 'المدة الافتراضية لضمان العمالة هي 30 يومًا من تاريخ تسليم السيارة أو 1000 كيلومتر إضافية، أيهما أقرب، ما لم يُذكر خلاف ذلك صراحةً على الفاتورة أو في أمر الشغل عن خدمة بعينها. (هذه المدة قابلة للتخصيص من قِبل سندك لكل خدمة على حدة، ويجب توضيحها للعميل وقت التنفيذ).', en: 'The default labor warranty period is 30 days from the date the car is handed back, or an additional 1,000 km, whichever comes first — unless a different period is explicitly stated on the invoice or Job Card for a given service. (This period may be customized by SNDK per service and must be disclosed to the Customer at the time.)' },
+      ] },
+      { title: { ar: 'نطاق التغطية', en: 'Coverage' }, bullets: [
+        { ar: 'عيوب التركيب أو التنفيذ الناتجة عن خطأ من فريق سندك في تنفيذ العمل المتفق عليه.', en: "Installation or workmanship defects caused by an error from SNDK's team in carrying out the agreed work." },
+        { ar: 'إعادة تنفيذ نفس الخدمة مجانًا (بدون تكلفة عمالة إضافية) إذا ظهر عيب في التنفيذ ذاته خلال مدة الضمان.', en: 'Free re-performance of the same service (no additional labor charge) if a defect appears in that same work within the warranty period.' },
+      ] },
+      { title: { ar: 'الاستثناءات من الضمان', en: 'Warranty Exclusions' }, body: [{ ar: 'لا يغطي الضمان الحالات التالية:', en: 'The warranty does not cover:' }], bullets: [
+        { ar: 'الأعطال الناتجة عن سوء استخدام السيارة أو حوادث أو إهمال العميل بعد التسليم.', en: 'Faults caused by misuse of the car, accidents, or Customer negligence after handover.' },
+        { ar: 'أي تدخل أو إصلاح قام به طرف آخر غير سندك على نفس الجزء بعد تسليم السيارة.', en: 'Any repair or intervention on the same part by anyone other than SNDK after the car was handed back.' },
+        { ar: 'الأجزاء والمواد الاستهلاكية سريعة التلف بطبيعتها (كالزيوت والفلاتر وأقمشة الفرامل) بعد استهلاكها الطبيعي.', en: 'Fast-wearing consumables by their nature (oils, filters, brake pads) once naturally consumed.' },
+        { ar: 'الأعطال غير المرتبطة بالخدمة المنفذة أصلًا.', en: 'Faults unrelated to the service originally performed.' },
+        { ar: 'عدم اتباع العميل لتوصيات الصيانة التي أبلغه بها فريق سندك.', en: "The Customer's failure to follow maintenance recommendations given by SNDK's team." },
+        { ar: 'قطع الغيار التي يوفّرها العميل بنفسه (وليس من سندك)، وتخضع فقط لضمان المصنّع أو المورّد الأصلي لها إن وُجد.', en: "Parts the Customer supplies themselves (not from SNDK) — covered only by that part's original manufacturer/supplier warranty, if any." },
+        { ar: 'القطع الكهربائية على وجه الخصوص (كالحساسات والوحدات الإلكترونية والأسلاك والمكونات الكهربائية عمومًا) — لا يوجد عليها أي ضمان من سندك مهما كان نوعها أو مصدرها.', en: 'Electrical parts specifically (sensors, electronic control units, wiring and electrical components generally) — carry no warranty from SNDK whatsoever, regardless of their type or source.' },
+      ] },
+      { title: { ar: 'كيفية تقديم مطالبة الضمان', en: 'How to File a Warranty Claim' }, bullets: [
+        { ar: 'يتواصل العميل مع سندك عبر المنصة أو أرقام التواصل الرسمية خلال مدة الضمان، موضحًا وصف المشكلة.', en: 'The Customer contacts SNDK through the Platform or official contact numbers within the warranty period, describing the issue.' },
+        { ar: 'تقوم سندك بفحص السيارة لتحديد ما إذا كانت المشكلة مشمولة بالضمان.', en: 'SNDK inspects the car to determine whether the issue is covered by the warranty.' },
+        { ar: 'في حال ثبوت أن المشكلة تدخل ضمن نطاق الضمان، يُعاد تنفيذ الخدمة (أو الجزء المتضرر منها) دون أي تكلفة عمالة إضافية على العميل، وقد تُطبَّق تكلفة القطعة البديلة إن لم تكن هي القطعة المعيبة نفسها التي وردت في الأصل من سندك.', en: 'If the issue is confirmed to fall within the warranty, the service (or the affected part of it) is re-performed with no additional labor cost to the Customer; the cost of a replacement part may still apply if it is not the same defective part originally supplied by SNDK.' },
+      ] },
+      { title: { ar: 'ضمان القطع', en: 'Parts Warranty' }, bullets: [
+        { ar: 'القطع الأصلية (OEM) والقطع البديلة (Aftermarket) التي توفرها سندك — باستثناء القطع الكهربائية — مشمولة بضمان المورّد أو المصنّع الخاص بها بحسب نوعها، وتلتزم سندك بنقل هذا الضمان للعميل ومساعدته في تفعيله عند الحاجة.', en: "Original (OEM) and aftermarket parts supplied by SNDK — excluding electrical parts — carry the relevant supplier's/manufacturer's warranty, and SNDK will pass this warranty on to the Customer and help them activate it when needed." },
+        { ar: 'عيوب التصنيع في القطعة نفسها (وليس في تركيبها) تخضع لضمان المورّد/المصنّع وليس لهذه السياسة.', en: "Manufacturing defects in the part itself (not its installation) are covered by the supplier's/manufacturer's warranty, not this policy." },
+        { ar: 'لا يسري أي ضمان (سواء من سندك أو منقول عن المورّد/المصنّع) على القطع الكهربائية بجميع أنواعها، وتُباع وتُركّب هذه القطع دون أي ضمان.', en: 'No warranty (from SNDK or passed through from a supplier/manufacturer) applies to electrical parts of any kind — these are sold and installed with no warranty whatsoever.' },
+      ] },
+      { title: { ar: 'سريان الضمان', en: 'When the Warranty Runs' }, body: [
+        { ar: 'يبدأ سريان الضمان من تاريخ توقيع العميل على استلام السيارة بعد إتمام الخدمة، وينتهي تلقائيًا بانتهاء مدته المذكورة أعلاه دون الحاجة لإشعار مسبق.', en: 'The warranty starts on the date the Customer signs for receiving the car after the service is completed, and expires automatically at the end of the period stated above with no prior notice required.' },
+      ] },
+    ],
+  },
+  returns: {
+    title: { ar: 'سياسة استرجاع واستبدال قطع الغيار', en: 'Spare Parts Return & Exchange Policy' },
+    sections: [
+      { title: { ar: 'عام', en: 'General' }, body: [
+        { ar: 'تسري هذه السياسة على قطع الغيار التي توفرها سندك للعميل ضمن خدماتها، سواء كانت مركّبة على السيارة أو مباعة بشكل منفصل (خدمة "توفير قطع غيار").', en: 'This policy applies to spare parts SNDK supplies to the Customer, whether installed on the car or sold separately (the "Spare Parts" service).' },
+      ] },
+      { title: { ar: 'القطع غير المركّبة', en: 'Uninstalled Parts' }, bullets: [
+        { ar: 'يجوز للعميل طلب استرجاع أو استبدال أي قطعة غيار لم يتم تركيبها بعد، خلال 7 أيام من تاريخ استلامها، شريطة أن تكون بحالتها الأصلية، في عبوتها الأصلية غير المفتوحة، ولم يسبق تركيبها أو استخدامها.', en: 'The Customer may request a return or exchange of any part not yet installed within 7 days of receiving it, provided it is in its original condition, in its original unopened packaging, and has never been installed or used.' },
+        { ar: 'لا تُسترجع القطع المطلوبة خصيصًا لسيارة العميل (طلب خاص) أو المستوردة بناءً على طلبه، إلا إذا ثبت أنها معيبة أو غير مطابقة للطلب.', en: "Parts specially ordered for the Customer's car (special order) or imported at their request are not returnable, unless proven defective or not matching the order." },
+      ] },
+      { title: { ar: 'القطع المركّبة', en: 'Installed Parts' }, bullets: [
+        { ar: 'بمجرد تركيب القطعة على السيارة، لا يجوز استرجاعها أو استرداد قيمتها إلا في حال ثبوت عيب في التصنيع أو خطأ في التركيب، وذلك وفق سياسة الضمان المرفقة.', en: 'Once a part is installed on the car, it cannot be returned or refunded except where a manufacturing defect or installation error is confirmed, per the Warranty Policy.' },
+        { ar: 'استبدال قطعة سليمة تم تركيبها بناءً على رغبة العميل (وليس بسبب عيب) يُعامل كخدمة/طلب جديد بتكلفة إضافية.', en: "Replacing a sound, already-installed part at the Customer's request (not due to a defect) is treated as a new service/order at additional cost." },
+      ] },
+      { title: { ar: 'القطع المعيبة', en: 'Defective Parts' }, body: [
+        { ar: 'إذا تبيّن أن القطعة معيبة (سواء عيب تصنيع أو تلف أثناء الشحن/التخزين لدى سندك) قبل أو بعد التركيب، تلتزم سندك باستبدالها مجانًا في أقرب وقت ممكن، دون أي تكلفة إضافية على العميل.', en: "If a part is found defective (whether a manufacturing defect or damage during shipping/storage at SNDK) before or after installation, SNDK will replace it free of charge as soon as possible, at no extra cost to the Customer." },
+      ] },
+      { title: { ar: 'طريقة الاسترداد', en: 'Refund Method' }, bullets: [
+        { ar: 'في حال الموافقة على استرجاع قيمة قطعة ما، يُردّ المبلغ بنفس وسيلة الدفع الأصلية حيثما أمكن، أو كرصيد في محفظة العميل داخل المنصة يمكن استخدامه في طلبات لاحقة، بحسب اختيار العميل ووفق ما تسمح به وسيلة الدفع المستخدمة.', en: "Where a refund is approved, the amount is returned via the original payment method where possible, or as credit in the Customer's in-app wallet usable on future orders — at the Customer's choice and subject to what the payment method allows." },
+        { ar: 'تتم معالجة طلبات الاسترداد خلال مدة معقولة لا تتجاوز عادةً 14 يوم عمل من تاريخ الموافقة على الطلب.', en: 'Refund requests are typically processed within 14 business days of approval.' },
+      ] },
+      { title: { ar: 'القطع القديمة (المستبدلة من سيارة العميل)', en: "Old Parts (Replaced From the Customer's Car)" }, bullets: [
+        { ar: 'عند استبدال أي قطعة من سيارة العميل بأخرى جديدة، يُخيَّر العميل صراحةً بين استلام القطعة القديمة أو تركها لدى سندك.', en: "Whenever a part from the Customer's car is replaced with a new one, the Customer is explicitly asked whether to take the old part or leave it with SNDK." },
+        { ar: 'القطع القديمة ليست محل استرجاع أو استرداد قيمة بأي حال، لأنها كانت مملوكة أصلًا للعميل قبل الاستبدال.', en: 'Old parts are never subject to return or refund, since they already belonged to the Customer before being replaced.' },
+      ] },
+      { title: { ar: 'استثناءات وفق القانون', en: 'Statutory Exceptions' }, body: [
+        { ar: 'لا تخل هذه السياسة بأي حقوق مقررة للعميل بشكل إلزامي بموجب قانون حماية المستهلك القطري رقم (8) لسنة 2008. مع مراعاة أن الخدمات التي بدأ تنفيذها فعليًا بموافقة صريحة من العميل (تركيب قطعة، تنفيذ عمالة) تخرج عن نطاق "حق العدول" المقرر عادة للبيع عن بُعد فور بدء التنفيذ الفعلي بطلب العميل، تماشيًا مع الاستثناءات المعتادة على حق العدول في التعاقدات الإلكترونية عند بدء تنفيذ الخدمة.', en: "This policy does not affect any right mandatorily granted to the Customer under Qatar's Consumer Protection Law No. (8) of 2008. Note that services whose performance has already begun with the Customer's explicit consent (a part installed, labor carried out) fall outside the usual distance-selling withdrawal right once actual performance has started at the Customer's request — consistent with the standard exceptions to that right in electronic contracting." },
+      ] },
+    ],
+  },
+};
+
+function buildLegalHtml(kind, isRtl) {
+  const c = LEGAL_CONTENT[kind];
+  const L = isRtl ? 'ar' : 'en';
+  const dir = isRtl ? 'rtl' : 'ltr';
+  const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const sectionsHtml = c.sections.map((s, i) => `
+    <div class="sec">
+      <h2>${i + 1}. ${esc(s.title[L])}</h2>
+      ${(s.body || []).map(b => `<p>${esc(b[L])}</p>`).join('')}
+      ${(s.bullets || []).length ? `<ul>${s.bullets.map(b => `<li>${esc(b[L])}</li>`).join('')}</ul>` : ''}
+    </div>
+  `).join('');
+  return `<!DOCTYPE html><html dir="${dir}" lang="${L}"><head><meta charset="UTF-8">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#1e293b;font-size:14px;padding:20px 22px 40px}
+    .header{background:linear-gradient(135deg,#8A1538 0%,#3D0818 100%);margin:-20px -22px 20px;padding:20px 22px;color:#fff}
+    .header .brand{font-weight:900;font-size:15px;letter-spacing:.5px}
+    .header h1{font-size:19px;font-weight:900;margin-top:8px;line-height:1.4}
+    .sec{margin-bottom:16px}
+    h2{font-size:14.5px;font-weight:800;color:#8A1538;margin-bottom:6px}
+    p{line-height:1.9;margin:6px 0;font-size:13.5px}
+    ul{margin:4px ${isRtl ? '22px 0 0' : '0 0 0 22px'};line-height:1.9}
+    li{margin-bottom:5px;font-size:13.5px}
+    .intro{font-weight:600;line-height:1.9;margin-bottom:18px;color:#334155}
+    .footer{margin-top:24px;padding-top:14px;border-top:1px solid #e2e8f0;text-align:center;font-size:10.5px;color:#94a3b8;line-height:1.8}
+  </style></head><body>
+    <div class="header">
+      <div class="brand">SNDK · سندك</div>
+      <h1>${esc(c.title[L])}</h1>
+    </div>
+    ${c.intro ? `<p class="intro">${esc(c.intro[L])}</p>` : ''}
+    ${sectionsHtml}
+    <div class="footer">
+      سندك الرقمي لوساطة الخدمات والتجارة الإلكترونية · SNDK Digital Platform for Service Brokerage and E-Commerce<br/>
+      ${isRtl ? 'سجل تجاري C.R. : 244788 · رخصة تجارية Commercial License : 336567' : 'C.R. 244788 · Commercial License 336567'}
+    </div>
+  </body></html>`;
+}
+
 // Public read (no login required) — matches how the "تواصل" nav item is
 // reachable without an account, same as browsing services.
 function ContactView({ isRtl }) {
   const [info, setInfo] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [openPolicy, setOpenPolicy] = useState(null); // 'terms' | 'warranty' | 'returns' | null
 
   useEffect(() => {
     supabase.from('contact_info').select('*').eq('id', 1).maybeSingle()
@@ -3129,6 +3339,41 @@ function ContactView({ isRtl }) {
         </div>
       ) : (
         <p className="text-sm text-center py-10" style={{ color:C.muted }}>{isRtl ? 'بيانات التواصل غير متاحة حالياً' : 'Contact info not available yet'}</p>
+      )}
+
+      {/* Legal — Terms, Warranty, Parts Return. Same in-app modal pattern as
+          the registration-card viewer elsewhere, so mobile Safari never
+          strands the customer on a bare new tab with no way back. */}
+      <div className="rounded-2xl overflow-hidden" style={{ border:`1px solid ${C.border}` }}>
+        {[
+          { key:'terms', icon:<FileImage size={18} style={{ color:C.gold }}/>, label: isRtl?'الشروط والأحكام':'Terms & Conditions' },
+          { key:'warranty', icon:<ShieldCheck size={18} style={{ color:C.gold }}/>, label: isRtl?'سياسة الضمان':'Warranty Policy' },
+          { key:'returns', icon:<Package size={18} style={{ color:C.gold }}/>, label: isRtl?'سياسة استرجاع القطع':'Parts Return Policy' },
+        ].map((r, i) => (
+          <button key={r.key} onClick={() => setOpenPolicy(r.key)}
+            className="w-full flex items-center gap-3 px-4 py-3.5 transition-all hover:brightness-110 text-start"
+            style={{ background:C.panel, borderTop: i>0 ? `1px solid ${C.border}` : 'none' }}>
+            <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ background:`${C.gold}15` }}>{r.icon}</div>
+            <span className="text-sm font-semibold flex-1" style={{ color:C.text }}>{r.label}</span>
+            {isRtl ? <ChevronLeft size={16} style={{ color:C.muted }}/> : <ChevronRight size={16} style={{ color:C.muted }}/>}
+          </button>
+        ))}
+      </div>
+
+      {openPolicy && (
+        <div className="fixed inset-0 z-[100] flex flex-col" style={{ background:'rgba(0,0,0,0.92)' }} onClick={() => setOpenPolicy(null)}>
+          <div className="flex items-center justify-between p-4 flex-shrink-0">
+            <span className="text-sm font-bold text-white">{LEGAL_CONTENT[openPolicy].title[isRtl?'ar':'en']}</span>
+            <button onClick={() => setOpenPolicy(null)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white"
+              style={{ background:'rgba(255,255,255,0.15)' }}>
+              <X size={14}/>{isRtl?'إغلاق':'Close'}
+            </button>
+          </div>
+          <div className="flex-1 min-h-0" onClick={e=>e.stopPropagation()}>
+            <iframe srcDoc={buildLegalHtml(openPolicy, isRtl)} title={openPolicy} className="w-full h-full border-0" style={{ background:'#fff' }}/>
+          </div>
+        </div>
       )}
     </div>
   );
