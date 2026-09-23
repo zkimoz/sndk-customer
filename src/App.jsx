@@ -3871,6 +3871,11 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
   // changing page) would otherwise call fewer hooks on that re-render than
   // the previous one, which crashes the whole app to a blank screen.
   const [sigModal, setSigModal] = useState({ open:false, orderId:null });
+  // Separate modal/flow from sigModal above — a phone rejection (staff
+  // recorded it, not the customer) only ever needs a confirmation
+  // signature on the rejection itself, never a fresh approve/reject pass
+  // over the services (those are already decided).
+  const [phoneRejectionSigModal, setPhoneRejectionSigModal] = useState({ open:false, orderId:null });
   const [payMethodModal, setPayMethodModal] = useState(null); // { orderId, types } | null
   const [partOrders, setPartOrders] = useState([]);
   const [payPartOrderModal, setPayPartOrderModal] = useState(null); // { partOrderId, amount, requestNumber } | null
@@ -4224,6 +4229,34 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
       }).then(({ error: notifyErr }) => { if (notifyErr) console.error('notify-staff failed:', notifyErr); })
         .catch((notifyErr) => console.error('notify-staff failed:', notifyErr));
     }
+  };
+
+  // Confirms a staff-recorded phone rejection — only ever shown when the car
+  // was already in our custody (car_received or later) at rejection time, so
+  // this is purely a confirmation signature on a decision already made, not
+  // a fresh approve/reject pass; service_decisions/customer_rejected are
+  // left untouched.
+  const signPhoneRejection = async (sigData, sigName) => {
+    const orderId = phoneRejectionSigModal.orderId;
+    if (!orderId) return;
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    const { data: apptCheck } = await supabase.from('appointments').select('id').eq('id', order.appointment_id).eq('profile_id', user.id).maybeSingle();
+    if (!apptCheck) {
+      alert(isRtl ? 'حدث خطأ — لا يمكن التحقق من ملكية هذا الطلب' : 'Something went wrong — could not verify ownership of this order');
+      return;
+    }
+    const now = new Date().toISOString();
+    const update = { phone_rejection_signed_at: now };
+    if (sigData) update.phone_rejection_signature_data = sigData;
+    if (sigName) update.phone_rejection_signed_by = sigName;
+    const { error } = await supabase.from('orders').update(update).eq('id', orderId);
+    if (error) {
+      alert(isRtl ? 'خطأ في حفظ التوقيع: ' + error.message : 'Error saving signature: ' + error.message);
+      return;
+    }
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...update } : o));
+    setPhoneRejectionSigModal({ open:false, orderId:null });
   };
 
   const cancelAppt = async (appt) => {
@@ -5103,14 +5136,51 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                               </div>
                             );
                           })()}
-                          {/* Rejected badge */}
-                          {relOrd.customer_rejected && !relOrd.customer_approved && (
-                            <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
-                              style={{ background:'rgba(239,68,68,0.07)', border:'1px solid rgba(239,68,68,0.2)' }}>
-                              <X size={14} style={{ color:'#ef4444' }}/>
-                              <span className="text-sm font-bold" style={{ color:'#ef4444' }}>{isRtl ? 'تم رفض كل الخدمات — بانتظار مراجعة الفريق' : 'All services rejected — awaiting review'}</span>
-                            </div>
-                          )}
+                          {/* Rejected badge — a staff-recorded phone rejection made once the car
+                              was already in our custody (phone_rejection_needs_signature) still
+                              needs the customer to sign here before it's fully confirmed. */}
+                          {relOrd.customer_rejected && !relOrd.customer_approved && (() => {
+                            const needsSig = relOrd.phone_rejection_needs_signature;
+                            const signed = relOrd.phone_rejection_signed_at;
+                            if (needsSig && !signed) {
+                              return (
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
+                                    style={{ background:'rgba(239,68,68,0.07)', border:'1px solid rgba(239,68,68,0.2)' }}>
+                                    <X size={14} style={{ color:'#ef4444' }}/>
+                                    <span className="text-sm font-bold" style={{ color:'#ef4444' }}>{isRtl ? 'سجّلنا رفضك لكل الخدمات تليفونيًا — برجاء التوقيع لتأكيد الرفض' : 'We recorded your phone rejection of all services — please sign to confirm'}</span>
+                                  </div>
+                                  <button onClick={() => setPhoneRejectionSigModal({ open:true, orderId:relOrd.id })}
+                                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-base font-black transition-all active:scale-95"
+                                    style={{ background:'#ef4444', color:'#fff' }}>
+                                    <Check size={15}/>{isRtl ? 'توقيع على الرفض' : 'Sign the Rejection'}
+                                  </button>
+                                </div>
+                              );
+                            }
+                            return (
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
+                                  style={{ background:'rgba(239,68,68,0.07)', border:'1px solid rgba(239,68,68,0.2)' }}>
+                                  <X size={14} style={{ color:'#ef4444' }}/>
+                                  <span className="text-sm font-bold" style={{ color:'#ef4444' }}>{isRtl ? 'تم رفض كل الخدمات — بانتظار مراجعة الفريق' : 'All services rejected — awaiting review'}</span>
+                                </div>
+                                {needsSig && signed && relOrd.phone_rejection_signature_data && (
+                                  <div className="px-2 py-2 rounded-xl" style={{ background:`${C.gold}08`, border:`1px solid ${C.gold}20` }}>
+                                    <p className="text-[11px] font-bold mb-1.5" style={{ color:C.dim }}>{isRtl ? 'توقيعك على الرفض:' : 'Your rejection signature:'}</p>
+                                    <img src={relOrd.phone_rejection_signature_data} alt="sig"
+                                      style={{ maxWidth:180, height:'auto', background:'#fff', padding:3, borderRadius:8, border:`1px solid ${C.border}`, display:'block' }}/>
+                                  </div>
+                                )}
+                                {needsSig && signed && relOrd.phone_rejection_signed_by && !relOrd.phone_rejection_signature_data && (
+                                  <div className="px-3 py-2 rounded-xl" style={{ background:`${C.gold}08`, border:`1px solid ${C.gold}20` }}>
+                                    <p className="text-[11px] font-bold mb-1" style={{ color:C.dim }}>{isRtl ? 'توقيعك على الرفض:' : 'Your rejection signature:'}</p>
+                                    <p style={{ fontFamily:'Georgia,serif', fontStyle:'italic', fontSize:20, color:C.text }}>{relOrd.phone_rejection_signed_by}</p>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       ) : null}
 
@@ -5439,6 +5509,19 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
           hasParts={(orders.find(o => o.id === sigModal.orderId)?.order_items || []).some(i => i.item_type === 'part')}
           onConfirm={approveWithSignature}
           onClose={() => setSigModal({ open:false, orderId:null })}
+        />
+      )}
+
+      {phoneRejectionSigModal.open && (
+        <SignatureModal
+          isRtl={isRtl}
+          theme={theme}
+          hasParts={false}
+          title={isRtl ? 'توقيع على الرفض' : 'Rejection Signature'}
+          subtitle={isRtl ? 'وقّع لتأكيد رفضك لكل الخدمات المعروضة' : 'Sign to confirm you rejected all proposed services'}
+          confirmLabel={isRtl ? 'تأكيد الرفض' : 'Confirm Rejection'}
+          onConfirm={signPhoneRejection}
+          onClose={() => setPhoneRejectionSigModal({ open:false, orderId:null })}
         />
       )}
 
