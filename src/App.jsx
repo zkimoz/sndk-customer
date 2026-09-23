@@ -3247,6 +3247,66 @@ const LEGAL_CONTENT = {
       ] },
     ],
   },
+  privacy: {
+    title: { ar: 'سياسة الخصوصية', en: 'Privacy Policy' },
+    intro: {
+      ar: 'تحترم سندك خصوصية عملائها، وتوضح سياسة الخصوصية هذه ("السياسة") كيفية جمع بياناتك الشخصية واستخدامها وحمايتها عند استخدامك لمنصة سندك (الموقع الإلكتروني والتطبيق). باستخدامك للمنصة فإنك توافق على جمع واستخدام بياناتك وفق ما هو موضح في هذه السياسة.',
+      en: "SNDK respects its customers' privacy. This Privacy Policy (\"Policy\") explains how your personal data is collected, used and protected when you use the SNDK Platform (the website and the mobile app). By using the Platform, you agree to the collection and use of your data as described in this Policy.",
+    },
+    sections: [
+      { title: { ar: 'البيانات التي نجمعها', en: 'Data We Collect' }, bullets: [
+        { ar: 'بيانات الهوية والتواصل: الاسم، رقم الجوال، البريد الإلكتروني.', en: 'Identity & contact data: name, mobile number, email.' },
+        { ar: 'بيانات العنوان: رقم المنطقة والشارع والمبنى (عند إدخالها اختياريًا).', en: 'Address data: zone, street and building number (when optionally entered).' },
+        { ar: 'بيانات السيارة: نوع السيارة وفئتها وسنة الصنع، رقم اللوحة، رقم الشاصية، وصور استمارة السيارة عند الحاجة (كخدمة تجديد الاستمارة).', en: 'Car data: make, category and year, plate number, chassis number, and registration-card photos where needed (e.g. the registration renewal service).' },
+        { ar: 'بيانات الخدمة: تفاصيل الحجوزات وأوامر الشغل والفواتير وسجل المدفوعات.', en: 'Service data: booking details, job cards, invoices and payment history.' },
+        { ar: 'الصور: أي صورة يرفعها العميل عبر الكاميرا أو مكتبة الصور (كصورة استمارة السيارة أو إيصال دفع).', en: 'Photos: any image the Customer uploads via camera or photo library (e.g. a registration card or a payment receipt).' },
+        { ar: 'بيانات الموقع: لا تجمع سندك موقع جهاز العميل؛ تُستخدم الخرائط داخل التطبيق فقط لعرض موقع سائق سندك أثناء استلام أو توصيل السيارة.', en: "Location data: SNDK does not collect the Customer's own device location; in-app maps are only used to show SNDK's driver location while picking up or delivering the car." },
+        { ar: 'بيانات الجهاز: رمز الإشعارات (Push Token) لإرسال إشعارات حالة الطلب، ونوع الجهاز ونظام التشغيل لأغراض تقنية.', en: 'Device data: a push-notification token to send order-status alerts, plus device type/OS for technical purposes.' },
+        { ar: 'التوقيع الإلكتروني: عند موافقتك على عروض الأسعار أو تفويضات الخدمات (مثل خدمة تجديد الاستمارة)، تُحفظ صورة توقيعك الإلكتروني كجزء من سجل الموافقة.', en: 'Electronic signature: when you approve a quotation or a service authorization (e.g. the registration renewal service), an image of your e-signature is kept as part of that approval record.' },
+      ] },
+      { title: { ar: 'لماذا نجمع هذه البيانات', en: 'Why We Collect It' }, body: [{ ar: 'نستخدم بياناتك من أجل:', en: 'We use your data to:' }], bullets: [
+        { ar: 'تنفيذ الخدمة المطلوبة (حجز موعد، فتح أمر شغل، تنفيذ الصيانة أو الإصلاح، تجديد استمارة السيارة).', en: 'Carry out the requested service (booking, opening a job card, maintenance/repair, registration renewal).' },
+        { ar: 'التواصل معك بخصوص حالة طلبك (عبر إشعارات أو رسائل).', en: 'Communicate with you about your order status (via notifications or messages).' },
+        { ar: 'إصدار الفواتير ومعالجة المدفوعات.', en: 'Issue invoices and process payments.' },
+        { ar: 'تحسين جودة خدماتنا.', en: 'Improve the quality of our services.' },
+        { ar: 'الامتثال لالتزاماتنا القانونية (مثل التعامل مع الإدارة العامة للمرور بموجب تفويضك الصريح في خدمة تجديد الاستمارة).', en: "Comply with our legal obligations (such as dealing with the Traffic Department under your explicit authorization for the registration renewal service)." },
+      ] },
+      { title: { ar: 'مشاركة البيانات مع أطراف أخرى', en: 'Sharing Data With Others' }, body: [
+        { ar: 'لا تبيع سندك بياناتك الشخصية لأي طرف ثالث لأغراض تسويقية. قد تتم مشاركة بيانات محددة فقط في الحالات التالية:', en: 'SNDK never sells your personal data to any third party for marketing purposes. Specific data may only be shared in the following cases:' },
+      ], bullets: [
+        { ar: 'مع الإدارة العامة للمرور بدولة قطر، حصرًا في حدود تفويضك الصريح لخدمة تجديد استمارة السيارة.', en: "With Qatar's Traffic Department, strictly within the limits of your explicit authorization for the registration renewal service." },
+        { ar: 'مع شركة التأمين المعنية، في حالة اختيارك لخدمة تجديد الاستمارة وتطلب الأمر تأمين المركبة.', en: "With the relevant insurance company, if you chose the registration renewal service and vehicle insurance is required." },
+        { ar: 'مع مزودي الخدمات التقنية الذين نستعين بهم لتشغيل المنصة (مثل استضافة قواعد البيانات وخدمات الإشعارات)، وذلك فقط بالقدر اللازم لتقديم الخدمة ووفق التزامات تعاقدية بالحفاظ على سرية البيانات.', en: 'With the technical service providers we rely on to run the Platform (such as database hosting and notification services), only to the extent needed to deliver the service and under contractual confidentiality obligations.' },
+        { ar: 'إذا أُلزمنا بذلك بموجب القانون أو أمر قضائي صادر عن جهة مختصة في دولة قطر.', en: 'If required to do so by law or a court order from a competent authority in the State of Qatar.' },
+      ] },
+      { title: { ar: 'حماية البيانات', en: 'Data Protection' }, body: [
+        { ar: 'تتخذ سندك إجراءات تقنية وتنظيمية معقولة لحماية بياناتك من الوصول غير المصرح به أو الفقد أو سوء الاستخدام. يقتصر وصول موظفي سندك إلى بياناتك على ما تستلزمه طبيعة عملهم فقط.', en: "SNDK takes reasonable technical and organizational measures to protect your data from unauthorized access, loss or misuse. SNDK staff access to your data is limited to what their role actually requires." },
+      ] },
+      { title: { ar: 'الاحتفاظ بالبيانات', en: 'Data Retention' }, body: [
+        { ar: 'تحتفظ سندك ببياناتك طوال مدة استخدامك للمنصة، وللمدة الإضافية اللازمة قانونيًا بعد ذلك (لأغراض محاسبية أو ضريبية أو لتسوية أي نزاع محتمل)، ثم يتم حذفها أو إخفاء هويتها بشكل آمن.', en: 'SNDK retains your data for as long as you use the Platform, plus any further period legally required afterward (for accounting, tax, or potential dispute purposes), after which it is securely deleted or anonymized.' },
+      ] },
+      { title: { ar: 'حقوقك', en: 'Your Rights' }, body: [
+        { ar: 'وفق القانون رقم (13) لسنة 2016 بشأن حماية البيانات الشخصية في دولة قطر، يحق لك:', en: "Under Qatar's Personal Data Privacy Protection Law No. (13) of 2016, you have the right to:" },
+      ], bullets: [
+        { ar: 'الاطلاع على بياناتك الشخصية المحفوظة لدينا.', en: 'Access the personal data we hold about you.' },
+        { ar: 'طلب تصحيح أي بيانات غير دقيقة.', en: 'Request correction of any inaccurate data.' },
+        { ar: 'الاعتراض على معالجة بياناتك في حالات معينة.', en: 'Object to the processing of your data in certain cases.' },
+        { ar: 'طلب حذف حسابك وبياناتك، مع مراعاة أي التزامات قانونية تستوجب الاحتفاظ بسجلات معينة لمدة محددة.', en: 'Request deletion of your account and data, subject to any legal obligations that require keeping certain records for a defined period.' },
+      ] },
+      { title: { ar: 'ملفات تعريف الارتباط والتخزين المحلي', en: 'Cookies & Local Storage' }, body: [
+        { ar: 'يستخدم موقعنا الإلكتروني تخزينًا محليًا محدودًا (كحفظ تفضيلات اللغة والمظهر) لتحسين تجربتك، ولا يُستخدم لأغراض تتبع إعلاني.', en: 'Our website uses limited local storage (e.g. saving your language and theme preference) to improve your experience — never for advertising tracking.' },
+      ] },
+      { title: { ar: 'خصوصية القُصَّر', en: "Children's Privacy" }, body: [
+        { ar: 'منصة سندك مخصصة لتقديم خدمات لأصحاب السيارات البالغين، ولا تستهدف عمدًا جمع بيانات من الأطفال دون سن الرشد القانوني.', en: 'The SNDK Platform is intended for adult car owners and does not knowingly collect data from children under the legal age of majority.' },
+      ] },
+      { title: { ar: 'التعديلات على هذه السياسة', en: 'Changes to This Policy' }, body: [
+        { ar: 'يجوز لسندك تحديث هذه السياسة من وقت لآخر، ويُعمل بالتحديث من تاريخ نشره على المنصة.', en: 'SNDK may update this Policy from time to time; an update takes effect once published on the Platform.' },
+      ] },
+      { title: { ar: 'تواصل معنا', en: 'Contact Us' }, body: [
+        { ar: 'لأي استفسار بخصوص خصوصية بياناتك، تواصل معنا عبر بيانات التواصل الموضحة أدناه.', en: 'For any question about your data privacy, contact us using the details below.' },
+      ] },
+    ],
+  },
 };
 
 function buildLegalHtml(kind, isRtl) {
@@ -3289,14 +3349,15 @@ function buildLegalHtml(kind, isRtl) {
   </body></html>`;
 }
 
-// Row of three buttons (Terms, Warranty, Parts Return) — shared between
-// ContactView and the mandatory TermsGateModal below so the exact same
-// legal text is one tap away in both places.
+// Row of four buttons (Terms, Privacy, Warranty, Parts Return) — shared
+// between ContactView and the mandatory TermsGateModal below so the exact
+// same legal text is one tap away in both places.
 function LegalPolicyButtons({ isRtl, onOpen }) {
   return (
     <div className="rounded-2xl overflow-hidden" style={{ border:`1px solid ${C.border}` }}>
       {[
         { key:'terms', icon:<FileImage size={18} style={{ color:C.gold }}/>, label: isRtl?'الشروط والأحكام':'Terms & Conditions' },
+        { key:'privacy', icon:<Lock size={18} style={{ color:C.gold }}/>, label: isRtl?'سياسة الخصوصية':'Privacy Policy' },
         { key:'warranty', icon:<ShieldCheck size={18} style={{ color:C.gold }}/>, label: isRtl?'سياسة الضمان':'Warranty Policy' },
         { key:'returns', icon:<Package size={18} style={{ color:C.gold }}/>, label: isRtl?'سياسة استرجاع القطع':'Parts Return Policy' },
       ].map((r, i) => (
@@ -3375,8 +3436,8 @@ function TermsGateModal({ isRtl, user, onAccepted }) {
             className="mt-0.5 w-5 h-5 flex-shrink-0 accent-current" style={{ color:C.gold }}/>
           <span className="text-sm leading-relaxed" style={{ color:C.cardText }}>
             {isRtl
-              ? 'أقر بأنني قرأت الشروط والأحكام وسياسة الضمان وسياسة استرجاع القطع، وأوافق عليها بالكامل.'
-              : 'I acknowledge that I have read the Terms & Conditions, Warranty Policy and Parts Return Policy, and I fully agree to them.'}
+              ? 'أقر بأنني قرأت الشروط والأحكام وسياسة الخصوصية وسياسة الضمان وسياسة استرجاع القطع، وأوافق عليها بالكامل.'
+              : 'I acknowledge that I have read the Terms & Conditions, Privacy Policy, Warranty Policy and Parts Return Policy, and I fully agree to them.'}
           </span>
         </label>
 
