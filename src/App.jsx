@@ -1599,6 +1599,9 @@ export default function App() {
       {showNewPassword && (
         <NewPasswordModal tr={tr} isRtl={isRtl} onClose={() => setShowNewPassword(false)}/>
       )}
+      {user && profile && !profile.terms_accepted_at && (
+        <TermsGateModal isRtl={isRtl} user={user} onAccepted={setProfile}/>
+      )}
       {showBelongingsNotice && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background:'rgba(0,0,0,0.7)' }}>
           <div className="rounded-2xl p-6 max-w-sm w-full text-center space-y-4" style={{ background:C.card, border:`1px solid ${C.gold}30` }}>
@@ -3286,6 +3289,112 @@ function buildLegalHtml(kind, isRtl) {
   </body></html>`;
 }
 
+// Row of three buttons (Terms, Warranty, Parts Return) — shared between
+// ContactView and the mandatory TermsGateModal below so the exact same
+// legal text is one tap away in both places.
+function LegalPolicyButtons({ isRtl, onOpen }) {
+  return (
+    <div className="rounded-2xl overflow-hidden" style={{ border:`1px solid ${C.border}` }}>
+      {[
+        { key:'terms', icon:<FileImage size={18} style={{ color:C.gold }}/>, label: isRtl?'الشروط والأحكام':'Terms & Conditions' },
+        { key:'warranty', icon:<ShieldCheck size={18} style={{ color:C.gold }}/>, label: isRtl?'سياسة الضمان':'Warranty Policy' },
+        { key:'returns', icon:<Package size={18} style={{ color:C.gold }}/>, label: isRtl?'سياسة استرجاع القطع':'Parts Return Policy' },
+      ].map((r, i) => (
+        <button key={r.key} type="button" onClick={() => onOpen(r.key)}
+          className="w-full flex items-center gap-3 px-4 py-3.5 transition-all hover:brightness-110 text-start"
+          style={{ background:C.panel, borderTop: i>0 ? `1px solid ${C.border}` : 'none' }}>
+          <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ background:`${C.gold}15` }}>{r.icon}</div>
+          <span className="text-sm font-semibold flex-1" style={{ color:C.text }}>{r.label}</span>
+          {isRtl ? <ChevronLeft size={16} style={{ color:C.muted }}/> : <ChevronRight size={16} style={{ color:C.muted }}/>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Full-screen viewer for one policy's HTML — z-[300] so it stacks above the
+// mandatory TermsGateModal (z-[250]) as well as ContactView's own z-[100] use.
+function LegalPolicyViewer({ policy, isRtl, onClose }) {
+  if (!policy) return null;
+  return (
+    <div className="fixed inset-0 z-[300] flex flex-col" style={{ background:'rgba(0,0,0,0.92)' }} onClick={onClose}>
+      <div className="flex items-center justify-between p-4 flex-shrink-0">
+        <span className="text-sm font-bold text-white">{LEGAL_CONTENT[policy].title[isRtl?'ar':'en']}</span>
+        <button onClick={onClose}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white"
+          style={{ background:'rgba(255,255,255,0.15)' }}>
+          <X size={14}/>{isRtl?'إغلاق':'Close'}
+        </button>
+      </div>
+      <div className="flex-1 min-h-0" onClick={e=>e.stopPropagation()}>
+        <iframe srcDoc={buildLegalHtml(policy, isRtl)} title={policy} className="w-full h-full border-0" style={{ background:'#fff' }}/>
+      </div>
+    </div>
+  );
+}
+
+// Blocks the whole app (no close button, no click-outside-dismiss) until the
+// customer reads and checks off the three legal documents — shown for every
+// signed-in customer whose profile has no terms_accepted_at yet, whether
+// that's a brand-new signup or an existing account from before this existed.
+function TermsGateModal({ isRtl, user, onAccepted }) {
+  const [openPolicy, setOpenPolicy] = useState(null);
+  const [checked, setChecked] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const accept = async () => {
+    if (!checked || saving) return;
+    setSaving(true);
+    setError('');
+    const accepted_at = new Date().toISOString();
+    const { data, error: err } = await supabase.from('profiles')
+      .update({ terms_accepted_at: accepted_at }).eq('id', user.id).select().single();
+    setSaving(false);
+    if (err) { setError(isRtl ? 'حدث خطأ، حاول مرة أخرى' : 'Something went wrong, please try again'); return; }
+    onAccepted(data);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[250] flex items-center justify-center p-4" style={{ background:'rgba(0,0,0,0.85)' }}>
+      <div className="w-full max-w-md rounded-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto" style={{ background:C.card, border:`1px solid ${C.gold}30` }}>
+        <div className="text-center space-y-1.5">
+          <ShieldCheck size={32} style={{ color:C.gold }} className="mx-auto"/>
+          <h2 className="font-black text-xl" style={{ color:C.cardText }}>{isRtl ? 'الموافقة على الشروط والأحكام' : 'Terms & Conditions Agreement'}</h2>
+          <p className="text-sm leading-relaxed" style={{ color:C.cardMuted }}>
+            {isRtl
+              ? 'قبل متابعة استخدام سندك، من فضلك اقرأ المستندات التالية ووافق عليها.'
+              : 'Before continuing to use SNDK, please read the following documents and agree to them.'}
+          </p>
+        </div>
+
+        <LegalPolicyButtons isRtl={isRtl} onOpen={setOpenPolicy}/>
+
+        <label className="flex items-start gap-3 cursor-pointer select-none">
+          <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)}
+            className="mt-0.5 w-5 h-5 flex-shrink-0 accent-current" style={{ color:C.gold }}/>
+          <span className="text-sm leading-relaxed" style={{ color:C.cardText }}>
+            {isRtl
+              ? 'أقر بأنني قرأت الشروط والأحكام وسياسة الضمان وسياسة استرجاع القطع، وأوافق عليها بالكامل.'
+              : 'I acknowledge that I have read the Terms & Conditions, Warranty Policy and Parts Return Policy, and I fully agree to them.'}
+          </span>
+        </label>
+
+        {error && <p className="text-sm font-bold text-center" style={{ color:'#f87171' }}>{error}</p>}
+
+        <button type="button" disabled={!checked || saving} onClick={accept}
+          className="w-full py-3.5 rounded-xl font-black text-[15px] transition-all active:scale-[0.98] disabled:opacity-40 flex items-center justify-center gap-2"
+          style={{ background:C.gold, color:C.btnTxt }}>
+          {saving ? <Loader2 size={17} className="animate-spin"/> : null}
+          {isRtl ? 'متابعة' : 'Continue'}
+        </button>
+      </div>
+
+      <LegalPolicyViewer policy={openPolicy} isRtl={isRtl} onClose={() => setOpenPolicy(null)}/>
+    </div>
+  );
+}
+
 // Public read (no login required) — matches how the "تواصل" nav item is
 // reachable without an account, same as browsing services.
 function ContactView({ isRtl }) {
@@ -3344,37 +3453,8 @@ function ContactView({ isRtl }) {
       {/* Legal — Terms, Warranty, Parts Return. Same in-app modal pattern as
           the registration-card viewer elsewhere, so mobile Safari never
           strands the customer on a bare new tab with no way back. */}
-      <div className="rounded-2xl overflow-hidden" style={{ border:`1px solid ${C.border}` }}>
-        {[
-          { key:'terms', icon:<FileImage size={18} style={{ color:C.gold }}/>, label: isRtl?'الشروط والأحكام':'Terms & Conditions' },
-          { key:'warranty', icon:<ShieldCheck size={18} style={{ color:C.gold }}/>, label: isRtl?'سياسة الضمان':'Warranty Policy' },
-          { key:'returns', icon:<Package size={18} style={{ color:C.gold }}/>, label: isRtl?'سياسة استرجاع القطع':'Parts Return Policy' },
-        ].map((r, i) => (
-          <button key={r.key} onClick={() => setOpenPolicy(r.key)}
-            className="w-full flex items-center gap-3 px-4 py-3.5 transition-all hover:brightness-110 text-start"
-            style={{ background:C.panel, borderTop: i>0 ? `1px solid ${C.border}` : 'none' }}>
-            <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ background:`${C.gold}15` }}>{r.icon}</div>
-            <span className="text-sm font-semibold flex-1" style={{ color:C.text }}>{r.label}</span>
-            {isRtl ? <ChevronLeft size={16} style={{ color:C.muted }}/> : <ChevronRight size={16} style={{ color:C.muted }}/>}
-          </button>
-        ))}
-      </div>
-
-      {openPolicy && (
-        <div className="fixed inset-0 z-[100] flex flex-col" style={{ background:'rgba(0,0,0,0.92)' }} onClick={() => setOpenPolicy(null)}>
-          <div className="flex items-center justify-between p-4 flex-shrink-0">
-            <span className="text-sm font-bold text-white">{LEGAL_CONTENT[openPolicy].title[isRtl?'ar':'en']}</span>
-            <button onClick={() => setOpenPolicy(null)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white"
-              style={{ background:'rgba(255,255,255,0.15)' }}>
-              <X size={14}/>{isRtl?'إغلاق':'Close'}
-            </button>
-          </div>
-          <div className="flex-1 min-h-0" onClick={e=>e.stopPropagation()}>
-            <iframe srcDoc={buildLegalHtml(openPolicy, isRtl)} title={openPolicy} className="w-full h-full border-0" style={{ background:'#fff' }}/>
-          </div>
-        </div>
-      )}
+      <LegalPolicyButtons isRtl={isRtl} onOpen={setOpenPolicy}/>
+      <LegalPolicyViewer policy={openPolicy} isRtl={isRtl} onClose={() => setOpenPolicy(null)}/>
     </div>
   );
 }
