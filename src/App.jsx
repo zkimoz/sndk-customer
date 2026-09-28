@@ -2367,6 +2367,23 @@ function TrackingTimeline({ stage, isRtl }) {
 
 function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
   const [zoomImage, setZoomImage] = useState(null);
+  const [sigOpen, setSigOpen] = useState(false);
+  // Local override so the "sign to approve" step reflects instantly without
+  // waiting for the parent list to refetch — merged over `po` below.
+  const [localApproval, setLocalApproval] = useState({
+    customer_approved_at: po.customer_approved_at,
+    approval_signature_data: po.approval_signature_data,
+    approval_signed_by: po.approval_signed_by,
+  });
+  const isApproved = !!localApproval.customer_approved_at;
+  const confirmApproval = async (sigData, sigName) => {
+    const nowIso = new Date().toISOString();
+    const patch = { customer_approved_at: nowIso, approval_signature_data: sigData || null, approval_signed_by: sigName || null };
+    if (po.status === 'priced') patch.status = 'awaiting_payment';
+    await supabase.from('part_orders').update(patch).eq('id', po.id);
+    setLocalApproval({ customer_approved_at: nowIso, approval_signature_data: sigData || null, approval_signed_by: sigName || null });
+    setSigOpen(false);
+  };
   const ST = {
     pending:          { label: isRtl ? 'قيد المراجعة' : 'Pending review',      bg:'rgba(59,130,246,0.15)',  text:'#60a5fa' },
     reviewing:        { label: isRtl ? 'قيد المراجعة' : 'Under review',        bg:'rgba(59,130,246,0.15)',  text:'#60a5fa' },
@@ -2384,7 +2401,8 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
   const totalQuoted = items.reduce((s,i)=>s+Number(i.quoted_sell_price||0), 0);
   const paidSoFar = (po.part_order_payments || []).reduce((s,p)=>s+Number(p.amount||0), 0);
   const amountDue = Math.max(totalQuoted - paidSoFar, 0);
-  const canPay = ['priced','awaiting_payment'].includes(po.status) && po.payment_status !== 'paid' && amountDue > 0.01;
+  const needsApproval = ['priced','awaiting_payment'].includes(po.status) && !isApproved && totalQuoted > 0.01;
+  const canPay = ['priced','awaiting_payment'].includes(po.status) && po.payment_status !== 'paid' && amountDue > 0.01 && isApproved;
   const title = items.length > 1
     ? (isRtl ? `${items.length} قطع غيار` : `${items.length} spare parts`)
     : (items[0]?.part_snapshot?.name?.[lang] || items[0]?.part_snapshot?.name?.ar || '—');
@@ -2477,6 +2495,26 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
             <p className="text-sm font-semibold" style={{ color:'#eab308' }}>{isRtl ? 'بانتظار تأكيد الدفع من فريقنا' : 'Awaiting payment confirmation from our team'}</p>
           )}
 
+          {isApproved && (
+            <div className="rounded-xl p-3" style={{ background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.3)' }}>
+              <p className="text-xs font-bold" style={{ color:'#22c55e' }}>
+                {isRtl ? '✓ تمت الموافقة على الطلب' : '✓ Request Approved'}
+                {localApproval.approval_signed_by && ` — ${localApproval.approval_signed_by}`}
+              </p>
+              {localApproval.approval_signature_data && (
+                <img src={localApproval.approval_signature_data} alt="" className="h-10 mt-1 rounded bg-white"/>
+              )}
+            </div>
+          )}
+
+          {needsApproval && (
+            <button onClick={()=>setSigOpen(true)}
+              className="w-full py-3 rounded-xl text-sm font-black transition-all active:scale-95"
+              style={{ background:'#722F37', color:'#fff' }}>
+              {isRtl ? 'الموافقة والتوقيع على الطلب' : 'Approve & Sign the Request'}
+            </button>
+          )}
+
           {canPay && (
             <button onClick={()=>onPay(amountDue)}
               className="w-full py-3 rounded-xl text-sm font-black transition-all active:scale-95"
@@ -2487,6 +2525,18 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
         </div>
       </div>
     </div>
+    {sigOpen && (
+      <SignatureModal
+        isRtl={isRtl}
+        theme="dark"
+        hasParts={false}
+        title={isRtl ? 'الموافقة على طلب قطعة الغيار' : 'Approve Spare Part Request'}
+        subtitle={isRtl ? `وقّع لتأكيد موافقتك على السعر (${totalQuoted.toFixed(3)} ر.ق) والمتابعة للدفع` : `Sign to confirm you approve the price (${totalQuoted.toFixed(3)} QAR) and proceed to payment`}
+        confirmLabel={isRtl ? 'تأكيد الموافقة' : 'Confirm Approval'}
+        onConfirm={confirmApproval}
+        onClose={()=>setSigOpen(false)}
+      />
+    )}
     {zoomImage && (
       <div className="fixed inset-0 bg-black/95 z-[60] flex items-center justify-center p-4" onClick={()=>setZoomImage(null)}>
         <button onClick={()=>setZoomImage(null)} className="absolute top-4 text-white/80 p-2" style={{ [isRtl?'left':'right']:16 }}><X size={26}/></button>
@@ -5569,6 +5619,9 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                     </div>
                     {totalQuoted > 0 && (
                       <p className="text-base font-black" style={{ color:C.gold }}>{totalQuoted.toFixed(3)} {isRtl?'ر.ق':'QAR'}</p>
+                    )}
+                    {['priced','awaiting_payment'].includes(po.status) && !po.customer_approved_at && totalQuoted > 0.01 && (
+                      <p className="text-xs font-bold" style={{ color:cc.fg }}>{isRtl ? '⚠ بانتظار موافقتك وتوقيعك' : '⚠ Awaiting your approval & signature'}</p>
                     )}
                     {po.payment_status === 'pending' && (
                       <p className="text-xs font-semibold" style={{ color:'#eab308' }}>{isRtl ? 'بانتظار تأكيد الدفع من فريقنا' : 'Awaiting payment confirmation from our team'}</p>
