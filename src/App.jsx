@@ -2331,6 +2331,7 @@ function PartOrderPaymentModal({ partOrderId, amount, requestNumber, customerNam
 // description) once they've priced the request, viewed here by the customer.
 // Everything staff hasn't filled in yet just doesn't render.
 function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
+  const [zoomImage, setZoomImage] = useState(null);
   const ST = {
     pending:          { label: isRtl ? 'قيد المراجعة' : 'Pending review',      bg:'rgba(59,130,246,0.15)',  text:'#60a5fa' },
     reviewing:        { label: isRtl ? 'قيد المراجعة' : 'Under review',        bg:'rgba(59,130,246,0.15)',  text:'#60a5fa' },
@@ -2354,6 +2355,7 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
     : (items[0]?.part_snapshot?.name?.[lang] || items[0]?.part_snapshot?.name?.ar || '—');
 
   return (
+    <>
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto" onClick={e=>e.stopPropagation()}
         style={{ background:C.card }}>
@@ -2372,6 +2374,8 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
             {items.map(it => {
               const photos = it.admin_image_urls?.length ? it.admin_image_urls : (it.part_snapshot?.image_url ? [it.part_snapshot.image_url] : []);
               const description = it.admin_description?.[lang] || it.admin_description?.ar;
+              const compatibleCars = it.compatible_cars?.[lang] || it.compatible_cars?.ar;
+              const availabilityEta = it.availability_eta?.[lang] || it.availability_eta?.ar;
               return (
                 <div key={it.id} className="rounded-xl p-3 space-y-2" style={{ background:`${C.gold}0a`, border:`1px solid ${C.gold}20` }}>
                   <div className="flex items-center justify-between gap-2">
@@ -2380,14 +2384,44 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
                       <span className="font-black text-sm flex-shrink-0" style={{ color:C.gold }}>{Number(it.quoted_sell_price).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
                     )}
                   </div>
+                  {it.part_number && (
+                    <p className="text-xs font-mono" style={{ color:C.cardMuted }}>{isRtl?'رقم القطعة':'Part No.'}: {it.part_number}</p>
+                  )}
                   {photos.length > 0 && (
                     <div className="flex gap-2 overflow-x-auto">
                       {photos.map(url => (
-                        <img key={url} src={url} alt="" className="h-32 rounded-xl object-cover flex-shrink-0"/>
+                        <img key={url} src={url} alt="" onClick={()=>setZoomImage(url)}
+                          className="h-32 rounded-xl object-cover flex-shrink-0 cursor-zoom-in active:opacity-80 transition-opacity"/>
                       ))}
                     </div>
                   )}
                   {description && <p className="text-sm leading-relaxed" style={{ color:C.cardMuted }}>{description}</p>}
+                  {compatibleCars && (
+                    <div className="pt-1" style={{ borderTop:`1px dashed ${C.gold}25` }}>
+                      <p className="text-xs font-bold mb-0.5" style={{ color:C.cardMuted }}>{isRtl?'تركّب على':'Fits'}</p>
+                      <p className="text-sm" style={{ color:C.cardText }}>{compatibleCars}</p>
+                    </div>
+                  )}
+                  {availabilityEta && (
+                    <div>
+                      <p className="text-xs font-bold mb-0.5" style={{ color:C.cardMuted }}>{isRtl?'مدة التوفير':'Availability'}</p>
+                      <p className="text-sm" style={{ color:C.cardText }}>{availabilityEta}</p>
+                    </div>
+                  )}
+                  {(it.tracking_number || it.tracking_url) && (
+                    <div>
+                      <p className="text-xs font-bold mb-0.5" style={{ color:C.cardMuted }}>{isRtl?'تتبع القطعة':'Part Tracking'}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {it.tracking_number && <span className="text-sm font-mono" style={{ color:C.cardText }}>{it.tracking_number}</span>}
+                        {it.tracking_url && (
+                          <a href={it.tracking_url} target="_blank" rel="noopener noreferrer"
+                            className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background:`${C.gold}20`, color:C.gold }}>
+                            {isRtl?'تتبع الشحنة ↗':'Track Shipment ↗'}
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -2421,6 +2455,13 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
         </div>
       </div>
     </div>
+    {zoomImage && (
+      <div className="fixed inset-0 bg-black/95 z-[60] flex items-center justify-center p-4" onClick={()=>setZoomImage(null)}>
+        <button onClick={()=>setZoomImage(null)} className="absolute top-4 text-white/80 p-2" style={{ [isRtl?'left':'right']:16 }}><X size={26}/></button>
+        <img src={zoomImage} alt="" className="max-w-full max-h-full object-contain rounded-lg" onClick={e=>e.stopPropagation()}/>
+      </div>
+    )}
+    </>
   );
 }
 
