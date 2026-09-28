@@ -4079,7 +4079,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
         loaded.filter(o => o.sent_to_customer).forEach(o => seenIdsRef.current.add(o.id));
       }
       // auto-switch to orders tab if there are any active orders
-      if (loaded.some(o => o.sent_to_customer)) setTab('orders');
+      if (loaded.some(o => o.sent_to_customer)) setTab('active');
       const pending = loaded.filter(o => o.sent_to_customer && hasUndecidedService(o)).length;
       onCountChange?.(pending);
     }
@@ -4488,15 +4488,75 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
   const apptMap       = Object.fromEntries(appts.map(a => [a.id, a]));
   const orderByApptId = Object.fromEntries(orders.map(o => [o.appointment_id, o]));
 
+  // Hoisted so the "الحالية"/"الملغية" tabs can stack all three kinds of
+  // request (appointments awaiting reception, ones with an active job card,
+  // and spare-parts requests) as one combined feed under just two tabs,
+  // and so a single shared empty-state can tell when literally nothing
+  // in any of the three is left to show.
+  const noJcAppts        = appts.filter(a => !a.job_cards?.length && a.status !== 'cancelled');
+  const jcAppts          = appts.filter(a => a.job_cards?.length > 0 && !a.job_cards[0].closed_at && a.status !== 'cancelled' && !rejectedAllOverride(orderByApptId[a.id]));
+  const cancelledAppts   = appts.filter(a => a.status === 'cancelled');
+  const activePartOrders = partOrders.filter(po => !['cancelled','declined'].includes(po.status));
+  const cancelledPartOrders = partOrders.filter(po => ['cancelled','declined'].includes(po.status));
+  const activeIsEmpty    = noJcAppts.length === 0 && jcAppts.length === 0 && activePartOrders.length === 0;
+  const cancelledIsEmpty = cancelledAppts.length === 0 && cancelledPartOrders.length === 0;
+  // Same catName-based category chip mobile shows — read off service_type
+  // the same way parseServices already does for the service-name chips.
+  const categoryOf = (a) => {
+    const svcs = parseServices(a.service_type);
+    if (!svcs) return null;
+    const cats = Array.from(new Set(svcs.map(s => (typeof s==='string' ? null : s.catName)).filter(Boolean)));
+    return cats.join(' · ') || null;
+  };
+  // Shared by both the active and cancelled spare-parts sections below —
+  // same card either way, just fed from a different filtered array.
+  const renderPartCard = (po, pi) => {
+    const cc = CARD_BG_CYCLE[pi % 2];
+    // Badge always takes the OTHER card color in the cycle, not a
+    // status-specific color — guarantees contrast against the card's own
+    // alternating gold/maroon background instead of sometimes blending in
+    // (e.g. a yellow "Priced" badge on the gold card).
+    const badgeC = CARD_BG_CYCLE[(pi + 1) % 2];
+    const st = PART_ORDER_ST[po.status] || PART_ORDER_ST.pending;
+    const items = po.part_order_items || [];
+    const totalQuoted = items.reduce((s,i)=>s+Number(i.quoted_sell_price||0), 0);
+    const title = items.length > 1
+      ? (isRtl ? `${items.length} قطع غيار` : `${items.length} spare parts`)
+      : (items[0]?.part_snapshot?.name?.[lang] || items[0]?.part_snapshot?.name?.ar || '—');
+    return (
+      <button key={po.id} onClick={()=>setViewPartOrder(po)}
+        className="w-full text-start rounded-2xl p-4 space-y-2 transition-all active:scale-[0.98]"
+        style={{ background:cc.bg, border:`1px solid ${cc.fg}40` }}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded-full mb-1" style={{ background:'rgba(0,0,0,0.12)', color:cc.txt }}>
+              {isRtl ? 'طلب قطع غيار' : 'Spare Parts Request'}
+            </span>
+            <p className="font-bold text-sm" style={{ color:cc.txt }}>{title}</p>
+            <p className="text-xs mt-1 font-mono" style={{ color:cc.sub }}>{po.request_number}</p>
+          </div>
+          <span className="px-2.5 py-1 rounded-full text-sm font-bold flex-shrink-0" style={{ background:badgeC.bg, color:badgeC.txt }}>{st.label}</span>
+        </div>
+        {totalQuoted > 0 && (
+          <p className="text-base font-black" style={{ color:C.gold }}>{totalQuoted.toFixed(3)} {isRtl?'ر.ق':'QAR'}</p>
+        )}
+        {['priced','awaiting_payment'].includes(po.status) && !po.customer_approved_at && totalQuoted > 0.01 && (
+          <p className="text-xs font-bold" style={{ color:cc.fg }}>{isRtl ? '⚠ بانتظار موافقتك وتوقيعك' : '⚠ Awaiting your approval & signature'}</p>
+        )}
+        {po.payment_status === 'pending' && (
+          <p className="text-xs font-semibold" style={{ color:'#eab308' }}>{isRtl ? 'بانتظار تأكيد الدفع من فريقنا' : 'Awaiting payment confirmation from our team'}</p>
+        )}
+      </button>
+    );
+  };
+
   return (
     <div className="p-4 md:p-8 space-y-5 max-w-3xl md:mx-auto">
       <h1 className="text-2xl font-black" style={{ color:C.gold }}>{tr.myOrders}</h1>
 
       {/* Tabs */}
-      <div className="grid grid-cols-4 rounded-2xl overflow-hidden" style={{ border:`1px solid ${C.border}` }}>
-        {[{ key:'appts',     label: isRtl ? 'المواعيد' : 'Appointments', icon:Calendar },
-          { key:'orders',    label: isRtl ? 'الطلبات'  : 'My Orders',    icon:ClipboardList },
-          { key:'parts',     label: isRtl ? 'قطع الغيار' : 'Spare Parts', icon:Package },
+      <div className="grid grid-cols-2 rounded-2xl overflow-hidden" style={{ border:`1px solid ${C.border}` }}>
+        {[{ key:'active',    label: isRtl ? 'الحالية' : 'Active',                                          icon:Calendar },
           { key:'cancelled', label: isRtl ? 'المواعيد أو الطلبات الملغية' : 'Cancelled Appointments/Orders', icon:X }].map(item => (
           <button key={item.key} onClick={() => setTab(item.key)}
             className="flex items-center justify-center gap-2 py-3 text-base font-bold transition-all"
@@ -4514,24 +4574,17 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
         </div>
       ) : (
         <>
-          {/* ── قسم 1: المواعيد (بدون أمر شغل) ── */}
-          {tab==='appts' && (() => {
-            const noJcAppts = appts.filter(a => !a.job_cards?.length && a.status !== 'cancelled');
+          {/* ── الحالية: كل شيء مدمج في تاب واحد (مواعيد بانتظار الاستقبال + طلبات جارية + قطع غيار) ── */}
+          {tab==='active' && activeIsEmpty && (
+            <div className="py-16 text-center space-y-2" style={{ color:C.muted }}>
+              <Calendar size={44} className="mx-auto opacity-25"/>
+              <p className="text-base">{isRtl ? 'لا توجد طلبات حالية' : 'No active requests'}</p>
+            </div>
+          )}
+          {tab==='active' && noJcAppts.length > 0 && (() => {
             return (
               <div className="space-y-3">
-                {noJcAppts.length === 0 ? (
-                  <div className="py-16 text-center space-y-3" style={{ color:C.muted }}>
-                    <Calendar size={44} className="mx-auto opacity-25"/>
-                    <p className="text-base">{isRtl ? 'لا توجد مواعيد بانتظار الاستقبال' : 'No pending appointments'}</p>
-                    {appts.filter(a => a.job_cards?.length > 0).length > 0 && (
-                      <button onClick={() => setTab('orders')}
-                        className="text-sm font-bold px-4 py-2 rounded-xl border transition-all"
-                        style={{ borderColor:C.gold, color:C.gold, background:`${C.gold}10` }}>
-                        {isRtl ? 'عرض الطلبات الجارية ←' : 'View active orders →'}
-                      </button>
-                    )}
-                  </div>
-                ) : noJcAppts.map((a, ai) => {
+                {noJcAppts.map((a, ai) => {
                   const cc  = CARD_BG_CYCLE[ai % 2];
                   const car = a.cars;
                   const st  = APPT_ST[a.status] || APPT_ST.pending;
@@ -4541,6 +4594,11 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                       {/* Service + status */}
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
+                          {categoryOf(a) && (
+                            <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded-full mb-1.5" style={{ background:`${C.gold}20`, color:C.gold }}>
+                              {categoryOf(a)}
+                            </span>
+                          )}
                           {(() => {
                             const svcs = parseServices(a.service_type);
                             return svcs ? (
@@ -4602,19 +4660,11 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
             );
           })()}
 
-          {/* ── قسم 2: الطلبات (مواعيد عندها أمر شغل) ── */}
-          {tab==='orders' && (() => {
-            // Closed job cards, and orders the customer rejected in full, move to
-            // the car's maintenance history under حسابي — not shown here.
-            const jcAppts = appts.filter(a => a.job_cards?.length > 0 && !a.job_cards[0].closed_at && a.status !== 'cancelled' && !rejectedAllOverride(orderByApptId[a.id]));
+          {/* ── الحالية (تابع): المواعيد اللي ليها أمر شغل ── */}
+          {tab==='active' && jcAppts.length > 0 && (() => {
             return (
               <div className="space-y-3">
-                {jcAppts.length === 0 ? (
-                  <div className="py-16 text-center space-y-2" style={{ color:C.muted }}>
-                    <ClipboardList size={44} className="mx-auto opacity-25"/>
-                    <p className="text-base">{isRtl ? 'لا توجد طلبات حتى الآن' : 'No orders yet'}</p>
-                  </div>
-                ) : jcAppts.map((a, ai) => {
+                {jcAppts.map((a, ai) => {
                   const cc     = CARD_BG_CYCLE[1]; // always maroon
                   const jc     = publishedJobCard(a.job_cards[0]);
                   const car    = a.cars;
@@ -4676,6 +4726,11 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                         className="w-full text-inherit px-4 py-3 flex items-center justify-between gap-3 transition-all cursor-pointer"
                         style={{ borderBottom: isExpanded ? `1px solid ${cc.div}` : 'none', textAlign: isRtl ? 'right' : 'left' }}>
                         <div className="flex-1 min-w-0">
+                          {categoryOf(a) && (
+                            <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-1" style={{ background:'rgba(255,255,255,0.15)', color:'#fff' }}>
+                              {categoryOf(a)}
+                            </span>
+                          )}
                           {car && (
                             <p className="text-sm font-bold" style={{ color:cc.txt }}>
                               {[carTypeLabel(car, carBrandsRef, lang), carCategoryLabel(car, carCatsRef, lang), car.production_year].filter(Boolean).join(' · ')}
@@ -5510,17 +5565,24 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
             );
           })()}
 
-          {/* ── قسم 3: الطلبات الملغية (من العميل أو الموظف) ── */}
-          {tab==='cancelled' && (() => {
-            const cancelledAppts = appts.filter(a => a.status === 'cancelled');
+          {/* ── الحالية (تابع): طلبات قطع الغيار الجارية ── */}
+          {tab==='active' && activePartOrders.length > 0 && (
+            <div className="space-y-3">
+              {activePartOrders.map((po, pi) => renderPartCard(po, pi))}
+            </div>
+          )}
+
+          {/* ── الملغية: مواعيد وطلبات قطع غيار ملغية، مدمجة في تاب واحد ── */}
+          {tab==='cancelled' && cancelledIsEmpty && (
+            <div className="py-16 text-center space-y-2" style={{ color:C.muted }}>
+              <X size={44} className="mx-auto opacity-25"/>
+              <p className="text-base">{isRtl ? 'لا توجد طلبات ملغية' : 'No cancelled orders'}</p>
+            </div>
+          )}
+          {tab==='cancelled' && cancelledAppts.length > 0 && (() => {
             return (
               <div className="space-y-3">
-                {cancelledAppts.length === 0 ? (
-                  <div className="py-16 text-center space-y-2" style={{ color:C.muted }}>
-                    <X size={44} className="mx-auto opacity-25"/>
-                    <p className="text-base">{isRtl ? 'لا توجد طلبات ملغية' : 'No cancelled orders'}</p>
-                  </div>
-                ) : cancelledAppts.map((a, ai) => {
+                {cancelledAppts.map((a, ai) => {
                   const cc  = CARD_BG_CYCLE[ai % 2];
                   const car = a.cars;
                   const jc  = a.job_cards?.[0];
@@ -5532,6 +5594,11 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                       style={{ background:cc.bg, border:'1px solid rgba(239,68,68,0.4)' }}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
+                          {categoryOf(a) && (
+                            <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded-full mb-1.5" style={{ background:`${C.gold}20`, color:C.gold }}>
+                              {categoryOf(a)}
+                            </span>
+                          )}
                           {(() => {
                             const svcs = parseServices(a.service_type);
                             return svcs ? (
@@ -5581,54 +5648,10 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
             );
           })()}
 
-          {/* ── قسم 4: طلبات قطع الغيار (نظام منفصل عن أوامر الشغل) ── */}
-          {tab==='parts' && (
+          {/* ── الملغية (تابع): طلبات قطع الغيار الملغية/المرفوضة ── */}
+          {tab==='cancelled' && cancelledPartOrders.length > 0 && (
             <div className="space-y-3">
-              {partOrders.length === 0 ? (
-                <div className="py-16 text-center space-y-3" style={{ color:C.muted }}>
-                  <Package size={44} className="mx-auto opacity-25"/>
-                  <p className="text-base">{isRtl ? 'لا توجد طلبات قطع غيار' : 'No spare-parts requests'}</p>
-                </div>
-              ) : partOrders.map((po, pi) => {
-                const cc = CARD_BG_CYCLE[pi % 2];
-                // Badge always takes the OTHER card color in the cycle, not a
-                // status-specific color — guarantees contrast against the
-                // card's own alternating gold/maroon background instead of
-                // sometimes blending in (e.g. a yellow "Priced" badge on the
-                // gold card).
-                const badgeC = CARD_BG_CYCLE[(pi + 1) % 2];
-                const st = PART_ORDER_ST[po.status] || PART_ORDER_ST.pending;
-                const items = po.part_order_items || [];
-                const totalQuoted = items.reduce((s,i)=>s+Number(i.quoted_sell_price||0), 0);
-                const title = items.length > 1
-                  ? (isRtl ? `${items.length} قطع غيار` : `${items.length} spare parts`)
-                  : (items[0]?.part_snapshot?.name?.[lang] || items[0]?.part_snapshot?.name?.ar || '—');
-                return (
-                  <button key={po.id} onClick={()=>setViewPartOrder(po)}
-                    className="w-full text-start rounded-2xl p-4 space-y-2 transition-all active:scale-[0.98]"
-                    style={{ background:cc.bg, border:`1px solid ${cc.fg}40` }}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-sm" style={{ color:cc.txt }}>{title}</p>
-                        <p className="text-xs mt-1 font-mono" style={{ color:cc.sub }}>{po.request_number}</p>
-                        <p className="text-xs mt-0.5" style={{ color:cc.sub }}>
-                          {po.request_type === 'quote' ? (isRtl ? 'طلب عرض سعر' : 'Quote request') : (isRtl ? 'طلب القطعة' : 'Part order')}
-                        </p>
-                      </div>
-                      <span className="px-2.5 py-1 rounded-full text-sm font-bold flex-shrink-0" style={{ background:badgeC.bg, color:badgeC.txt }}>{st.label}</span>
-                    </div>
-                    {totalQuoted > 0 && (
-                      <p className="text-base font-black" style={{ color:C.gold }}>{totalQuoted.toFixed(3)} {isRtl?'ر.ق':'QAR'}</p>
-                    )}
-                    {['priced','awaiting_payment'].includes(po.status) && !po.customer_approved_at && totalQuoted > 0.01 && (
-                      <p className="text-xs font-bold" style={{ color:cc.fg }}>{isRtl ? '⚠ بانتظار موافقتك وتوقيعك' : '⚠ Awaiting your approval & signature'}</p>
-                    )}
-                    {po.payment_status === 'pending' && (
-                      <p className="text-xs font-semibold" style={{ color:'#eab308' }}>{isRtl ? 'بانتظار تأكيد الدفع من فريقنا' : 'Awaiting payment confirmation from our team'}</p>
-                    )}
-                  </button>
-                );
-              })}
+              {cancelledPartOrders.map((po, pi) => renderPartCard(po, pi))}
             </div>
           )}
         </>
