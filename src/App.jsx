@@ -3959,7 +3959,7 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome, carBrands, carCateg
 }
 
 function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, highlightJobNumber }) {
-  const [tab, setTab]           = useState('appts');
+  const [tab, setTab]           = useState('active');
   const [appts, setAppts]       = useState([]);
   const [orders, setOrders]     = useState([]);
   const [loading, setLoading]   = useState(true);
