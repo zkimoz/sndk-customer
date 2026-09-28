@@ -5541,6 +5541,12 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                 </div>
               ) : partOrders.map((po, pi) => {
                 const cc = CARD_BG_CYCLE[pi % 2];
+                // Badge always takes the OTHER card color in the cycle, not a
+                // status-specific color — guarantees contrast against the
+                // card's own alternating gold/maroon background instead of
+                // sometimes blending in (e.g. a yellow "Priced" badge on the
+                // gold card).
+                const badgeC = CARD_BG_CYCLE[(pi + 1) % 2];
                 const st = PART_ORDER_ST[po.status] || PART_ORDER_ST.pending;
                 const items = po.part_order_items || [];
                 const totalQuoted = items.reduce((s,i)=>s+Number(i.quoted_sell_price||0), 0);
@@ -5559,7 +5565,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                           {po.request_type === 'quote' ? (isRtl ? 'طلب عرض سعر' : 'Quote request') : (isRtl ? 'طلب القطعة' : 'Part order')}
                         </p>
                       </div>
-                      <span className="px-2.5 py-1 rounded-full text-sm font-bold flex-shrink-0" style={{ background:st.bg, color:st.text }}>{st.label}</span>
+                      <span className="px-2.5 py-1 rounded-full text-sm font-bold flex-shrink-0" style={{ background:badgeC.bg, color:badgeC.txt }}>{st.label}</span>
                     </div>
                     {totalQuoted > 0 && (
                       <p className="text-base font-black" style={{ color:C.gold }}>{totalQuoted.toFixed(3)} {isRtl?'ر.ق':'QAR'}</p>
