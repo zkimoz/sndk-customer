@@ -2380,7 +2380,11 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
     const nowIso = new Date().toISOString();
     const patch = { customer_approved_at: nowIso, approval_signature_data: sigData || null, approval_signed_by: sigName || null };
     if (po.status === 'priced') patch.status = 'awaiting_payment';
-    await supabase.from('part_orders').update(patch).eq('id', po.id);
+    const { error } = await supabase.from('part_orders').update(patch).eq('id', po.id);
+    if (error) {
+      alert((isRtl ? 'فشل حفظ الموافقة: ' : 'Failed to save approval: ') + error.message);
+      return;
+    }
     setLocalApproval({ customer_approved_at: nowIso, approval_signature_data: sigData || null, approval_signed_by: sigName || null });
     setSigOpen(false);
   };
