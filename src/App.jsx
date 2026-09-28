@@ -2330,6 +2330,41 @@ function PartOrderPaymentModal({ partOrderId, amount, requestNumber, customerNam
 // The actual "page" for a requested spare part — built by staff (photos +
 // description) once they've priced the request, viewed here by the customer.
 // Everything staff hasn't filled in yet just doesn't render.
+// A branded, SNDK-owned tracking timeline for a sourced/imported part —
+// shown instead of sending the customer out to a courier's own site.
+const TRACKING_STAGES = ['ordered', 'shipped', 'customs', 'arrived', 'ready'];
+const TRACKING_STAGE_LABELS = {
+  ordered: { ar: 'تم الطلب من المورد', en: 'Ordered from Supplier' },
+  shipped: { ar: 'تم شحن القطعة', en: 'Part Shipped' },
+  customs: { ar: 'في الجمرك', en: 'In Customs' },
+  arrived: { ar: 'وصلت مستودع سندك', en: 'Arrived at SNDK Warehouse' },
+  ready: { ar: 'جاهزة للاستلام', en: 'Ready for Pickup' },
+};
+
+function TrackingTimeline({ stage, isRtl }) {
+  const idx = TRACKING_STAGES.indexOf(stage);
+  if (idx === -1) return null;
+  return (
+    <div className="flex flex-col gap-0">
+      {TRACKING_STAGES.map((s, i) => {
+        const done = i <= idx;
+        const isLast = i === TRACKING_STAGES.length - 1;
+        return (
+          <div key={s} className="flex gap-2.5" style={{ flexDirection: isRtl ? 'row-reverse' : 'row' }}>
+            <div className="flex flex-col items-center">
+              <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: done ? '#722F37' : '#D1D5DB' }}/>
+              {!isLast && <div className="w-0.5 flex-1" style={{ background: i < idx ? '#722F37' : '#D1D5DB', minHeight: 16 }}/>}
+            </div>
+            <p className="text-sm pb-3" style={{ color: done ? '#722F37' : '#9CA3AF', fontWeight: done ? 700 : 500 }}>
+              {TRACKING_STAGE_LABELS[s][isRtl ? 'ar' : 'en']}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
   const [zoomImage, setZoomImage] = useState(null);
   const ST = {
@@ -2408,18 +2443,15 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
                       <p className="text-sm" style={{ color:C.cardText }}>{availabilityEta}</p>
                     </div>
                   )}
-                  {(it.tracking_number || it.tracking_url) && (
-                    <div>
-                      <p className="text-xs font-bold mb-0.5" style={{ color:C.cardMuted }}>{isRtl?'تتبع القطعة':'Part Tracking'}</p>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {it.tracking_number && <span className="text-sm font-mono" style={{ color:C.cardText }}>{it.tracking_number}</span>}
-                        {it.tracking_url && (
-                          <a href={it.tracking_url} target="_blank" rel="noopener noreferrer"
-                            className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background:`${C.gold}20`, color:C.gold }}>
-                            {isRtl?'تتبع الشحنة ↗':'Track Shipment ↗'}
-                          </a>
-                        )}
-                      </div>
+                  {it.tracking_stage && (
+                    <div className="pt-2" style={{ borderTop:`1px dashed ${C.gold}25` }}>
+                      <p className="text-xs font-bold mb-2" style={{ color:C.cardMuted }}>{isRtl?'تتبع القطعة':'Part Tracking'}</p>
+                      <TrackingTimeline stage={it.tracking_stage} isRtl={isRtl}/>
+                      {it.tracking_number && (
+                        <p className="text-xs font-mono mt-1" style={{ color:C.cardMuted }}>
+                          {isRtl?'رقم الشحنة':'Shipment No.'}: {it.tracking_number}
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
