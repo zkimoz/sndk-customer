@@ -6207,7 +6207,8 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
   };
 
   const saveProfile = async () => {
-    if (!editForm.full_name?.trim() || editForm.phone_number?.length !== 8) return;
+    // Phone is optional — if provided at all it must be a valid 8-digit number.
+    if (!editForm.full_name?.trim() || (editForm.phone_number?.length > 0 && editForm.phone_number.length !== 8)) return;
     setSavingProfile(true);
     const updatePayload = {
       full_name: editForm.full_name.trim(),
@@ -6220,7 +6221,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
     // pre-existing duplicate elsewhere in the table for a field the customer
     // wasn't even trying to change (e.g. just updating their address).
     if (editForm.phone_number !== profile?.phone_number) {
-      updatePayload.phone_number = editForm.phone_number;
+      updatePayload.phone_number = editForm.phone_number || null;
     }
     const { error } = await supabase.from('profiles').update(updatePayload).eq('id', user.id);
     setSavingProfile(false);
@@ -6384,7 +6385,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
   const statusLabel = (status) => APPT_STATUS_LABELS[lang]?.[status] || status;
   const statusColor = { pending:'rgba(234,179,8,0.8)', confirmed:'rgba(59,130,246,0.8)', in_progress:'rgba(249,115,22,0.8)', completed:'rgba(34,197,94,0.8)', cancelled:'rgba(239,68,68,0.8)' };
 
-  const canSaveProfile = editForm.full_name?.trim() && editForm.phone_number?.length === 8;
+  const canSaveProfile = editForm.full_name?.trim() && (editForm.phone_number?.length === 0 || editForm.phone_number?.length === 8);
 
   const inField = (label, field, type='text', ph='', required=false) => (
     <div>
@@ -8213,6 +8214,14 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
     // Booking always requires an account (see DetailsStep) — guarded
     // defensively in case this is ever somehow reached without one.
     if (!user) return;
+    // Phone is optional at signup (Apple Guideline 5.1.1(v)) but genuinely
+    // needed once a real appointment is being booked — a driver/technician
+    // has to be able to reach the customer — so it's enforced right here,
+    // at the point it actually becomes relevant, instead of at signup.
+    if (!profile?.phone_number?.trim()) {
+      alert(isRtl ? 'محتاجين رقم جوالك الأول عشان نقدر نكمل حجزك ونتواصل معاك — ضيفه من صفحة "حسابي" وارجع كمّل الحجز' : 'We need your phone number first so we can confirm your booking and reach you — add it from "My Account" then come back to finish booking');
+      return;
+    }
     // Final guard against booking a past date — ScheduleStep already blocks
     // this in the UI, but re-check here too in case formData carried a stale
     // date in from somewhere the picker's own validation never touched.
@@ -8508,12 +8517,19 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
     e.preventDefault(); setError(''); setEmailExists(false); setLoading(true);
     try {
       if (isSignUp) {
-        const { data: phoneTaken, error:phoneCheckErr } = await supabase.rpc('phone_number_exists', { check_phone: phone, check_email: email });
-        if (!phoneCheckErr && phoneTaken) throw new Error(tr.phoneAlreadyUsed);
+        // Phone is optional at signup (Apple Guideline 5.1.1(v) — data must
+        // be optional unless directly relevant); only check for a
+        // duplicate when one was actually entered.
+        if (phone.trim()) {
+          const { data: phoneTaken, error:phoneCheckErr } = await supabase.rpc('phone_number_exists', { check_phone: phone, check_email: email });
+          if (!phoneCheckErr && phoneTaken) throw new Error(tr.phoneAlreadyUsed);
+        }
 
         const { data: signUpData, error:signUpErr } = await supabase.auth.signUp({
           email, password,
-          options: { data: { full_name:fullName, phone_number:phone, language_preference:isRtl?'ar':'en' } },
+          // null, not '' — phone_number is unique across profiles, and an
+          // empty string would collide with the next phone-less signup.
+          options: { data: { full_name:fullName, phone_number: phone.trim() || null, language_preference:isRtl?'ar':'en' } },
         });
         if (signUpErr) {
           // Resending too soon for an existing, unconfirmed signup — the earlier
@@ -8671,10 +8687,10 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
                     onFocus={e=>e.target.style.borderColor='#722F37'} onBlur={e=>e.target.style.borderColor=C.border}/>
                 </div>
                 <div>
-                  <label className={labelCls} style={{ color:'rgba(114,47,55,0.75)' }}>{tr.phone}</label>
+                  <label className={labelCls} style={{ color:'rgba(114,47,55,0.75)' }}>{tr.phone} ({isRtl?'اختياري':'optional'})</label>
                   <div className="flex gap-2">
                     <div className="flex items-center px-3 rounded-xl text-sm font-mono whitespace-nowrap" style={{ background:C.input, border:`1px solid ${C.border}`, color:C.muted }}>+974</div>
-                    <input type="tel" required value={phone} onChange={e=>{const v=e.target.value.replace(/\D/g,'');if(v.length<=8)setPhone(v);}} placeholder={tr.phoneHint}
+                    <input type="tel" value={phone} onChange={e=>{const v=e.target.value.replace(/\D/g,'');if(v.length<=8)setPhone(v);}} placeholder={tr.phoneHint}
                       className={`${C.inputCls} flex-1`} style={inp}
                       onFocus={e=>e.target.style.borderColor='#722F37'} onBlur={e=>e.target.style.borderColor=C.border}/>
                   </div>
