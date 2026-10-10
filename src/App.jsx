@@ -3660,6 +3660,12 @@ function PartTreeRow({ part, depth, childrenOf, expandedIds, toggleExpanded, car
   const hasKids = kids.length > 0;
   const isExpanded = expandedIds.has(part.id);
   const inCart = cart.some(p => p.id === part.id);
+  // Press-and-hold to magnify the thumbnail in place, shrinks back the
+  // moment the finger/mouse lifts (or leaves/cancels) — not a tap-to-open
+  // lightbox, just a quick preview while held.
+  const [imgPressed, setImgPressed] = useState(false);
+  const press = () => setImgPressed(true);
+  const release = () => setImgPressed(false);
   return (
     <div>
       <div className="flex items-center gap-3 py-3.5 rounded-xl transition-all"
@@ -3667,7 +3673,12 @@ function PartTreeRow({ part, depth, childrenOf, expandedIds, toggleExpanded, car
         onClick={hasKids ? () => toggleExpanded(part.id) : undefined}
         role={hasKids ? 'button' : undefined}>
         {part.image_url
-          ? <img src={part.image_url} alt="" className="w-24 h-24 rounded-xl object-cover flex-shrink-0" style={{ border:`1px solid ${C.border}` }}/>
+          ? <img src={part.image_url} alt="" draggable={false}
+              onMouseDown={press} onMouseUp={release} onMouseLeave={release}
+              onTouchStart={press} onTouchEnd={release} onTouchCancel={release}
+              onContextMenu={e=>e.preventDefault()}
+              className="w-24 h-24 rounded-xl object-cover flex-shrink-0 transition-transform duration-150 ease-out"
+              style={{ border:`1px solid ${C.border}`, transform: imgPressed ? 'scale(2.3)' : 'scale(1)', position:'relative', zIndex: imgPressed ? 30 : 'auto' }}/>
           : <div className="w-24 h-24 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background:`${C.gold}12` }}><Package size={32} style={{ color:`${C.gold}80` }}/></div>
         }
         <span className="flex-1 min-w-0 text-base font-bold truncate cursor-pointer" style={{ color:C.text }}>
