@@ -3673,12 +3673,25 @@ function PartTreeRow({ part, depth, childrenOf, expandedIds, toggleExpanded, car
         onClick={hasKids ? () => toggleExpanded(part.id) : undefined}
         role={hasKids ? 'button' : undefined}>
         {part.image_url
-          ? <img src={part.image_url} alt="" draggable={false}
-              onMouseDown={press} onMouseUp={release} onMouseLeave={release}
-              onTouchStart={press} onTouchEnd={release} onTouchCancel={release}
-              onContextMenu={e=>e.preventDefault()}
-              className="w-24 h-24 rounded-xl object-cover flex-shrink-0 transition-transform duration-150 ease-out"
-              style={{ border:`1px solid ${C.border}`, transform: imgPressed ? 'scale(2.3)' : 'scale(1)', position:'relative', zIndex: imgPressed ? 30 : 'auto' }}/>
+          ? <div className="relative flex-shrink-0">
+              <img src={part.image_url} alt="" draggable={false}
+                onMouseDown={press} onMouseUp={release} onMouseLeave={release}
+                onTouchStart={press} onTouchEnd={release} onTouchCancel={release}
+                onContextMenu={e=>e.preventDefault()}
+                className="w-24 h-24 rounded-xl object-cover"
+                style={{ border:`1px solid ${C.border}` }}/>
+              {/* A separate floating preview card, not a CSS scale of the
+                  already-cropped thumbnail — scaling the small object-cover
+                  crop just blew it up blurry/mis-cropped on wide desktop
+                  screens (fine on mobile's smaller viewing size, not here).
+                  object-contain shows the whole image cleanly instead. */}
+              {imgPressed && (
+                <div className="absolute rounded-2xl shadow-2xl pointer-events-none overflow-hidden"
+                  style={{ top:-24, insetInlineStart:-24, width:230, height:230, background:C.panel, border:`2px solid ${C.gold}`, zIndex:30 }}>
+                  <img src={part.image_url} alt="" className="w-full h-full object-contain p-2"/>
+                </div>
+              )}
+            </div>
           : <div className="w-24 h-24 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background:`${C.gold}12` }}><Package size={32} style={{ color:`${C.gold}80` }}/></div>
         }
         <span className="flex-1 min-w-0 text-base font-bold truncate cursor-pointer" style={{ color:C.text }}>
