@@ -1875,7 +1875,7 @@ function PaymentMethodModal({ orderId, types, amount, user, customerName, isRtl,
 
   useEffect(() => {
     supabase.from('payment_methods').select('*').eq('is_active', true).order('sort_order')
-      .then(({ data }) => { setMethods(data || []); setLoadingMethods(false); });
+      .then(({ data }) => { setMethods((data || []).filter(pm => pm.show_to_customer !== false)); setLoadingMethods(false); });
   }, []);
 
   // Loads the PayPal JS SDK once and renders its Smart Buttons into
@@ -2131,7 +2131,7 @@ function PartOrderPaymentModal({ partOrderId, amount, requestNumber, customerNam
 
   useEffect(() => {
     supabase.from('payment_methods').select('*').eq('is_active', true).order('sort_order')
-      .then(({ data }) => { setMethods(data || []); setLoadingMethods(false); });
+      .then(({ data }) => { setMethods((data || []).filter(pm => pm.show_to_customer !== false)); setLoadingMethods(false); });
   }, []);
 
   useEffect(() => {
