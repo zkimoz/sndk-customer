@@ -175,6 +175,9 @@ const T = {
     pmPayRemaining:'ادفع المتبقي',
     pmModalTitle:'اختر طريقة الدفع', pmModalSub:'اختر الطريقة التي تفضّل الدفع بها',
     pmModalEmpty:'لا توجد طرق دفع متاحة حاليًا', pmModalConfirm:'تأكيد',
+    pmWalletTitle:'الدفع من المحفظة', pmWalletBalance:'رصيدك المتاح',
+    pmWalletButton:'ادفع من المحفظة', pmWalletPaying:'جاري الدفع...',
+    pmWalletOr:'أو اختر طريقة أخرى للمتبقي',
     rfAlreadyFixedTitle:'هل قمت بإصلاح هذه الخدمة بالفعل؟', rfAddQuoteTitle:'هل تريد إضافة عرض سعر لهذه الخدمة إلى طلبك الجديد؟',
     rfYes:'نعم', rfNo:'لا',
     pmReceiptUpload:'ارفع صورة أو ملف PDF لإيصال التحويل', pmReceiptHint:'مطلوب رفع إيصال التحويل قبل التأكيد',
@@ -331,6 +334,9 @@ const T = {
     pmPayRemaining:'Pay Remaining',
     pmModalTitle:'Choose a Payment Method', pmModalSub:'Pick how you\'d like to pay',
     pmModalEmpty:'No payment methods available right now', pmModalConfirm:'Confirm',
+    pmWalletTitle:'Pay from Wallet', pmWalletBalance:'Your available balance',
+    pmWalletButton:'Pay from wallet', pmWalletPaying:'Paying...',
+    pmWalletOr:'Or choose another method for the rest',
     rfAlreadyFixedTitle:'Did you already get this service fixed?', rfAddQuoteTitle:'Add a quotation for this service to your new request?',
     rfYes:'Yes', rfNo:'No',
     pmReceiptUpload:'Upload a photo or PDF of the transfer receipt', pmReceiptHint:'The transfer receipt is required before confirming',
@@ -1864,6 +1870,51 @@ function PaymentMethodModal({ orderId, types, amount, user, customerName, isRtl,
   const chosenMethod = methods.find(m => m.key === chosenKey);
   const isGateway = chosenMethod?.method_type === 'gateway';
 
+  // What's still owed drops locally the moment a wallet payment goes
+  // through, so the modal (and the PayPal button below it, which always
+  // recomputes server-side anyway) reflect the new remaining balance without
+  // needing to close and reopen.
+  const [remainingAmount, setRemainingAmount] = useState(amount);
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [walletAmt, setWalletAmt] = useState('');
+  const [payingWallet, setPayingWallet] = useState(false);
+  const [walletError, setWalletError] = useState(null);
+
+  useEffect(() => {
+    supabase.from('wallet_transactions').select('amount').eq('profile_id', user.id).eq('status', 'confirmed')
+      .then(({ data }) => {
+        const bal = (data || []).reduce((s, w) => s + Number(w.amount || 0), 0);
+        setWalletBalance(bal);
+        setWalletAmt(Math.max(Math.min(bal, amount), 0).toFixed(3));
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const confirmWallet = async () => {
+    const amt = Number(walletAmt);
+    if (!amt || amt <= 0 || payingWallet) return;
+    setPayingWallet(true);
+    setWalletError(null);
+    const { data, error } = await supabase.functions.invoke('wallet-payment', { body: { orderId, types, amount: amt } });
+    setPayingWallet(false);
+    if (error || !data?.success) {
+      setWalletError(data?.error || error?.message || (isRtl ? 'تعذر الدفع من المحفظة' : 'Could not pay from wallet'));
+      return;
+    }
+    setWalletBalance(b => Math.max(b - data.amountQAR, 0));
+    const newRemaining = Math.max(data.remainingQAR ?? (remainingAmount - data.amountQAR), 0);
+    setRemainingAmount(newRemaining);
+    if (newRemaining <= 0.001) {
+      alert(isRtl ? `تم الدفع بالكامل من محفظتك (${data.amountQAR.toFixed(3)} ر.ق)` : `Fully paid from your wallet (${data.amountQAR.toFixed(3)} QAR)`);
+      onDone(types, { gateway: true });
+      return;
+    }
+    setWalletAmt(Math.max(Math.min(walletBalance - data.amountQAR, newRemaining), 0).toFixed(3));
+    alert(isRtl
+      ? `تم خصم ${data.amountQAR.toFixed(3)} ر.ق من محفظتك. المتبقي: ${newRemaining.toFixed(3)} ر.ق`
+      : `${data.amountQAR.toFixed(3)} QAR deducted from your wallet. Remaining: ${newRemaining.toFixed(3)} QAR`);
+  };
+
   // orderId/types/isRtl/onDone are read from this ref inside the PayPal
   // button callbacks below instead of the effect's dependency array — types
   // is a fresh array reference and onDone a fresh function on every parent
@@ -2003,7 +2054,7 @@ function PaymentMethodModal({ orderId, types, amount, user, customerName, isRtl,
           event: 'payment_method_chosen',
           jobNumber: apptCheck.job_cards?.job_number,
           customerName,
-          amountQAR: amount,
+          amountQAR: remainingAmount,
           methodAr: chosenMethod?.display_name_ar,
           methodEn: chosenMethod?.display_name_en,
           receiptUrl,
@@ -2032,6 +2083,27 @@ function PaymentMethodModal({ orderId, types, amount, user, customerName, isRtl,
           </button>
         </div>
         <div className="p-5 space-y-2.5">
+          {walletBalance > 0.001 && remainingAmount > 0.001 && (
+            <div className="p-3.5 rounded-xl space-y-2" style={{ background:'rgba(0,0,0,0.12)', border:'1px dashed rgba(255,255,255,0.25)' }}>
+              <div className="flex items-center justify-between">
+                <p className="font-bold text-sm" style={{ color:mc.txt }}>{tr.pmWalletTitle}</p>
+                <p className="text-xs font-bold" style={{ color:mc.sub }}>{tr.pmWalletBalance}: {walletBalance.toFixed(3)} {isRtl?'ر.ق':'QAR'}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="number" min="0.001" step="0.001" max={Math.min(walletBalance, remainingAmount)}
+                  value={walletAmt} onChange={e=>setWalletAmt(e.target.value)}
+                  className="flex-1 px-3 py-2 rounded-lg text-sm font-bold outline-none"
+                  style={{ background:'rgba(255,255,255,0.08)', color:mc.txt }}/>
+                <button onClick={confirmWallet} disabled={payingWallet || !Number(walletAmt) || Number(walletAmt) <= 0}
+                  className="px-3.5 py-2 rounded-lg text-xs font-black transition-all active:scale-95 disabled:opacity-60"
+                  style={{ background:'#8A1538', color:'#fff' }}>
+                  {payingWallet ? tr.pmWalletPaying : tr.pmWalletButton}
+                </button>
+              </div>
+              {walletError && <p className="text-xs font-bold" style={{ color:'#fca5a5' }}>{walletError}</p>}
+              <p className="text-[11px]" style={{ color:mc.sub }}>{tr.pmWalletOr}</p>
+            </div>
+          )}
           {loadingMethods ? (
             <div className="flex justify-center py-6"><Loader2 size={22} className="animate-spin" style={{ color:mc.fg }}/></div>
           ) : methods.length === 0 ? (
