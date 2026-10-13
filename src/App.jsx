@@ -3988,8 +3988,8 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome, carBrands, carCateg
             {headerBar(isRtl ? 'توفير قطع غيار' : 'Spare Parts', ()=>setStep('carGate'))}
             <button onClick={()=>setStep('custom')}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all active:scale-95 flex-shrink-0 mb-4"
-              style={{ background:`${C.gold}15`, color:C.gold, border:`1px solid ${C.gold}40` }}>
-              <HelpCircle size={14}/>{isRtl?'مش عارف القطعة؟':"Don't know the part?"}
+              style={{ background:'#8A1538', color:C.gold }}>
+              <HelpCircle size={14}/>{isRtl?'لا أقدر على تحديد القطع المطلوبة':"Can't identify the part"}
             </button>
           </div>
           {catsLoading ? (
@@ -4041,7 +4041,7 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome, carBrands, carCateg
 
       {step === 'custom' && (
         <div className="max-w-lg mx-auto">
-          {headerBar(isRtl ? 'مش عارف القطعة؟' : "Don't know the part?", ()=>setStep('categories'))}
+          {headerBar(isRtl ? 'لا أقدر على تحديد القطع المطلوبة' : "Can't identify the part", ()=>setStep('categories'))}
           <p className="text-sm mb-4" style={{ color:C.muted }}>
             {isRtl
               ? 'وصّفلنا القطعة اللي محتاجها، وأي صورة أو ملف يساعدنا نتعرف عليها — فريقنا هيتواصل معاك بعرض السعر'
