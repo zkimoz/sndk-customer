@@ -7,7 +7,7 @@ import {
   Menu, X, ChevronLeft, ChevronRight, ChevronDown, User, Calendar,
   Wrench, ArrowRight, Lock, LogOut, MapPin, Mail,
   ClipboardList, Package, ShoppingCart, Trash2, Upload, FileImage, Pencil, Check,
-  Sun, Moon, Eye, EyeOff, PlayCircle, Wallet, AlertCircle, Download,
+  Sun, Moon, Eye, EyeOff, PlayCircle, Wallet, AlertCircle, Download, HelpCircle,
 } from 'lucide-react';
 
 // Re-runs `onChange` (usually a view's own `load`) whenever any row in the
@@ -3793,7 +3793,7 @@ function PartTreeRow({ part, depth, childrenOf, expandedIds, toggleExpanded, car
 }
 
 function PartsFlowView({ lang, isRtl, user, profile, goHome, carBrands, carCategories }) {
-  const [step, setStep] = useState('carGate'); // 'carGate'|'categories'|'parts'|'confirm'
+  const [step, setStep] = useState('carGate'); // 'carGate'|'categories'|'parts'|'custom'|'confirm'
   const [cars, setCars] = useState([]);
   const [carsLoading, setCarsLoading] = useState(true);
   const [selectedCar, setSelectedCar] = useState(null);
@@ -3820,6 +3820,15 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome, carBrands, carCateg
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [confirmedType, setConfirmedType] = useState(null);
+  // "مش عارف القطعة؟" — a free-form request for a part that isn't in the
+  // catalog at all (or the customer just doesn't know its name): a
+  // description, an optional part number, and photos/files staff can
+  // identify it from. Separate state from the cart above since it's always
+  // exactly one request, never a multi-part cart.
+  const [customDesc, setCustomDesc] = useState('');
+  const [customPartNumber, setCustomPartNumber] = useState('');
+  const [customFiles, setCustomFiles] = useState([]);
+  const [customSubmitting, setCustomSubmitting] = useState(false);
   // Grid column count for the staggered category cards — 2 on phones keeps
   // each card readable; 3 (the size Karim asked for) only fits from
   // small-tablet width up. The per-item offset math below needs the live
@@ -3882,6 +3891,53 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome, carBrands, carCateg
     setStep('confirm');
   };
 
+  const addCustomFiles = (fileList) => {
+    const files = Array.from(fileList || []);
+    if (files.length) setCustomFiles(prev => [...prev, ...files]);
+  };
+  const removeCustomFile = (idx) => setCustomFiles(prev => prev.filter((_, i) => i !== idx));
+
+  // No catalog part_id here at all — this is a completely unknown part, so
+  // the request rides on part_snapshot/part_number alone (part_id is
+  // nullable on part_order_items precisely for this case).
+  const submitCustomRequest = async () => {
+    if (!customDesc.trim() || customSubmitting) return;
+    setCustomSubmitting(true);
+    const request_number = `PR-${Date.now().toString(36).toUpperCase()}`;
+    const { data: order, error } = await supabase.from('part_orders').insert({
+      request_number,
+      profile_id: user.id,
+      car_id: selectedCar.id,
+      car_snapshot: { car_type: selectedCar.car_type, car_category: selectedCar.car_category, production_year: selectedCar.production_year, plate_number: selectedCar.plate_number },
+      request_type: 'quote',
+      customer_notes: customDesc.trim(),
+    }).select('id').single();
+    if (error) { setCustomSubmitting(false); alert((isRtl ? 'خطأ: ' : 'Error: ') + error.message); return; }
+    const uploadedUrls = [];
+    for (const file of customFiles) {
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `${order.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('part-request-photos').upload(path, file, { contentType: file.type });
+      if (!upErr) {
+        const { data: { publicUrl } } = supabase.storage.from('part-request-photos').getPublicUrl(path);
+        uploadedUrls.push(publicUrl);
+      }
+    }
+    const { error: itemErr } = await supabase.from('part_order_items').insert({
+      part_order_id: order.id,
+      part_snapshot: { name: { ar: customDesc.trim(), en: customDesc.trim() }, image_url: uploadedUrls[0] || null, image_urls: uploadedUrls },
+      part_number: customPartNumber.trim() || null,
+    });
+    setCustomSubmitting(false);
+    if (itemErr) { alert((isRtl ? 'خطأ: ' : 'Error: ') + itemErr.message); return; }
+    supabase.functions.invoke('clever-endpoint', {
+      body: { event: 'part_request_created', customerName: profile?.full_name, requestNumber: request_number },
+    }).catch(() => {});
+    setCustomDesc(''); setCustomPartNumber(''); setCustomFiles([]);
+    setConfirmedType('quote');
+    setStep('confirm');
+  };
+
   const headerBar = (title, onBack) => (
     <div className="flex items-center gap-3 mb-4">
       {onBack && (
@@ -3928,7 +3984,14 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome, carBrands, carCateg
 
       {step === 'categories' && (
         <div>
-          {headerBar(isRtl ? 'توفير قطع غيار' : 'Spare Parts', ()=>setStep('carGate'))}
+          <div className="flex items-center justify-between gap-2">
+            {headerBar(isRtl ? 'توفير قطع غيار' : 'Spare Parts', ()=>setStep('carGate'))}
+            <button onClick={()=>setStep('custom')}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all active:scale-95 flex-shrink-0 mb-4"
+              style={{ background:`${C.gold}15`, color:C.gold, border:`1px solid ${C.gold}40` }}>
+              <HelpCircle size={14}/>{isRtl?'مش عارف القطعة؟':"Don't know the part?"}
+            </button>
+          </div>
           {catsLoading ? (
             <div className="flex items-center justify-center py-14"><Loader2 size={22} className="animate-spin" style={{ color:C.gold }}/></div>
           ) : categories.length === 0 ? (
@@ -3973,6 +4036,65 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome, carBrands, carCateg
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {step === 'custom' && (
+        <div className="max-w-lg mx-auto">
+          {headerBar(isRtl ? 'مش عارف القطعة؟' : "Don't know the part?", ()=>setStep('categories'))}
+          <p className="text-sm mb-4" style={{ color:C.muted }}>
+            {isRtl
+              ? 'وصّفلنا القطعة اللي محتاجها، وأي صورة أو ملف يساعدنا نتعرف عليها — فريقنا هيتواصل معاك بعرض السعر'
+              : "Describe the part you need, and attach any photo or file that helps us identify it — our team will get back to you with a quote"}
+          </p>
+          {selectedCar && (
+            <div className="flex items-center gap-2 text-sm px-3 py-2 rounded-xl mb-4" style={{ background:`${C.gold}10`, color:C.text }}>
+              <Car size={14} style={{ color:C.gold }}/>
+              {[carTypeLabel(selectedCar, carBrands, lang), carCategoryLabel(selectedCar, carCategories, lang), selectedCar.production_year].filter(Boolean).join(' · ')}
+            </div>
+          )}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-bold mb-1.5" style={{ color:C.text }}>{isRtl?'وصف القطعة':'Part Description'}</label>
+              <textarea value={customDesc} onChange={e=>setCustomDesc(e.target.value)} rows={4}
+                placeholder={isRtl?'مثال: قطعة بلاستيك تحت الباب الأمامي شمال، فيها فيش كهرباء...':'e.g. A plastic piece under the front left door, with an electrical connector...'}
+                className="w-full px-3 py-2.5 rounded-xl text-sm outline-none resize-none"
+                style={{ background:C.input || C.panel, border:`1px solid ${C.border}`, color:C.text }}/>
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-1.5" style={{ color:C.text }}>{isRtl?'رقم القطعة (لو عندك)':'Part Number (if you have one)'}</label>
+              <input value={customPartNumber} onChange={e=>setCustomPartNumber(e.target.value)} dir="ltr"
+                className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+                style={{ background:C.input || C.panel, border:`1px solid ${C.border}`, color:C.text }}/>
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-1.5" style={{ color:C.text }}>{isRtl?'صور أو ملفات (اختياري)':'Photos or files (optional)'}</label>
+              <div className="flex flex-wrap gap-2.5">
+                {customFiles.map((file, idx) => (
+                  <div key={idx} className="relative w-16 h-16 rounded-xl overflow-hidden border flex items-center justify-center flex-shrink-0" style={{ borderColor:C.border, background:`${C.gold}08` }}>
+                    {file.type.startsWith('image/')
+                      ? <img src={URL.createObjectURL(file)} alt="" className="w-full h-full object-cover"/>
+                      : <FileImage size={20} style={{ color:C.gold }}/>}
+                    <button onClick={()=>removeCustomFile(idx)}
+                      className="absolute inset-0 bg-black/50 flex items-center justify-center text-white">
+                      <Trash2 size={14}/>
+                    </button>
+                  </div>
+                ))}
+                <label className="w-16 h-16 border-2 border-dashed rounded-xl flex items-center justify-center flex-shrink-0 cursor-pointer" style={{ borderColor:C.border }}>
+                  <Upload size={16} style={{ color:C.muted }}/>
+                  <input type="file" accept="image/*,.pdf" multiple className="hidden"
+                    onChange={e=>{ addCustomFiles(e.target.files); e.target.value=''; }}/>
+                </label>
+              </div>
+            </div>
+            <button onClick={submitCustomRequest} disabled={!customDesc.trim() || customSubmitting}
+              className="w-full py-3 rounded-xl text-sm font-black transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+              style={{ background:C.gold, color:C.btnTxt }}>
+              {customSubmitting && <Loader2 size={14} className="animate-spin"/>}
+              {isRtl?'إرسال الطلب':'Send Request'}
+            </button>
+          </div>
         </div>
       )}
 
