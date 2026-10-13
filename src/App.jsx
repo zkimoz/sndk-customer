@@ -3820,11 +3820,13 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome, carBrands, carCateg
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [confirmedType, setConfirmedType] = useState(null);
-  // "مش عارف القطعة؟" — a free-form request for a part that isn't in the
-  // catalog at all (or the customer just doesn't know its name): a
-  // description, an optional part number, and photos/files staff can
-  // identify it from. Separate state from the cart above since it's always
-  // exactly one request, never a multi-part cart.
+  // "لا أقدر على تحديد القطع المطلوبة" — one or more free-form parts that
+  // aren't in the catalog at all (or the customer just doesn't know their
+  // names): each gets its own description, optional part number, and
+  // photos/files staff can identify it from. customItems holds every part
+  // already added to this request; customDesc/customPartNumber/customFiles
+  // are just the in-progress form for the next one.
+  const [customItems, setCustomItems] = useState([]);
   const [customDesc, setCustomDesc] = useState('');
   const [customPartNumber, setCustomPartNumber] = useState('');
   const [customFiles, setCustomFiles] = useState([]);
@@ -3897,11 +3899,26 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome, carBrands, carCateg
   };
   const removeCustomFile = (idx) => setCustomFiles(prev => prev.filter((_, i) => i !== idx));
 
-  // No catalog part_id here at all — this is a completely unknown part, so
-  // the request rides on part_snapshot/part_number alone (part_id is
-  // nullable on part_order_items precisely for this case).
+  // Pushes the in-progress form (desc/partNumber/files) onto the list as its
+  // own part and clears the form, so the customer can describe another one.
+  const addCustomItem = () => {
+    if (!customDesc.trim()) return;
+    setCustomItems(prev => [...prev, { id: Date.now() + Math.random(), desc: customDesc.trim(), partNumber: customPartNumber.trim(), files: customFiles }]);
+    setCustomDesc(''); setCustomPartNumber(''); setCustomFiles([]);
+  };
+  const removeCustomItem = (id) => setCustomItems(prev => prev.filter(it => it.id !== id));
+
+  // No catalog part_id on any of these — every one is a completely unknown
+  // part, so each rides on its own part_snapshot/part_number alone (part_id
+  // is nullable on part_order_items precisely for this case).
   const submitCustomRequest = async () => {
-    if (!customDesc.trim() || customSubmitting) return;
+    // Whatever's still sitting in the form (typed but not explicitly
+    // "added") counts too — a customer with exactly one part shouldn't have
+    // to click "add" before they can send.
+    const items = customDesc.trim()
+      ? [...customItems, { id: 'current', desc: customDesc.trim(), partNumber: customPartNumber.trim(), files: customFiles }]
+      : customItems;
+    if (!items.length || customSubmitting) return;
     setCustomSubmitting(true);
     const request_number = `PR-${Date.now().toString(36).toUpperCase()}`;
     const { data: order, error } = await supabase.from('part_orders').insert({
@@ -3910,30 +3927,34 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome, carBrands, carCateg
       car_id: selectedCar.id,
       car_snapshot: { car_type: selectedCar.car_type, car_category: selectedCar.car_category, production_year: selectedCar.production_year, plate_number: selectedCar.plate_number },
       request_type: 'quote',
-      customer_notes: customDesc.trim(),
+      customer_notes: items.length > 1 ? items.map((it, i) => `${i + 1}) ${it.desc}`).join('\n') : items[0].desc,
     }).select('id').single();
     if (error) { setCustomSubmitting(false); alert((isRtl ? 'خطأ: ' : 'Error: ') + error.message); return; }
-    const uploadedUrls = [];
-    for (const file of customFiles) {
-      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-      const path = `${order.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('part-request-photos').upload(path, file, { contentType: file.type });
-      if (!upErr) {
-        const { data: { publicUrl } } = supabase.storage.from('part-request-photos').getPublicUrl(path);
-        uploadedUrls.push(publicUrl);
+    const itemRows = [];
+    for (const it of items) {
+      const uploadedUrls = [];
+      for (const file of it.files) {
+        const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+        const path = `${order.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const { error: upErr } = await supabase.storage.from('part-request-photos').upload(path, file, { contentType: file.type });
+        if (!upErr) {
+          const { data: { publicUrl } } = supabase.storage.from('part-request-photos').getPublicUrl(path);
+          uploadedUrls.push(publicUrl);
+        }
       }
+      itemRows.push({
+        part_order_id: order.id,
+        part_snapshot: { name: { ar: it.desc, en: it.desc }, image_url: uploadedUrls[0] || null, image_urls: uploadedUrls },
+        part_number: it.partNumber || null,
+      });
     }
-    const { error: itemErr } = await supabase.from('part_order_items').insert({
-      part_order_id: order.id,
-      part_snapshot: { name: { ar: customDesc.trim(), en: customDesc.trim() }, image_url: uploadedUrls[0] || null, image_urls: uploadedUrls },
-      part_number: customPartNumber.trim() || null,
-    });
+    const { error: itemErr } = await supabase.from('part_order_items').insert(itemRows);
     setCustomSubmitting(false);
     if (itemErr) { alert((isRtl ? 'خطأ: ' : 'Error: ') + itemErr.message); return; }
     supabase.functions.invoke('clever-endpoint', {
       body: { event: 'part_request_created', customerName: profile?.full_name, requestNumber: request_number },
     }).catch(() => {});
-    setCustomDesc(''); setCustomPartNumber(''); setCustomFiles([]);
+    setCustomItems([]); setCustomDesc(''); setCustomPartNumber(''); setCustomFiles([]);
     setConfirmedType('quote');
     setStep('confirm');
   };
@@ -4053,6 +4074,21 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome, carBrands, carCateg
               {[carTypeLabel(selectedCar, carBrands, lang), carCategoryLabel(selectedCar, carCategories, lang), selectedCar.production_year].filter(Boolean).join(' · ')}
             </div>
           )}
+          {customItems.length > 0 && (
+            <div className="space-y-2 mb-4">
+              <p className="text-sm font-bold" style={{ color:C.text }}>{isRtl?`القطع المضافة (${customItems.length})`:`Added parts (${customItems.length})`}</p>
+              {customItems.map((it, idx) => (
+                <div key={it.id} className="flex items-start gap-2.5 p-2.5 rounded-xl" style={{ background:`${C.gold}08` }}>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold" style={{ color:C.text }}>{idx+1}. {it.desc}</p>
+                    {it.partNumber && <p className="text-xs mt-0.5" style={{ color:C.muted }} dir="ltr">{it.partNumber}</p>}
+                    {it.files.length > 0 && <p className="text-xs mt-0.5" style={{ color:C.muted }}>{isRtl?`${it.files.length} ملف مرفق`:`${it.files.length} file(s) attached`}</p>}
+                  </div>
+                  <button onClick={()=>removeCustomItem(it.id)} className="p-1.5 rounded-lg flex-shrink-0" style={{ color:'#ef4444' }}><Trash2 size={14}/></button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-bold mb-1.5" style={{ color:C.text }}>{isRtl?'وصف القطعة':'Part Description'}</label>
@@ -4088,7 +4124,12 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome, carBrands, carCateg
                 </label>
               </div>
             </div>
-            <button onClick={submitCustomRequest} disabled={!customDesc.trim() || customSubmitting}
+            <button onClick={addCustomItem} disabled={!customDesc.trim()}
+              className="w-full py-2.5 rounded-xl text-sm font-black transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-1.5"
+              style={{ background:'transparent', border:`1.5px solid ${C.gold}`, color:C.gold }}>
+              <Plus size={14}/>{isRtl?'إضافة قطعة أخرى':'Add another part'}
+            </button>
+            <button onClick={submitCustomRequest} disabled={(!customItems.length && !customDesc.trim()) || customSubmitting}
               className="w-full py-3 rounded-xl text-sm font-black transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
               style={{ background:C.gold, color:C.btnTxt }}>
               {customSubmitting && <Loader2 size={14} className="animate-spin"/>}
