@@ -769,6 +769,15 @@ const COMING_SOON_CAT_NAMES = new Set([
 // letter + two signatures + a fixed fee — not a sub-services accordion, so
 // its tile/row routes straight into that instead of expanding, same way
 // spare parts does.
+// ── TEMPORARY: Skip Cash / Qatar Central Bank payment-gateway review ──
+// While QCB reviews the payment integration, Karim asked that any visitor
+// who ISN'T logged in sees a page describing only the two activities
+// licensed on SNDK's Commercial Registration (244788) — intermediation +
+// e-commerce — instead of the normal home page's full services catalog.
+// Already-logged-in customers are completely unaffected either way; this
+// only ever gates the pre-login landing view (see `page==='home'` below).
+// Flip this back to false (and redeploy) the moment approval comes through.
+const COMPLIANCE_MODE = true;
 const RENEWAL_CAT_NAMES = new Set(['تجديد استمارة السيارة', 'Car Registration Renewal']);
 const RENEWAL_FEE = 250;
 const RENEWAL_FAIL_DISCOUNT = 50;
@@ -1424,7 +1433,9 @@ export default function App() {
 
           {/* Page Content */}
           <main className="flex-1 overflow-y-auto pb-24 md:pb-8">
-            {page==='home'    && <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements} goOrders={goOrders} goParts={goParts} goRenewal={goRenewal} pendingQuotCount={pendingQuotCount}/>}
+            {page==='home'    && (COMPLIANCE_MODE && !user
+              ? <ComplianceLandingView isRtl={isRtl} setAuthModal={setAuthModal}/>
+              : <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements} goOrders={goOrders} goParts={goParts} goRenewal={goRenewal} pendingQuotCount={pendingQuotCount}/>)}
             {page==='services'&& <ServicesView lang={lang} tr={tr} isRtl={isRtl} user={user} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} theme={theme} goParts={goParts} goRenewal={goRenewal}/>}
             {page==='renewal' && user && <RenewalFlowView key="renewal" lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories} timeSlots={timeSlots} serviceCategories={serviceCategories} allSubServices={allSubServices} goHome={goHome} goOrders={goOrders}/>}
             {page==='profile' && user && <ProfileView lang={lang} tr={tr} isRtl={isRtl} profile={profile} user={user} onBook={(car)=>bookFromProfile(car)} goServices={goServices} goOrders={goOrders} onProfileUpdated={()=>fetchProfile(user.id)} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories}/>}
@@ -6063,6 +6074,47 @@ const ANN_PRESETS = {
 // tile that routes into the dedicated parts flow instead of the normal
 // cart/booking flow.
 const PARTS_CAT_NAMES = new Set(['توفير قطع غيار', 'Spare Parts']);
+
+// ── Compliance landing (see COMPLIANCE_MODE above) — shown instead of
+// HomeView to a not-logged-in visitor, describing only SNDK's two licensed
+// Commercial Registration activities. Existing customers aren't affected:
+// the "Sign In" button here routes into the exact same AuthModal/flow they'd
+// normally use, and the full app resumes as soon as they're logged in.
+function ComplianceLandingView({ isRtl, setAuthModal }) {
+  return (
+    <div className="max-w-lg mx-auto p-4 md:p-8 space-y-6 text-center">
+      <img src="/logo-gear-email.png" alt="SNDK" className="w-20 h-20 mx-auto" style={{ opacity:0.9 }}/>
+      <h1 className="text-2xl font-black" style={{ color:C.text }}>سندك — SNDK</h1>
+      <p className="text-base leading-relaxed" style={{ color:C.text }}>
+        {isRtl
+          ? 'وفقًا للسجل التجاري الرسمي لدولة قطر (رقم 244788)، تعمل سندك تحت نشاطين تجاريين مرخّصين رسميًا:'
+          : 'In line with our official Qatar Commercial Registration (No. 244788), SNDK operates under two licensed commercial activities:'}
+      </p>
+      <div className="space-y-3" dir={isRtl?'rtl':'ltr'}>
+        <div className="rounded-2xl p-4 text-start" style={{ background:C.panel, border:`1px solid ${C.border}` }}>
+          <p className="font-black" style={{ color:C.gold }}>{isRtl?'١. الوساطة في خدمات دعم الأعمال':'1. Business-Support Intermediation'}</p>
+          <p className="text-sm mt-1" style={{ color:C.muted }}>
+            {isRtl
+              ? 'نُنسّق ونُسهّل لكم كل ما يخص صيانة وإصلاح سيارتكم من الاستلام وحتى التسليم.'
+              : "We coordinate and facilitate every step of your car's maintenance and repair, from pickup to delivery."}
+          </p>
+        </div>
+        <div className="rounded-2xl p-4 text-start" style={{ background:C.panel, border:`1px solid ${C.border}` }}>
+          <p className="font-black" style={{ color:C.gold }}>{isRtl?'٢. التجارة الإلكترونية (البيع بالجملة)':'2. E-Commerce (Online Wholesale)'}</p>
+          <p className="text-sm mt-1" style={{ color:C.muted }}>
+            {isRtl
+              ? 'نوفر لكم قطع الغيار الأصلية والمعتمدة بجودة موثوقة وأسعار تنافسية.'
+              : 'We supply genuine, certified spare parts at reliable quality and competitive prices.'}
+          </p>
+        </div>
+      </div>
+      <button onClick={()=>setAuthModal('signin')}
+        className="px-8 py-3 rounded-xl font-black text-sm transition-all active:scale-95" style={{ background:C.gold, color:C.btnTxt }}>
+        {isRtl ? 'تسجيل الدخول' : 'Sign In'}
+      </button>
+    </div>
+  );
+}
 
 function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, serviceCategories, homeAnnouncements, user, goOrders, goParts, goRenewal, pendingQuotCount }) {
   const cats = serviceCategories.map(enrichCat);
