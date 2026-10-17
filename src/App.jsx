@@ -6080,33 +6080,72 @@ const PARTS_CAT_NAMES = new Set(['توفير قطع غيار', 'Spare Parts']);
 // Commercial Registration activities. Existing customers aren't affected:
 // the "Sign In" button here routes into the exact same AuthModal/flow they'd
 // normally use, and the full app resumes as soon as they're logged in.
+const COMPLIANCE_ACTIVITIES = {
+  ar: [
+    {
+      title: '١. الوساطة في خدمات دعم الأعمال',
+      items: [
+        { t:'منصة ربط العملاء بمزودي الخدمات', d:'نساعد عملاءنا على إيجاد مزودي الخدمات المناسبين ومقارنة الخيارات بسهولة.' },
+        { t:'حجز وتنسيق المواعيد', d:'نرتّب مواعيد الخدمة ونتابعها من الطلب وحتى الإتمام.' },
+        { t:'خدمات صيانة وإصلاح السيارات', d:'ننسّق لكم كل ما يخص صيانة وإصلاح سيارتكم من الاستلام وحتى التسليم.' },
+        { t:'التواصل وتسهيل الخدمة', d:'نُسهّل التواصل بين الأطراف لإتمام الخدمة بسلاسة.' },
+      ],
+      explain: 'باختصار، نُنسّق ونُسهّل التواصل بين عملائنا ومزودي الخدمات المختلفين، بما في ذلك خدمات صيانة وإصلاح السيارات، من الطلب وحتى إتمام الخدمة.',
+    },
+    {
+      title: '٢. التجارة الإلكترونية (البيع بالجملة)',
+      items: [
+        { t:'البيع بالجملة والتجزئة عبر الإنترنت', d:'نوفر منتجات متنوعة للبيع أونلاين بأسعار تنافسية.' },
+        { t:'التوصيل حتى باب المنزل', d:'نوصّل طلباتكم مباشرة إلى عنوانكم.' },
+        { t:'مقارنة الأسعار وأفضل العروض', d:'نساعدكم في الحصول على أفضل سعر وجودة متاحة.' },
+      ],
+      explain: 'باختصار، نقدر نوفرلك أي منتج تطلب شراءه أونلاين، ونوصّله لحد باب بيتك، بأسعار تنافسية وجودة موثوقة.',
+    },
+  ],
+  en: [
+    {
+      title: '1. Business-Support Intermediation',
+      items: [
+        { t:'Customer-to-Provider Matching', d:'We help customers find the right service providers and compare options easily.' },
+        { t:'Booking & Appointment Coordination', d:'We arrange and follow up on service appointments from request to completion.' },
+        { t:'Car Maintenance & Repair Services', d:"We coordinate every step of your car's maintenance and repair, from pickup to delivery." },
+        { t:'Facilitating Communication', d:'We facilitate communication between parties to complete the service smoothly.' },
+      ],
+      explain: 'In short, we coordinate and facilitate communication between our customers and various service providers, including car maintenance and repair services, from request to completion.',
+    },
+    {
+      title: '2. E-Commerce (Online Wholesale)',
+      items: [
+        { t:'Online Wholesale & Retail', d:'We offer a range of products for sale online at competitive prices.' },
+        { t:'Doorstep Delivery', d:'We deliver your orders directly to your address.' },
+        { t:'Price Comparison & Best Offers', d:'We help you get the best available price and quality.' },
+      ],
+      explain: 'In short, we can supply anything you want to buy online, delivered straight to your doorstep, at competitive prices and reliable quality.',
+    },
+  ],
+};
+
 function ComplianceLandingView({ isRtl, setAuthModal }) {
+  const activities = COMPLIANCE_ACTIVITIES[isRtl ? 'ar' : 'en'];
   return (
     <div className="max-w-lg mx-auto p-4 md:p-8 space-y-6 text-center">
       <img src="/logo-gear-email.png" alt="SNDK" className="w-20 h-20 mx-auto" style={{ opacity:0.9 }}/>
       <h1 className="text-2xl font-black" style={{ color:C.text }}>سندك — SNDK</h1>
-      <p className="text-base leading-relaxed" style={{ color:C.text }}>
-        {isRtl
-          ? 'وفقًا للسجل التجاري الرسمي لدولة قطر (رقم 244788)، تعمل سندك تحت نشاطين تجاريين مرخّصين رسميًا:'
-          : 'In line with our official Qatar Commercial Registration (No. 244788), SNDK operates under two licensed commercial activities:'}
-      </p>
-      <div className="space-y-3" dir={isRtl?'rtl':'ltr'}>
-        <div className="rounded-2xl p-4 text-start" style={{ background:C.panel, border:`1px solid ${C.border}` }}>
-          <p className="font-black" style={{ color:C.gold }}>{isRtl?'١. الوساطة في خدمات دعم الأعمال':'1. Business-Support Intermediation'}</p>
-          <p className="text-sm mt-1" style={{ color:C.muted }}>
-            {isRtl
-              ? 'نُنسّق ونُسهّل لكم كل ما يخص صيانة وإصلاح سيارتكم من الاستلام وحتى التسليم.'
-              : "We coordinate and facilitate every step of your car's maintenance and repair, from pickup to delivery."}
-          </p>
-        </div>
-        <div className="rounded-2xl p-4 text-start" style={{ background:C.panel, border:`1px solid ${C.border}` }}>
-          <p className="font-black" style={{ color:C.gold }}>{isRtl?'٢. التجارة الإلكترونية (البيع بالجملة)':'2. E-Commerce (Online Wholesale)'}</p>
-          <p className="text-sm mt-1" style={{ color:C.muted }}>
-            {isRtl
-              ? 'نوفر لكم قطع الغيار الأصلية والمعتمدة بجودة موثوقة وأسعار تنافسية.'
-              : 'We supply genuine, certified spare parts at reliable quality and competitive prices.'}
-          </p>
-        </div>
+      <div className="space-y-4">
+        {activities.map((act, i) => (
+          <div key={i} className="rounded-2xl p-4 text-start space-y-3" style={{ background:C.panel, border:`1px solid ${C.border}` }} dir={isRtl?'rtl':'ltr'}>
+            <p className="font-black text-base" style={{ color:C.gold }}>{act.title}</p>
+            <div className="space-y-2.5">
+              {act.items.map((it, j) => (
+                <div key={j}>
+                  <p className="text-sm font-bold" style={{ color:C.text }}>{it.t}</p>
+                  <p className="text-xs mt-0.5" style={{ color:C.muted }}>{it.d}</p>
+                </div>
+              ))}
+            </div>
+            <p className="text-sm pt-2.5" style={{ color:C.muted, borderTop:`1px solid ${C.border}` }}>{act.explain}</p>
+          </div>
+        ))}
       </div>
       <button onClick={()=>setAuthModal('signin')}
         className="px-8 py-3 rounded-xl font-black text-sm transition-all active:scale-95" style={{ background:C.gold, color:C.btnTxt }}>
