@@ -6087,10 +6087,9 @@ const COMPLIANCE_ACTIVITIES = {
       items: [
         { t:'منصة ربط العملاء بمزودي الخدمات', d:'نساعد عملاءنا على إيجاد مزودي الخدمات المناسبين ومقارنة الخيارات بسهولة.' },
         { t:'حجز وتنسيق المواعيد', d:'نرتّب مواعيد الخدمة ونتابعها من الطلب وحتى الإتمام.' },
-        { t:'خدمات صيانة وإصلاح السيارات', d:'ننسّق لكم كل ما يخص صيانة وإصلاح سيارتكم من الاستلام وحتى التسليم.' },
         { t:'التواصل وتسهيل الخدمة', d:'نُسهّل التواصل بين الأطراف لإتمام الخدمة بسلاسة.' },
       ],
-      explain: 'باختصار، نُنسّق ونُسهّل التواصل بين عملائنا ومزودي الخدمات المختلفين، بما في ذلك خدمات صيانة وإصلاح السيارات، من الطلب وحتى إتمام الخدمة.',
+      explain: 'باختصار، نُنسّق ونُسهّل التواصل بين عملائنا ومزودي الخدمات المختلفين، من الطلب وحتى إتمام الخدمة.',
     },
     {
       title: '٢. التجارة الإلكترونية (البيع بالجملة)',
@@ -6108,10 +6107,9 @@ const COMPLIANCE_ACTIVITIES = {
       items: [
         { t:'Customer-to-Provider Matching', d:'We help customers find the right service providers and compare options easily.' },
         { t:'Booking & Appointment Coordination', d:'We arrange and follow up on service appointments from request to completion.' },
-        { t:'Car Maintenance & Repair Services', d:"We coordinate every step of your car's maintenance and repair, from pickup to delivery." },
         { t:'Facilitating Communication', d:'We facilitate communication between parties to complete the service smoothly.' },
       ],
-      explain: 'In short, we coordinate and facilitate communication between our customers and various service providers, including car maintenance and repair services, from request to completion.',
+      explain: 'In short, we coordinate and facilitate communication between our customers and various service providers, from request to completion.',
     },
     {
       title: '2. E-Commerce (Online Wholesale)',
@@ -6131,19 +6129,19 @@ function ComplianceLandingView({ isRtl, setAuthModal }) {
     <div className="max-w-lg mx-auto p-4 md:p-8 space-y-6 text-center">
       <img src="/logo-gear-email.png" alt="SNDK" className="w-20 h-20 mx-auto" style={{ opacity:0.9 }}/>
       <h1 className="text-2xl font-black" style={{ color:C.text }}>سندك — SNDK</h1>
-      <div className="space-y-4">
+      <div className="space-y-5">
         {activities.map((act, i) => (
-          <div key={i} className="rounded-2xl p-4 text-start space-y-3" style={{ background:C.panel, border:`1px solid ${C.border}` }} dir={isRtl?'rtl':'ltr'}>
-            <p className="font-black text-base" style={{ color:C.gold }}>{act.title}</p>
-            <div className="space-y-2.5">
+          <div key={i} className="rounded-2xl p-6 text-start space-y-4" style={{ background:C.panel, border:`1px solid ${C.border}` }} dir={isRtl?'rtl':'ltr'}>
+            <p className="font-black text-lg" style={{ color:'#8A1538' }}>{act.title}</p>
+            <div className="space-y-3">
               {act.items.map((it, j) => (
                 <div key={j}>
-                  <p className="text-sm font-bold" style={{ color:C.text }}>{it.t}</p>
-                  <p className="text-xs mt-0.5" style={{ color:C.muted }}>{it.d}</p>
+                  <p className="text-base font-bold" style={{ color:C.text }}>{it.t}</p>
+                  <p className="text-sm mt-1" style={{ color:C.muted }}>{it.d}</p>
                 </div>
               ))}
             </div>
-            <p className="text-sm pt-2.5" style={{ color:C.muted, borderTop:`1px solid ${C.border}` }}>{act.explain}</p>
+            <p className="text-base pt-3" style={{ color:C.muted, borderTop:`1px solid ${C.border}` }}>{act.explain}</p>
           </div>
         ))}
       </div>
