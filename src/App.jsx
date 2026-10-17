@@ -1436,7 +1436,9 @@ export default function App() {
             {page==='home'    && (COMPLIANCE_MODE && !user
               ? <ComplianceLandingView isRtl={isRtl} setAuthModal={setAuthModal}/>
               : <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements} goOrders={goOrders} goParts={goParts} goRenewal={goRenewal} pendingQuotCount={pendingQuotCount}/>)}
-            {page==='services'&& <ServicesView lang={lang} tr={tr} isRtl={isRtl} user={user} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} theme={theme} goParts={goParts} goRenewal={goRenewal}/>}
+            {page==='services'&& (COMPLIANCE_MODE && !user
+              ? <ComplianceServicesView isRtl={isRtl}/>
+              : <ServicesView lang={lang} tr={tr} isRtl={isRtl} user={user} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} theme={theme} goParts={goParts} goRenewal={goRenewal}/>)}
             {page==='renewal' && user && <RenewalFlowView key="renewal" lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories} timeSlots={timeSlots} serviceCategories={serviceCategories} allSubServices={allSubServices} goHome={goHome} goOrders={goOrders}/>}
             {page==='profile' && user && <ProfileView lang={lang} tr={tr} isRtl={isRtl} profile={profile} user={user} onBook={(car)=>bookFromProfile(car)} goServices={goServices} goOrders={goOrders} onProfileUpdated={()=>fetchProfile(user.id)} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories}/>}
             {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount} theme={theme} highlightJobNumber={deepLinkJobNumber}/>}
@@ -6149,6 +6151,63 @@ function ComplianceLandingView({ isRtl, setAuthModal }) {
         className="px-8 py-3 rounded-xl font-black text-sm transition-all active:scale-95" style={{ background:C.gold, color:C.btnTxt }}>
         {isRtl ? 'تسجيل الدخول' : 'Sign In'}
       </button>
+    </div>
+  );
+}
+
+// ── Compliance services page (see COMPLIANCE_MODE above) — shown instead of
+// the real ServicesView to a not-logged-in visitor. Deliberately generic,
+// non-automotive example services grouped under the same two licensed
+// activities as ComplianceLandingView, with nothing bookable/interactive.
+const COMPLIANCE_SERVICE_GROUPS = {
+  ar: [
+    { title:'الوساطة في خدمات دعم الأعمال', items:[
+      { t:'حجز الخدمات المنزلية', d:'ربط العملاء بمقدمي خدمات الصيانة المنزلية والتنظيف.' },
+      { t:'التوصيل والمشاوير', d:'تنسيق طلبات التوصيل والمشاوير بين العملاء ومقدمي الخدمة.' },
+      { t:'حجز المواعيد الشخصية', d:'تسهيل حجز مواعيد الخدمات الشخصية والمهنية.' },
+      { t:'الوساطة التجارية بين الشركات', d:'ربط الشركات بمزودي الخدمات والموردين المناسبين.' },
+    ]},
+    { title:'التجارة الإلكترونية (البيع أونلاين)', items:[
+      { t:'التسوق الإلكتروني', d:'تصفح وشراء مجموعة متنوعة من المنتجات أونلاين.' },
+      { t:'البيع بالجملة للمتاجر', d:'توفير منتجات بالجملة للمتاجر والموزعين.' },
+      { t:'التوصيل حتى باب المنزل', d:'توصيل الطلبات مباشرة لعنوان العميل.' },
+      { t:'مقارنة الأسعار والعروض', d:'مساعدة العملاء في العثور على أفضل سعر وجودة.' },
+    ]},
+  ],
+  en: [
+    { title:'Business-Support Intermediation', items:[
+      { t:'Home Services Booking', d:'Connecting customers with home maintenance and cleaning providers.' },
+      { t:'Delivery & Errands', d:'Coordinating delivery and errand requests between customers and providers.' },
+      { t:'Personal Appointment Booking', d:'Facilitating bookings for personal and professional services.' },
+      { t:'B2B Brokerage', d:'Connecting businesses with suitable service providers and suppliers.' },
+    ]},
+    { title:'E-Commerce (Online Sales)', items:[
+      { t:'Online Shopping', d:'Browse and purchase a variety of products online.' },
+      { t:'Wholesale for Retailers', d:'Supplying bulk products to shops and distributors.' },
+      { t:'Doorstep Delivery', d:"Delivering orders directly to the customer's address." },
+      { t:'Price Comparison & Deals', d:'Helping customers find the best available price and quality.' },
+    ]},
+  ],
+};
+
+function ComplianceServicesView({ isRtl }) {
+  const groups = COMPLIANCE_SERVICE_GROUPS[isRtl ? 'ar' : 'en'];
+  return (
+    <div className="max-w-2xl mx-auto p-4 md:p-8 space-y-8">
+      <h1 className="text-2xl font-black text-center" style={{ color:C.text }}>{isRtl?'خدماتنا':'Our Services'}</h1>
+      {groups.map((g, i) => (
+        <div key={i} className="space-y-3" dir={isRtl?'rtl':'ltr'}>
+          <p className="font-black text-lg" style={{ color:'#8A1538' }}>{g.title}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {g.items.map((it, j) => (
+              <div key={j} className="rounded-2xl p-4 text-start" style={{ background:C.panel, border:`1px solid ${C.border}` }}>
+                <p className="text-base font-bold" style={{ color:C.text }}>{it.t}</p>
+                <p className="text-sm mt-1" style={{ color:C.muted }}>{it.d}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
