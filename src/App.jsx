@@ -1442,7 +1442,7 @@ export default function App() {
             {page==='renewal' && user && <RenewalFlowView key="renewal" lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories} timeSlots={timeSlots} serviceCategories={serviceCategories} allSubServices={allSubServices} goHome={goHome} goOrders={goOrders}/>}
             {page==='profile' && user && <ProfileView lang={lang} tr={tr} isRtl={isRtl} profile={profile} user={user} onBook={(car)=>bookFromProfile(car)} goServices={goServices} goOrders={goOrders} onProfileUpdated={()=>fetchProfile(user.id)} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories}/>}
             {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount} theme={theme} highlightJobNumber={deepLinkJobNumber}/>}
-            {page==='contact' && <ContactView isRtl={isRtl}/>}
+            {page==='contact' && <ContactView isRtl={isRtl} user={user}/>}
             {page==='parts'   && <PartsFlowView lang={lang} isRtl={isRtl} user={user} profile={profile} goHome={goHome} carBrands={carBrands} carCategories={carCategories}/>}
             {page==='booking' && step===2 && <DetailsStep {...shared} prevStep={()=>setPage('home')}/>}
             {page==='booking' && step===3 && <ScheduleStep {...shared} prevStep={()=>setStep(2)}/>}
@@ -3670,7 +3670,7 @@ function TermsGateModal({ isRtl, user, onAccepted }) {
 
 // Public read (no login required) — matches how the "تواصل" nav item is
 // reachable without an account, same as browsing services.
-function ContactView({ isRtl }) {
+function ContactView({ isRtl, user }) {
   const [info, setInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [openPolicy, setOpenPolicy] = useState(null); // 'terms' | 'warranty' | 'returns' | null
@@ -3683,6 +3683,15 @@ function ContactView({ isRtl }) {
   if (loading) {
     return <div className="flex items-center justify-center py-20"><Loader2 size={22} className="animate-spin" style={{ color:C.gold }}/></div>;
   }
+
+  // TEMPORARY (Skip Cash / QCB payment-gateway review, see COMPLIANCE_MODE
+  // above) — a not-logged-in visitor sees a generic About blurb instead of
+  // the real car-focused intro/photos; contact details and legal links
+  // below are untouched either way, per Karim's explicit request.
+  const showCompliance = COMPLIANCE_MODE && !user;
+  const complianceText = isRtl
+    ? 'سندك منصة رقمية مرخّصة في دولة قطر، تعمل تحت نشاطي الوساطة في خدمات دعم الأعمال والتجارة الإلكترونية. نحرص على تقديم تجربة موثوقة وشفافة لعملائنا في كل تعاملاتهم معنا. لا تترددوا في التواصل معنا — فريقنا جاهز لخدمتكم في أي وقت.'
+    : 'SNDK is a licensed digital platform in Qatar, operating under business-support intermediation and e-commerce. We strive to give our customers a reliable, transparent experience in everything we do. Feel free to reach out — our team is ready to help, any time.';
 
   const introText = isRtl ? info?.intro_text_ar : (info?.intro_text_en || info?.intro_text_ar);
   const rows = [
@@ -3698,14 +3707,20 @@ function ContactView({ isRtl }) {
     <div className="max-w-lg mx-auto p-4 md:p-6 space-y-5">
       <h1 className="text-2xl font-black text-center" style={{ color:C.text }}>{isRtl ? 'تواصل معنا وتعرف علينا' : 'Contact & About Us'}</h1>
 
-      {introText && <p className="text-lg font-bold leading-relaxed text-center" style={{ color:C.text }}>{introText}</p>}
+      {showCompliance ? (
+        <p className="text-lg font-bold leading-relaxed text-center" style={{ color:C.text }}>{complianceText}</p>
+      ) : (
+        <>
+          {introText && <p className="text-lg font-bold leading-relaxed text-center" style={{ color:C.text }}>{introText}</p>}
 
-      {info?.image_urls?.length > 0 && (
-        <div className="space-y-3">
-          {info.image_urls.map(url => (
-            <img key={url} src={url} alt="" className="w-full rounded-2xl object-cover" style={{ border:`1px solid ${C.border}`, maxHeight:520 }}/>
-          ))}
-        </div>
+          {info?.image_urls?.length > 0 && (
+            <div className="space-y-3">
+              {info.image_urls.map(url => (
+                <img key={url} src={url} alt="" className="w-full rounded-2xl object-cover" style={{ border:`1px solid ${C.border}`, maxHeight:520 }}/>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {rows.length > 0 ? (
