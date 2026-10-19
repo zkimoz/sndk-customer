@@ -4311,6 +4311,14 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
   const [payPartOrderModal, setPayPartOrderModal] = useState(null); // { partOrderId, amount, requestNumber } | null
   const [viewPartOrder, setViewPartOrder] = useState(null); // the tapped part_orders row, or null
   const [serviceSelections, setServiceSelections] = useState({}); // { [orderId]: { [serviceKey]: boolean } }
+  // Collapsed by default once a service is approved — only its priority,
+  // title and final price show until this is toggled open, so an order with
+  // several already-approved services doesn't bury the one still awaiting a
+  // decision under a wall of line items. { [orderId]: { [serviceKey]: boolean } }
+  const [expandedApproved, setExpandedApproved] = useState({});
+  const toggleApprovedExpanded = (orderId, key) => setExpandedApproved(prev => ({
+    ...prev, [orderId]: { ...(prev[orderId]||{}), [key]: !prev[orderId]?.[key] },
+  }));
   // Booking a date/time for a quote-only request the customer just approved —
   // the service decisions and quotation are already locked in, this only
   // needs a date/time, then flips the (already-existing) job card straight
@@ -5248,7 +5256,15 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                             });
                             if (services.length === 0) return null;
                             const order = { high:0, medium:1, low:2 };
-                            services.sort((a,b)=>order[a.priority]-order[b.priority]);
+                            // Still-undecided services sort first (need the customer's
+                            // attention), decided ones (approved/rejected) after — priority
+                            // only breaks ties within each of those two groups.
+                            services.sort((a,b) => {
+                              const aDecided = relOrd.service_decisions?.[a.key] ? 1 : 0;
+                              const bDecided = relOrd.service_decisions?.[b.key] ? 1 : 0;
+                              if (aDecided !== bDecided) return aDecided - bDecided;
+                              return order[a.priority]-order[b.priority];
+                            });
                             // Same-named services (now allowed as separate instances) get a
                             // "(2)", "(3)"... suffix so the customer can tell them apart —
                             // purely cosmetic, matches the admin side's numbering.
@@ -5285,87 +5301,127 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                                   const laborItems = lineItems.filter(i => i.item_type === 'labor');
                                   const partItems   = lineItems.filter(i => i.item_type === 'part');
                                   const groupHasDiscount = lineItems.some(it => Number(it.discount_pct||0) > 0);
+                                  const groupTotal = lineItems.reduce((s2,it)=>s2+lineTotal(it),0);
+                                  const isApproved = decision === 'approved';
+                                  const isExpanded = !isApproved || !!expandedApproved[relOrd.id]?.[s.key];
+                                  const isRenewalGroup = needsRenewalAuth && isRenewalServiceName({ ar:s.name_ar, en:s.name_en });
                                   return (
                                     <div key={s.key} className="rounded-lg overflow-hidden" style={{ background:'rgba(0,0,0,0.08)' }}>
-                                      <div className="flex items-center gap-2 px-3 py-2">
-                                        <div className="min-w-0 flex-1">
-                                          {(s.category_ar || s.category_en) && (
-                                            <p className="text-[10px] font-bold uppercase tracking-wider truncate" style={{ color:cc.sub }}>{isRtl?(s.category_ar||s.category_en):(s.category_en||s.category_ar)}</p>
-                                          )}
-                                          <span className="text-sm font-semibold" style={{ color:cc.txt }}>{isRtl?(s.name_ar||s.name_en):(s.name_en||s.name_ar)}{displaySuffixOf[s.key]}</span>
-                                          {s.is_warranty && (
-                                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ms-1.5" style={{background:'rgba(59,130,246,0.15)',color:'#3b82f6'}}>
-                                              🛡️ {isRtl?'ضمان':'Warranty'}
-                                            </span>
-                                          )}
-                                          {s.notes_ar && <p className="text-[11px] mt-0.5 italic" style={{ color:cc.sub }}>{isRtl ? s.notes_ar : (s.notes_en || s.notes_ar)}</p>}
-                                        </div>
-                                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background:PRIORITY_STYLE[s.priority].bg, color:PRIORITY_STYLE[s.priority].text }}>
+                                      {isApproved && !isExpanded ? (
+                                        // Approved — collapsed to priority + title + final price,
+                                        // so an order with several approved services doesn't bury
+                                        // whatever's still awaiting a decision under a wall of
+                                        // line-item detail. Tap to expand the full breakdown.
+                                        <button onClick={()=>toggleApprovedExpanded(relOrd.id, s.key)}
+                                          className="flex items-center gap-2 w-full px-3 py-2.5 text-start">
+                                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background:PRIORITY_STYLE[s.priority].bg, color:PRIORITY_STYLE[s.priority].text }}>
                                             {PRIORITY_STYLE[s.priority].label}
                                           </span>
-                                          {decision && (
-                                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={decision==='approved' ? { background:'rgba(34,197,94,0.15)', color:'#22c55e' } : { background:'rgba(239,68,68,0.15)', color:'#ef4444' }}>
-                                              {decision==='approved' ? (isRtl?'تمت الموافقة':'Approved') : (isRtl?'تم الرفض':'Rejected')}
-                                            </span>
-                                          )}
-                                        </div>
-                                      </div>
-                                      {!decision && (
-                                        <div className="flex items-center gap-2 px-3 pb-2">
-                                          <button onClick={()=>setServiceDecision(relOrd.id, s.key, 'approved')}
-                                            className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-sm font-bold transition-all active:scale-95"
-                                            style={liveDecision==='approved'
-                                              ? { background:'#16a34a', color:'#fff' }
-                                              : { background:'transparent', color:'#16a34a', border:'1.5px solid #16a34a60' }}>
-                                            <Check size={12}/>{isRtl?'موافق':'Approve'}
-                                          </button>
-                                          <button onClick={()=>setServiceDecision(relOrd.id, s.key, 'rejected')}
-                                            className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-sm font-bold transition-all active:scale-95"
-                                            style={liveDecision==='rejected'
-                                              ? { background:'#ef4444', color:'#fff' }
-                                              : { background:'transparent', color:'#ef4444', border:'1.5px solid #ef444460' }}>
-                                            <X size={12}/>{isRtl?'رفض':'Reject'}
-                                          </button>
-                                        </div>
-                                      )}
-                                      {(partItems.length > 0 || laborItems.length > 0) && (
-                                        <div className="px-3 pb-2 pt-1 space-y-1" style={{ borderTop:'1px solid rgba(255,255,255,0.08)' }}>
-                                          {partItems.map((it,i) => {
-                                            const hasDiscount = Number(it.discount_pct||0) > 0;
-                                            return (
-                                            <div key={`p-${i}`} className="flex items-center justify-between gap-2 text-xs">
-                                              <span style={{ color:cc.sub }}>
-                                                <span className="opacity-70">{isRtl?'قطعة —':'Part —'}</span> {isRtl?(it.item_name?.ar||it.item_name?.en):(it.item_name?.en||it.item_name?.ar)}
-                                              </span>
-                                              <span className="flex-shrink-0 flex items-center gap-1.5">
-                                                {hasDiscount && <span className="line-through opacity-50" style={{ color:cc.sub }}>{originalLineTotal(it).toFixed(3)}</span>}
-                                                <span className="font-bold" style={{ color: hasDiscount ? '#22c55e' : cc.txt }}>{lineTotal(it).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
-                                              </span>
+                                          <span className="text-sm font-semibold flex-1 min-w-0 truncate" style={{ color:cc.txt }}>{isRtl?(s.name_ar||s.name_en):(s.name_en||s.name_ar)}{displaySuffixOf[s.key]}</span>
+                                          <span className="font-black text-sm flex-shrink-0" dir="ltr" style={{ color:cc.fg }}>{groupTotal.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                                          <ChevronDown size={14} className="flex-shrink-0" style={{ color:cc.sub }}/>
+                                        </button>
+                                      ) : (
+                                        <>
+                                          <div className="flex items-center gap-2 px-3 py-2">
+                                            <div className="min-w-0 flex-1">
+                                              {(s.category_ar || s.category_en) && (
+                                                <p className="text-[10px] font-bold uppercase tracking-wider truncate" style={{ color:cc.sub }}>{isRtl?(s.category_ar||s.category_en):(s.category_en||s.category_ar)}</p>
+                                              )}
+                                              <span className="text-sm font-semibold" style={{ color:cc.txt }}>{isRtl?(s.name_ar||s.name_en):(s.name_en||s.name_ar)}{displaySuffixOf[s.key]}</span>
+                                              {s.is_warranty && (
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ms-1.5" style={{background:'rgba(59,130,246,0.15)',color:'#3b82f6'}}>
+                                                  🛡️ {isRtl?'ضمان':'Warranty'}
+                                                </span>
+                                              )}
+                                              {s.notes_ar && <p className="text-[11px] mt-0.5 italic" style={{ color:cc.sub }}>{isRtl ? s.notes_ar : (s.notes_en || s.notes_ar)}</p>}
                                             </div>
-                                            );
-                                          })}
-                                          {laborItems.map((it,i) => {
-                                            const hasDiscount = Number(it.discount_pct||0) > 0;
-                                            return (
-                                            <div key={`l-${i}`} className="flex items-center justify-between gap-2 text-xs">
-                                              <span style={{ color:cc.sub }}>
-                                                <span className="opacity-70">{it.item_name?.insurance ? (isRtl?'تأمين —':'Insurance —') : (isRtl?'عمالة —':'Labor —')}</span> {isRtl?(it.item_name?.ar||it.item_name?.en):(it.item_name?.en||it.item_name?.ar)}
+                                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                                              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background:PRIORITY_STYLE[s.priority].bg, color:PRIORITY_STYLE[s.priority].text }}>
+                                                {PRIORITY_STYLE[s.priority].label}
                                               </span>
-                                              <span className="flex-shrink-0 flex items-center gap-1.5">
-                                                {hasDiscount && <span className="line-through opacity-50" style={{ color:cc.sub }}>{originalLineTotal(it).toFixed(3)}</span>}
-                                                <span className="font-bold" style={{ color: hasDiscount ? '#22c55e' : cc.txt }}>{lineTotal(it).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
-                                              </span>
+                                              {decision && (
+                                                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={decision==='approved' ? { background:'rgba(34,197,94,0.15)', color:'#22c55e' } : { background:'rgba(239,68,68,0.15)', color:'#ef4444' }}>
+                                                  {decision==='approved' ? (isRtl?'تمت الموافقة':'Approved') : (isRtl?'تم الرفض':'Rejected')}
+                                                </span>
+                                              )}
                                             </div>
-                                            );
-                                          })}
-                                          <div className="flex items-center justify-between gap-2 text-xs pt-1 mt-1" style={{ borderTop:'1px dashed rgba(255,255,255,0.15)' }}>
-                                            <span className="font-bold" style={{ color:cc.sub }}>{isRtl?'إجمالي الخدمة':'Service total'}</span>
-                                            <span className="flex-shrink-0 flex items-center gap-1.5">
-                                              {groupHasDiscount && <span className="line-through opacity-50 text-[11px]" style={{ color:cc.sub }}>{lineItems.reduce((s,it)=>s+originalLineTotal(it),0).toFixed(3)}</span>}
-                                              <span className="font-black" style={{ color: groupHasDiscount ? '#22c55e' : cc.fg }}>{lineItems.reduce((s,it)=>s+lineTotal(it),0).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
-                                            </span>
                                           </div>
+                                          {!decision && (
+                                            <div className="flex items-center gap-2 px-3 pb-2">
+                                              <button onClick={()=>setServiceDecision(relOrd.id, s.key, 'approved')}
+                                                className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-sm font-bold transition-all active:scale-95"
+                                                style={liveDecision==='approved'
+                                                  ? { background:'#16a34a', color:'#fff' }
+                                                  : { background:'transparent', color:'#16a34a', border:'1.5px solid #16a34a60' }}>
+                                                <Check size={12}/>{isRtl?'موافق':'Approve'}
+                                              </button>
+                                              <button onClick={()=>setServiceDecision(relOrd.id, s.key, 'rejected')}
+                                                className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-sm font-bold transition-all active:scale-95"
+                                                style={liveDecision==='rejected'
+                                                  ? { background:'#ef4444', color:'#fff' }
+                                                  : { background:'transparent', color:'#ef4444', border:'1.5px solid #ef444460' }}>
+                                                <X size={12}/>{isRtl?'رفض':'Reject'}
+                                              </button>
+                                            </div>
+                                          )}
+                                          {(partItems.length > 0 || laborItems.length > 0) && (
+                                            <div className="px-3 pb-2 pt-1 space-y-1" style={{ borderTop:'1px solid rgba(255,255,255,0.08)' }}>
+                                              {partItems.map((it,i) => {
+                                                const hasDiscount = Number(it.discount_pct||0) > 0;
+                                                return (
+                                                <div key={`p-${i}`} className="flex items-center justify-between gap-2 text-xs">
+                                                  <span style={{ color:cc.sub }}>
+                                                    <span className="opacity-70">{isRtl?'قطعة —':'Part —'}</span> {isRtl?(it.item_name?.ar||it.item_name?.en):(it.item_name?.en||it.item_name?.ar)}
+                                                  </span>
+                                                  <span className="flex-shrink-0 flex items-center gap-1.5">
+                                                    {hasDiscount && <span className="line-through opacity-50" style={{ color:cc.sub }}>{originalLineTotal(it).toFixed(3)}</span>}
+                                                    <span className="font-bold" style={{ color: hasDiscount ? '#22c55e' : cc.txt }}>{lineTotal(it).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                                                  </span>
+                                                </div>
+                                                );
+                                              })}
+                                              {laborItems.map((it,i) => {
+                                                const hasDiscount = Number(it.discount_pct||0) > 0;
+                                                return (
+                                                <div key={`l-${i}`} className="flex items-center justify-between gap-2 text-xs">
+                                                  <span style={{ color:cc.sub }}>
+                                                    <span className="opacity-70">{it.item_name?.insurance ? (isRtl?'تأمين —':'Insurance —') : (isRtl?'عمالة —':'Labor —')}</span> {isRtl?(it.item_name?.ar||it.item_name?.en):(it.item_name?.en||it.item_name?.ar)}
+                                                  </span>
+                                                  <span className="flex-shrink-0 flex items-center gap-1.5">
+                                                    {hasDiscount && <span className="line-through opacity-50" style={{ color:cc.sub }}>{originalLineTotal(it).toFixed(3)}</span>}
+                                                    <span className="font-bold" style={{ color: hasDiscount ? '#22c55e' : cc.txt }}>{lineTotal(it).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                                                  </span>
+                                                </div>
+                                                );
+                                              })}
+                                              <div className="flex items-center justify-between gap-2 text-xs pt-1 mt-1" style={{ borderTop:'1px dashed rgba(255,255,255,0.15)' }}>
+                                                <span className="font-bold" style={{ color:cc.sub }}>{isRtl?'إجمالي الخدمة':'Service total'}</span>
+                                                <span className="flex-shrink-0 flex items-center gap-1.5">
+                                                  {groupHasDiscount && <span className="line-through opacity-50 text-[11px]" style={{ color:cc.sub }}>{lineItems.reduce((s2,it)=>s2+originalLineTotal(it),0).toFixed(3)}</span>}
+                                                  <span className="font-black" style={{ color: groupHasDiscount ? '#22c55e' : cc.fg }}>{groupTotal.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                                                </span>
+                                              </div>
+                                            </div>
+                                          )}
+                                          {isApproved && (
+                                            <button onClick={()=>toggleApprovedExpanded(relOrd.id, s.key)}
+                                              className="flex items-center justify-center gap-1 w-full text-[11px] font-bold py-1.5"
+                                              style={{ color:cc.sub, borderTop:'1px solid rgba(255,255,255,0.08)' }}>
+                                              {isRtl?'إخفاء التفاصيل':'Hide details'}<ChevronDown size={12} style={{ transform:'rotate(180deg)' }}/>
+                                            </button>
+                                          )}
+                                        </>
+                                      )}
+                                      {/* Renewal authorization always stays attached to its own
+                                          service group (not a separate block elsewhere on the
+                                          page), visible regardless of collapse state since it's
+                                          a signature requirement, not just a line-item detail. */}
+                                      {isRenewalGroup && (
+                                        <div className="px-3 pb-3 pt-2" style={{ borderTop:'1px solid rgba(255,255,255,0.08)' }}>
+                                          <RenewalAuthCard a={a} car={car} relOrd={relOrd} cc={cc} isRtl={isRtl} lang={lang}
+                                            carBrandsRef={carBrandsRef} carCatsRef={carCatsRef} profile={profile}
+                                            onSaved={(renewal_request) => setAppts(prev => prev.map(x => x.id === a.id ? { ...x, renewal_request } : x))}/>
                                         </div>
                                       )}
                                     </div>
@@ -5428,13 +5484,6 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                             style={{ background:cc.fg, color:'#111111' }}>
                             <FileImage size={16}/>{isRtl ? 'فتح أمر الشغل PDF' : 'Open Job Card PDF'}
                           </button>
-                          {/* Staff added the renewal service by hand — no authorization on
-                              file yet, collect it right here before anything can be confirmed. */}
-                          {needsRenewalAuth && (
-                            <RenewalAuthCard a={a} car={car} relOrd={relOrd} cc={cc} isRtl={isRtl} lang={lang}
-                              carBrandsRef={carBrandsRef} carCatsRef={carCatsRef} profile={profile}
-                              onSaved={(renewal_request) => setAppts(prev => prev.map(x => x.id === a.id ? { ...x, renewal_request } : x))}/>
-                          )}
                           {/* Total — reflects only the services currently checked (0 until the customer picks any).
                               Gated on there being a quotation at all (order_items present), not on the total
                               being positive — a single free/fully-discounted service has a real total of 0
