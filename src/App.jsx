@@ -455,10 +455,26 @@ const extractNoteNumber = (text) => {
 };
 
 const JobStatusVideoBlock = ({ videos, isRtl, jcId, videoKeyPrefix, openVideoId, setOpenVideoId, fg, txt }) => {
+  // One toggle for the whole batch instead of every photo/video getting its
+  // own always-visible row — a job card with several reception or workshop
+  // clips was filling the page before a customer even scrolled to the
+  // status itself. Collapsed by default; each item inside still opens its
+  // own player independently via openVideoId, same as before.
+  const [collapseOpen, setCollapseOpen] = useState(false);
   if (!videos.length) return null;
+  const collapseLabel = videoKeyPrefix === 'reception'
+    ? (isRtl ? `مشاهدة ملفات الاستلام (${videos.length})` : `View reception media (${videos.length})`)
+    : (isRtl ? `مشاهدة ملفات الورشة (${videos.length})` : `View workshop media (${videos.length})`);
   return (
     <div className="mr-6 mt-1 mb-2 space-y-2">
-      {videos.map((url, idx) => {
+      <button onClick={() => setCollapseOpen(v => !v)}
+        className="flex items-center gap-2 w-full px-3 py-2 rounded-xl transition-all active:scale-[0.99]"
+        style={{ background:'rgba(0,0,0,0.10)', border:`1px solid ${fg}50` }}>
+        <PlayCircle size={14} style={{ color:fg }}/>
+        <span className="flex-1 text-start text-sm font-bold" style={{ color:txt }}>{collapseLabel}</span>
+        <ChevronDown size={14} style={{ color:txt, transform: collapseOpen ? 'rotate(180deg)' : 'none', transition:'transform 0.2s' }}/>
+      </button>
+      {collapseOpen && videos.map((url, idx) => {
         const videoId = `${jcId}-${videoKeyPrefix}-${idx}`;
         const isOpen = openVideoId === videoId;
         const isImg = isImageUrl(url);
