@@ -2545,6 +2545,9 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
                   {it.part_number && (
                     <p className="text-xs font-mono" style={{ color:C.cardMuted }}>{isRtl?'رقم القطعة':'Part No.'}: {it.part_number}</p>
                   )}
+                  {it.source_country && (
+                    <p className="text-xs" style={{ color:C.cardMuted }}>{isRtl?'بلد المنشأ':'Country of Origin'}: {it.source_country}</p>
+                  )}
                   {photos.length > 0 && (
                     <div className="flex gap-2 overflow-x-auto">
                       {photos.map(url => (
