@@ -5317,6 +5317,9 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                                           <span className="text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background:PRIORITY_STYLE[s.priority].bg, color:PRIORITY_STYLE[s.priority].text }}>
                                             {PRIORITY_STYLE[s.priority].label}
                                           </span>
+                                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background:'rgba(34,197,94,0.15)', color:'#22c55e' }}>
+                                            ✓ {isRtl?'تمت الموافقة':'Approved'}
+                                          </span>
                                           <span className="text-sm font-semibold flex-1 min-w-0 truncate" style={{ color:cc.txt }}>{isRtl?(s.name_ar||s.name_en):(s.name_en||s.name_ar)}{displaySuffixOf[s.key]}</span>
                                           <span className="font-black text-sm flex-shrink-0" dir="ltr" style={{ color:cc.fg }}>{groupTotal.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
                                           <ChevronDown size={14} className="flex-shrink-0" style={{ color:cc.sub }}/>
