@@ -1142,6 +1142,26 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authChecked]);
 
+  // Returning from a SkipCash hosted-checkout redirect — just lands the
+  // customer back on their orders page. The payment itself is already
+  // recorded server-side by skipcash-webhook by the time (or shortly after)
+  // the customer gets back here; MyOrdersView's live subscription on
+  // "payments" picks it up on its own, so this only needs to clean the URL
+  // and reassure them it's being confirmed.
+  useEffect(() => {
+    if (!authChecked) return;
+    const skipcashOrder = new URLSearchParams(window.location.search).get('skipcash_order');
+    if (!skipcashOrder) return;
+    window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+    setPendingQuotCount(0);
+    setPage('orders');
+    setMenuOpen(false);
+    alert(isRtl
+      ? 'شكرًا! سيتم تأكيد الدفع وتحديث رصيدك خلال لحظات.'
+      : 'Thank you! Your payment will be confirmed and your balance updated shortly.');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authChecked]);
+
   const loadReferenceData = () => {
     // Load dynamic car brands, categories, and brand-category links
     supabase.from('car_brands').select('id,name_ar,name_en').or('is_active.eq.true,is_active.is.null').order('sort_order').order('id')
@@ -1893,7 +1913,31 @@ function PaymentMethodModal({ orderId, types, amount, user, customerName, isRtl,
   const paypalContainerRef = useRef(null);
   const needsReceipt = chosenKey === 'instant_transfer';
   const chosenMethod = methods.find(m => m.key === chosenKey);
-  const isGateway = chosenMethod?.method_type === 'gateway';
+  const isSkipcash = chosenKey === 'skipcash';
+  const [skipcashLoading, setSkipcashLoading] = useState(false);
+  const [skipcashError, setSkipcashError] = useState(null);
+
+  // SkipCash is a hosted-redirect checkout, not an SDK popup like PayPal —
+  // this just creates the payment and sends the browser to its payUrl.
+  // SkipCash confirms completion to skipcash-webhook server-to-server, which
+  // is the only place the payments row actually gets inserted; the "orders"
+  // page's live subscription (useLiveTables(['payments'],...) in
+  // MyOrdersView) then reflects it automatically once that lands — this tab
+  // never has to poll or be trusted to report success itself.
+  const paySkipcash = async () => {
+    if (skipcashLoading) return;
+    setSkipcashLoading(true);
+    setSkipcashError(null);
+    const returnUrl = `${window.location.origin}${window.location.pathname}?skipcash_order=${orderId}`;
+    const { data, error } = await supabase.functions.invoke('skipcash-payment', { body: { orderId, types, returnUrl } });
+    if (error || !data?.payUrl) {
+      const msg = data?.error || error?.message || (isRtl ? 'تعذر بدء الدفع' : 'Could not start payment');
+      setSkipcashError(msg);
+      setSkipcashLoading(false);
+      return;
+    }
+    window.location.href = data.payUrl;
+  };
 
   // What's still owed drops locally the moment a wallet payment goes
   // through, so the modal (and the PayPal button below it, which always
@@ -1960,7 +2004,7 @@ function PaymentMethodModal({ orderId, types, amount, user, customerName, isRtl,
   // recomputes the amount server-side and inserts the payments row itself —
   // this modal never touches money directly.
   useEffect(() => {
-    if (!isGateway || !chosenMethod?.client_id) return;
+    if (chosenKey !== 'paypal' || !chosenMethod?.client_id) return;
     let cancelled = false;
     let buttons = null;
 
@@ -2029,8 +2073,7 @@ function PaymentMethodModal({ orderId, types, amount, user, customerName, isRtl,
     // latestRef inside the callbacks above instead, so this effect (and the
     // PayPal Buttons widget it creates) only re-runs when the chosen method
     // actually changes, not on every unrelated parent re-render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isGateway, chosenMethod?.client_id]);
+  }, [chosenKey, chosenMethod?.client_id]);
 
   const confirm = async () => {
     if (!chosenKey || saving) return;
@@ -2175,7 +2218,7 @@ function PaymentMethodModal({ orderId, types, amount, user, customerName, isRtl,
             </div>
           )}
         </div>
-        {isGateway ? (
+        {chosenKey === 'paypal' ? (
           <div className="p-5 pt-0 space-y-2">
             <div ref={paypalContainerRef}/>
             {saving && (
@@ -2184,6 +2227,18 @@ function PaymentMethodModal({ orderId, types, amount, user, customerName, isRtl,
             <p className="text-[11px] text-center" style={{ color:mc.sub }}>
               {isRtl ? 'سيتم تحويل المبلغ تلقائيًا لدولار أمريكي بسعر الصرف الثابت (٣.٦٥ ر.ق = ١$)' : 'The amount is automatically converted to US Dollars at the fixed exchange rate (3.65 QAR = $1)'}
             </p>
+          </div>
+        ) : isSkipcash ? (
+          <div className="p-5 pt-0 space-y-2">
+            <button onClick={paySkipcash} disabled={skipcashLoading}
+              className="w-full py-3.5 rounded-xl font-black text-sm transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60"
+              style={{ background:'#8A1538', color:'#fff' }}>
+              {skipcashLoading
+                ? <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"/>{isRtl ? 'جاري التحويل...' : 'Redirecting...'}</>
+                : (isRtl ? 'الدفع عبر SkipCash' : 'Pay with SkipCash')
+              }
+            </button>
+            {skipcashError && <p className="text-xs font-bold text-center" style={{ color:'#fca5a5' }}>{skipcashError}</p>}
           </div>
         ) : (
           <div className="p-5 pt-0">
