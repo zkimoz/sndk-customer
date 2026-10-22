@@ -1896,6 +1896,38 @@ function SignatureModal({ isRtl, theme, hasParts, onConfirm, onClose, title, sub
   );
 }
 
+// Small accepted-card-network marks shown on the card-payment option —
+// simplified redraws (not the exact licensed artwork), same spirit as the
+// WhatsApp/Facebook/etc. glyphs elsewhere in this codebase: just enough to
+// read instantly as "Visa", "Apple Pay", etc. at badge size.
+const VisaMark = () => (
+  <div className="h-6 px-2 rounded flex items-center justify-center bg-white flex-shrink-0">
+    <span style={{ color:'#1A1F71', fontWeight:900, fontStyle:'italic', fontSize:13, letterSpacing:'-0.5px' }}>VISA</span>
+  </div>
+);
+const MastercardMark = () => (
+  <div className="h-6 px-1.5 rounded flex items-center justify-center bg-white flex-shrink-0">
+    <svg width="26" height="16" viewBox="0 0 26 16">
+      <circle cx="9" cy="8" r="7.5" fill="#EB001B"/>
+      <circle cx="17" cy="8" r="7.5" fill="#F79E1B" fillOpacity="0.85"/>
+    </svg>
+  </div>
+);
+const ApplePayMark = () => (
+  <div className="h-6 px-2.5 rounded flex items-center justify-center gap-1 bg-black flex-shrink-0">
+    <svg width="12" height="14" viewBox="0 0 384 512" fill="#fff">
+      <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/>
+    </svg>
+    <span style={{ color:'#fff', fontWeight:700, fontSize:12, fontStyle:'italic' }}>Pay</span>
+  </div>
+);
+const NapsMark = () => (
+  <div className="h-6 px-2 rounded flex items-center gap-1 bg-white flex-shrink-0">
+    <svg width="10" height="11" viewBox="0 0 10 11"><path d="M0 0 L10 0 L5 5.5 L10 11 L0 11 Z" fill="#8A1538"/></svg>
+    <span style={{ color:'#8A1538', fontWeight:900, fontSize:11, letterSpacing:'0.5px' }}>NAPS</span>
+  </div>
+);
+
 // Lets the customer pick how they want to pay (parts, labor, or both at once
 // for the "pay what's left" case) — payment methods come from the admin's
 // طرق الدفع control panel. "Manual" methods (cash on pickup / instant
@@ -2230,13 +2262,10 @@ function PaymentMethodModal({ orderId, types, amount, user, customerName, isRtl,
           </div>
         ) : isSkipcash ? (
           <div className="p-5 pt-0 space-y-3">
-            <div className="rounded-xl p-3 flex items-center gap-3" style={{ background:'rgba(0,0,0,0.12)', border:'1px dashed rgba(255,255,255,0.25)' }}>
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background:'rgba(255,255,255,0.15)' }}>
-                <CreditCard size={20} style={{ color:mc.txt }}/>
-              </div>
-              <div>
-                <p className="font-bold text-sm" style={{ color:mc.txt }}>{isRtl?'الدفع بالبطاقة':'Pay by Card'}</p>
-                <p className="text-xs mt-0.5" style={{ color:mc.sub }}>{isRtl?'فيزا، ماستركارد، وأي بطاقة بنكية':'Visa, Mastercard, and other bank cards'}</p>
+            <div className="rounded-xl p-3 space-y-2.5" style={{ background:'rgba(0,0,0,0.12)', border:'1px dashed rgba(255,255,255,0.25)' }}>
+              <p className="font-bold text-sm" style={{ color:mc.txt }}>{isRtl?'الدفع بالبطاقة':'Pay by Card'}</p>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <VisaMark/><MastercardMark/><ApplePayMark/><NapsMark/>
               </div>
             </div>
             <button onClick={paySkipcash} disabled={skipcashLoading}
