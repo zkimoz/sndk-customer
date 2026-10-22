@@ -7,7 +7,7 @@ import {
   Menu, X, ChevronLeft, ChevronRight, ChevronDown, User, Calendar,
   Wrench, ArrowRight, Lock, LogOut, MapPin, Mail,
   ClipboardList, Package, ShoppingCart, Trash2, Upload, FileImage, Pencil, Check,
-  Sun, Moon, Eye, EyeOff, PlayCircle, Wallet, AlertCircle, Download, HelpCircle,
+  Sun, Moon, Eye, EyeOff, PlayCircle, Wallet, AlertCircle, Download, HelpCircle, CreditCard,
 } from 'lucide-react';
 
 // Re-runs `onChange` (usually a view's own `load`) whenever any row in the
@@ -2229,15 +2229,27 @@ function PaymentMethodModal({ orderId, types, amount, user, customerName, isRtl,
             </p>
           </div>
         ) : isSkipcash ? (
-          <div className="p-5 pt-0 space-y-2">
+          <div className="p-5 pt-0 space-y-3">
+            <div className="rounded-xl p-3 flex items-center gap-3" style={{ background:'rgba(0,0,0,0.12)', border:'1px dashed rgba(255,255,255,0.25)' }}>
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background:'rgba(255,255,255,0.15)' }}>
+                <CreditCard size={20} style={{ color:mc.txt }}/>
+              </div>
+              <div>
+                <p className="font-bold text-sm" style={{ color:mc.txt }}>{isRtl?'الدفع بالبطاقة':'Pay by Card'}</p>
+                <p className="text-xs mt-0.5" style={{ color:mc.sub }}>{isRtl?'فيزا، ماستركارد، وأي بطاقة بنكية':'Visa, Mastercard, and other bank cards'}</p>
+              </div>
+            </div>
             <button onClick={paySkipcash} disabled={skipcashLoading}
               className="w-full py-3.5 rounded-xl font-black text-sm transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60"
               style={{ background:'#8A1538', color:'#fff' }}>
               {skipcashLoading
                 ? <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"/>{isRtl ? 'جاري التحويل...' : 'Redirecting...'}</>
-                : (isRtl ? 'الدفع عبر SkipCash' : 'Pay with SkipCash')
+                : <><CreditCard size={16}/>{isRtl ? 'متابعة الدفع بالبطاقة' : 'Continue to Card Payment'}</>
               }
             </button>
+            <p className="text-[11px] text-center flex items-center justify-center gap-1" style={{ color:mc.sub }}>
+              <Lock size={11}/>{isRtl ? 'دفع آمن ومشفر بالكامل' : 'Fully secure, encrypted payment'}
+            </p>
             {skipcashError && <p className="text-xs font-bold text-center" style={{ color:'#fca5a5' }}>{skipcashError}</p>}
           </div>
         ) : (
