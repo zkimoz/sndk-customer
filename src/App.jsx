@@ -785,15 +785,11 @@ const COMING_SOON_CAT_NAMES = new Set([
 // letter + two signatures + a fixed fee — not a sub-services accordion, so
 // its tile/row routes straight into that instead of expanding, same way
 // spare parts does.
-// ── TEMPORARY: Skip Cash / Qatar Central Bank payment-gateway review ──
-// While QCB reviews the payment integration, Karim asked that any visitor
-// who ISN'T logged in sees a page describing only the two activities
-// licensed on SNDK's Commercial Registration (244788) — intermediation +
-// e-commerce — instead of the normal home page's full services catalog.
-// Already-logged-in customers are completely unaffected either way; this
-// only ever gates the pre-login landing view (see `page==='home'` below).
-// Flip this back to false (and redeploy) the moment approval comes through.
-const COMPLIANCE_MODE = true;
+// Was a TEMPORARY flag during Skip Cash / Qatar Central Bank's payment-
+// gateway review, showing not-logged-in visitors a page describing only
+// the two licensed Commercial Registration activities instead of the
+// normal home/services/about pages. Approval came through — left false.
+const COMPLIANCE_MODE = false;
 const RENEWAL_CAT_NAMES = new Set(['تجديد استمارة السيارة', 'Car Registration Renewal']);
 const RENEWAL_FEE = 250;
 const RENEWAL_FAIL_DISCOUNT = 50;
