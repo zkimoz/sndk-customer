@@ -151,36 +151,31 @@ serve(async (req) => {
     const due = amountDueForTypes(breakdown, types);
     if (due <= 0.001) return jsonResponse({ error: "Nothing outstanding to pay" }, 400);
 
-    const { data: walletRows, error: wErr } = await adminClient
-      .from("wallet_transactions").select("amount").eq("profile_id", profileId).eq("status", "confirmed");
-    if (wErr) return jsonResponse({ error: wErr.message }, 500);
-    const walletBalance = (walletRows || []).reduce((s: number, w: any) => s + Number(w.amount || 0), 0);
-
-    if (requestedAmount > walletBalance + 0.001) {
-      return jsonResponse({ error: "Insufficient wallet balance" }, 400);
-    }
     if (requestedAmount > due + 0.001) {
       return jsonResponse({ error: "Amount exceeds what is still owed" }, 400);
     }
-    const appliedAmount = Math.min(requestedAmount, due, walletBalance);
     const isTowing = types.includes("towing");
     const purpose = isTowing ? "towing" : "service";
 
-    const { data: paymentRow, error: payErr } = await adminClient.from("payments").insert({
-      order_id: orderId, amount: appliedAmount, method: "wallet", recorded_by: null, purpose,
-    }).select("id").single();
-    if (payErr) return jsonResponse({ error: `Payment failed: ${payErr.message}` }, 500);
-
-    const { error: walErr } = await adminClient.from("wallet_transactions").insert({
-      profile_id: profileId, amount: -appliedAmount, type: "service_payment", status: "confirmed",
-      order_id: orderId, recorded_by: null,
+    // The balance check and both inserts (payments + the debit itself) all
+    // happen atomically inside pay_order_from_wallet, under a per-customer
+    // advisory lock — reading the balance here first and inserting after
+    // was a classic read-then-write race: two concurrent requests (two
+    // tabs, a retried request) could both read the same pre-debit balance,
+    // both pass the check, and both debit, pushing the wallet negative.
+    const { data: rpcRows, error: payErr } = await adminClient.rpc("pay_order_from_wallet", {
+      p_profile_id: profileId,
+      p_order_id: orderId,
+      p_requested_amount: Math.min(requestedAmount, due),
+      p_purpose: purpose,
     });
-    if (walErr) {
-      // Roll back the payments row so money is never recorded as paid
-      // without actually leaving the wallet.
-      await adminClient.from("payments").delete().eq("id", paymentRow.id);
-      return jsonResponse({ error: `Wallet debit failed: ${walErr.message}` }, 500);
+    if (payErr || !rpcRows?.[0]) {
+      if (payErr?.message?.includes("insufficient_wallet_balance")) {
+        return jsonResponse({ error: "Insufficient wallet balance" }, 400);
+      }
+      return jsonResponse({ error: `Payment failed: ${payErr?.message || "unknown error"}` }, 500);
     }
+    const appliedAmount = Number(rpcRows[0].applied_amount);
 
     // Parts-then-labor waterfall, same priority order as the admin app's
     // addPayment — only flips a status to 'paid' once that type's remaining

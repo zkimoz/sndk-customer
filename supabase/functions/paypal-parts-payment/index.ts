@@ -208,9 +208,28 @@ serve(async (req) => {
       if (insErr) return jsonResponse({ error: `Payment captured but failed to record: ${insErr.message}` }, 500);
 
       recordPaypalFee(amountQAR, partOrder.request_number);
+
+      // Re-check against FRESH data before promoting to "paid" — `partOrder`
+      // was loaded once at the start of this request. If staff re-quoted
+      // (raised quoted_sell_price) in the gap between create() and this
+      // capture landing, the amount just captured was correct for the OLD
+      // price but may no longer cover the current total; unconditionally
+      // flipping status here would silently mark an underpaid request as
+      // fully paid, with no record anywhere that it's actually short.
+      const { data: freshItems } = await adminClient.from("part_order_items").select("quoted_sell_price").eq("part_order_id", partOrderId);
+      const { data: freshPayments } = await adminClient.from("part_order_payments").select("amount").eq("part_order_id", partOrderId);
+      const freshTotalQuoted = (freshItems || []).reduce((s: number, i: any) => s + Number(i.quoted_sell_price || 0), 0);
+      const freshTotalPaid = (freshPayments || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+      const fullyCovered = freshTotalPaid >= freshTotalQuoted - 0.001;
+
+      // payment_status only allows 'unpaid' | 'pending' | 'paid' — there's
+      // no "partial" value in this model, so an under-covered capture just
+      // stays 'pending' (payment in progress, not yet complete) rather than
+      // being promoted to 'paid' it hasn't actually earned. The real
+      // captured amount is still accurately logged in part_order_payments
+      // either way.
       await adminClient.from("part_orders").update({
-        status: "paid",
-        payment_status: "paid",
+        ...(fullyCovered ? { status: "paid", payment_status: "paid" } : { payment_status: "pending" }),
         payment_method: "paypal",
         updated_at: new Date().toISOString(),
       }).eq("id", partOrderId);

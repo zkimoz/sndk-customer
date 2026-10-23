@@ -3,14 +3,15 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { adminClient, hmacBase64, loadSkipCashBase } from "../_shared/skipcash.ts";
 
 // SkipCash checkout for job-card parts/labor/towing payments — a hosted
-// redirect flow (not an SDK popup like paypal-payment), so this function
-// only ever creates the payment and hands back a payUrl to redirect to.
-// Unlike paypal-payment, there's no "capture" call here — the customer
-// completes payment on SkipCash's own hosted page, and the *only* place the
-// payments row actually gets inserted is skipcash-webhook (see
-// _shared/skipcash.ts's recordPaymentIfNew), once SkipCash confirms the
-// charge server-to-server. The client never has to be trusted to report
-// back that it succeeded.
+// redirect flow (not an SDK popup like paypal-payment). "create" makes the
+// payment and hands back a payUrl to redirect to; "status" (called once the
+// customer returns from that hosted page) just asks SkipCash what actually
+// happened, purely so the UI can tell a real success from a decline/cancel
+// instead of assuming "the browser came back" means "it was charged". The
+// *only* place the payments row actually gets inserted is skipcash-webhook
+// (see _shared/skipcash.ts's recordPaymentIfNew), once SkipCash confirms
+// the charge server-to-server — this function's "status" action never
+// writes anything, so the client still never has to be trusted for that.
 const SKIPCASH_KEY_ID = Deno.env.get("SKIPCASH_KEY_ID")!;
 const SKIPCASH_KEY_SECRET = Deno.env.get("SKIPCASH_KEY_SECRET")!;
 
@@ -121,18 +122,45 @@ serve(async (req) => {
       global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
     });
 
-    const { orderId, types, returnUrl } = await req.json();
-    if (!orderId || !Array.isArray(types) || !types.length) {
-      return jsonResponse({ error: "Missing orderId/types" }, 400);
+    const body = await req.json();
+    const { action, orderId } = body;
+    if (!orderId) return jsonResponse({ error: "Missing orderId" }, 400);
+
+    const baseRes = await loadSkipCashBase();
+    if ("error" in baseRes) return jsonResponse({ error: "SkipCash is not configured" }, 500);
+    const { base, clientId } = baseRes;
+
+    // Read-only — purely informational for the UI right after the customer
+    // returns from SkipCash's hosted page. "The browser came back" doesn't
+    // by itself mean "the card was charged" (a decline or the customer just
+    // backing out looks identical from here), so the client calls this to
+    // ask SkipCash directly instead of assuming success. This never writes
+    // to payments — skipcash-webhook (see _shared/skipcash.ts) stays the
+    // only place that actually happens.
+    if (action === "status") {
+      const { skipcashId } = body;
+      if (!skipcashId) return jsonResponse({ error: "Missing skipcashId" }, 400);
+      const { error: ownErr } = await loadOwnedOrder(userClient, orderId);
+      if (ownErr) return ownErr;
+      if (!clientId) return jsonResponse({ error: "SkipCash is not configured" }, 500);
+
+      const resp = await fetch(`${base}/api/v1/payments/${skipcashId}`, {
+        headers: { Authorization: clientId },
+      });
+      const json = await resp.json();
+      if (!resp.ok || !json.resultObj) return jsonResponse({ error: `Could not verify payment status: ${JSON.stringify(json)}` }, 502);
+      if (json.resultObj.custom1 !== orderId) return jsonResponse({ error: "Payment does not match this order" }, 400);
+      return jsonResponse({ statusId: Number(json.resultObj.statusId), status: json.resultObj.status });
+    }
+
+    const { types, returnUrl } = body;
+    if (!Array.isArray(types) || !types.length) {
+      return jsonResponse({ error: "Missing types" }, 400);
     }
     if (!returnUrl) return jsonResponse({ error: "Missing returnUrl" }, 400);
 
     const { order, jobNumber, profile, error: ownErr } = await loadOwnedOrder(userClient, orderId);
     if (ownErr) return ownErr;
-
-    const baseRes = await loadSkipCashBase();
-    if ("error" in baseRes) return jsonResponse({ error: "SkipCash is not configured" }, 500);
-    const { base } = baseRes;
 
     const amountQAR = computeAmountDueQAR(order, types);
     if (amountQAR <= 0.01) return jsonResponse({ error: "Nothing outstanding to pay" }, 400);
@@ -193,7 +221,7 @@ serve(async (req) => {
     if (!resp.ok || json.hasError || !json.resultObj?.payUrl) {
       return jsonResponse({ error: `SkipCash payment creation failed: ${JSON.stringify(json)}` }, 502);
     }
-    return jsonResponse({ payUrl: json.resultObj.payUrl, amountQAR: skipcashAmount });
+    return jsonResponse({ payUrl: json.resultObj.payUrl, skipcashId: json.resultObj.id, amountQAR: skipcashAmount });
   } catch (e) {
     return jsonResponse({ error: String(e) }, 500);
   }

@@ -25,14 +25,14 @@ export async function hmacBase64(message: string, secret: string): Promise<strin
   return base64Encode(new Uint8Array(sig));
 }
 
-export async function loadSkipCashBase(): Promise<{ base: string } | { error: true }> {
+export async function loadSkipCashBase(): Promise<{ base: string; clientId: string | null } | { error: true }> {
   const { data: pm } = await adminClient
     .from("payment_methods")
-    .select("is_sandbox")
+    .select("is_sandbox, client_id")
     .eq("key", "skipcash")
     .maybeSingle();
   if (!pm) return { error: true };
-  return { base: pm.is_sandbox ? SANDBOX_BASE : PRODUCTION_BASE };
+  return { base: pm.is_sandbox ? SANDBOX_BASE : PRODUCTION_BASE, clientId: pm.client_id };
 }
 
 // Best-effort — a notification failure must never block the payment result.

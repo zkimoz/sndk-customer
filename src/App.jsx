@@ -1142,23 +1142,55 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authChecked]);
 
-  // Returning from a SkipCash hosted-checkout redirect — just lands the
-  // customer back on their orders page. The payment itself is already
-  // recorded server-side by skipcash-webhook by the time (or shortly after)
-  // the customer gets back here; MyOrdersView's live subscription on
-  // "payments" picks it up on its own, so this only needs to clean the URL
-  // and reassure them it's being confirmed.
+  // Returning from a SkipCash hosted-checkout redirect — "the browser came
+  // back" doesn't by itself mean the card was actually charged (a decline
+  // or the customer just backing out on SkipCash's own page looks
+  // identical), so this asks SkipCash directly what really happened instead
+  // of assuming success. The payments row itself still only ever gets
+  // written by skipcash-webhook server-to-server — this call is read-only,
+  // purely to pick the right message to show.
   useEffect(() => {
     if (!authChecked) return;
-    const skipcashOrder = new URLSearchParams(window.location.search).get('skipcash_order');
+    const params = new URLSearchParams(window.location.search);
+    const skipcashOrder = params.get('skipcash_order');
     if (!skipcashOrder) return;
+    let skipcashId = null;
+    try { skipcashId = sessionStorage.getItem('skipcash_pending_id') || null; sessionStorage.removeItem('skipcash_pending_id'); } catch { /* fine, falls back below */ }
     window.history.replaceState(null, '', window.location.pathname + window.location.hash);
     setPendingQuotCount(0);
     setPage('orders');
     setMenuOpen(false);
-    alert(isRtl
+
+    const fallbackMsg = isRtl
       ? 'شكرًا! سيتم تأكيد الدفع وتحديث رصيدك خلال لحظات.'
-      : 'Thank you! Your payment will be confirmed and your balance updated shortly.');
+      : 'Thank you! Your payment will be confirmed and your balance updated shortly.';
+    if (!skipcashId) { alert(fallbackMsg); return; }
+
+    (async () => {
+      // A couple of retries — right after redirect SkipCash can briefly
+      // still report the pre-checkout "new" status before settling.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const { data } = await supabase.functions.invoke('skipcash-payment', {
+          body: { action: 'status', orderId: skipcashOrder, skipcashId },
+        });
+        const statusId = data?.statusId;
+        if (statusId === 2) {
+          alert(isRtl ? '✅ تم الدفع بنجاح' : '✅ Payment successful');
+          return;
+        }
+        if ([3, 4, 5].includes(statusId)) {
+          alert(isRtl
+            ? '⚠️ لم يكتمل الدفع (تم إلغاؤه أو رفضه) — حاول مرة أخرى'
+            : '⚠️ Payment was not completed (cancelled or declined) — please try again');
+          return;
+        }
+        if (attempt < 2) await new Promise(r => setTimeout(r, 1500));
+      }
+      // Inconclusive after retrying (still "new"/pending, or the check
+      // itself failed) — same reassuring fallback as before; the webhook
+      // will still settle this on its own if it does go through.
+      alert(fallbackMsg);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authChecked]);
 
@@ -1974,6 +2006,13 @@ function PaymentMethodModal({ orderId, types, amount, user, customerName, isRtl,
       setSkipcashLoading(false);
       return;
     }
+    // SkipCash's own payment id only exists once create() returns, but
+    // ReturnUrl has to be decided and SENT as part of that same create
+    // call — so it can't be embedded in the URL itself. sessionStorage
+    // survives the full-page round trip (same tab) and lets the
+    // return-effect below ask SkipCash directly what actually happened,
+    // instead of treating "the browser came back" as "it was charged".
+    try { sessionStorage.setItem('skipcash_pending_id', data.skipcashId || ''); } catch { /* private browsing, etc. — degrades to the neutral fallback message */ }
     window.location.href = data.payUrl;
   };
 
@@ -4717,33 +4756,32 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
           wants_old_parts: order.wants_old_parts, total_parts_price: order.total_parts_price, total_labor_price: order.total_labor_price,
         }]
       : (order.approval_history || []);
-    const { error: decErr } = await supabase.from('orders').update({
+    // One write, not two — the decision/totals and the signature used to be
+    // two separate sequential .update() calls. If the second (signature)
+    // call ever failed on its own — a dropped connection right after the
+    // first succeeded, routine on mobile data — the order was left
+    // permanently "approved" with every service_decisions key already
+    // locked in, but no valid signature on file at all, and no way back in
+    // (the confirm button only shows while something's still undecided).
+    // A single update makes that impossible: either the whole round lands
+    // together, or none of it does.
+    const localSig = {};
+    if (sigData) localSig.signature_data = sigData;
+    if (sigName) localSig.signed_by = sigName;
+    const { error: submitErr } = await supabase.from('orders').update({
       customer_approved: isApproved, customer_rejected: isRejected, approved_at: now,
       service_decisions: decisions,
       total_parts_price: newPartsTotal, total_labor_price: newLaborTotal,
       approval_history: newApprovalHistory,
+      ...localSig,
       // Only meaningful when this round actually had part items — the
       // signature modal only asks the question (and passes non-null) then.
       ...(wantsOldParts !== null && wantsOldParts !== undefined ? { wants_old_parts: wantsOldParts } : {}),
       ...autoPartsStatus,
     }).eq('id', orderId);
-    if (decErr) {
-      alert(isRtl ? 'خطأ في حفظ القرار: ' + decErr.message : 'Error saving decision: ' + decErr.message);
+    if (submitErr) {
+      alert(isRtl ? 'خطأ في حفظ القرار: ' + submitErr.message : 'Error saving decision: ' + submitErr.message);
       return;
-    }
-
-    const localSig = {};
-    if (sigData || sigName) {
-      const sigUpdate = {};
-      if (sigData) sigUpdate.signature_data = sigData;
-      if (sigName) sigUpdate.signed_by      = sigName;
-      const { error: sigErr } = await supabase.from('orders').update(sigUpdate).eq('id', orderId);
-      if (sigErr) {
-        alert(isRtl ? 'تم حفظ القرار لكن لم يُحفظ التوقيع — ربما الأعمدة غير موجودة بعد في قاعدة البيانات.' : 'Decision saved but signature failed — columns may be missing.');
-      } else {
-        if (sigData) localSig.signature_data = sigData;
-        if (sigName) localSig.signed_by = sigName;
-      }
     }
 
     setOrders(prev => prev.map(o => o.id === orderId
