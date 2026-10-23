@@ -60,9 +60,15 @@ export async function loadOrderContactInfo(orderId: string) {
   return { profileId: appt.profile_id as string, jobNumber: appt.job_cards?.job_number as string | undefined };
 }
 
-// Idempotent on payments.gateway_ref — whichever of (webhook, client status
-// poll) reaches this first wins; the other call is a harmless no-op. Never
-// records twice for the same SkipCash payment id.
+// Idempotent on payments.gateway_ref — SkipCash retries a webhook delivery
+// it didn't get a prompt 200 for (and a slow response can make its own HTTP
+// client retry a request we're already mid-processing), so two deliveries
+// for the same payment can genuinely race each other here. The SELECT
+// pre-check alone isn't enough to stop that (both could pass it before
+// either INSERT lands) — payments.gateway_ref carries a real unique index,
+// so a losing INSERT fails with Postgres error 23505 (unique_violation)
+// instead of creating a duplicate row, and that failure is what's actually
+// trusted as "already recorded", not just the pre-check.
 export async function recordPaymentIfNew(opts: {
   skipcashId: string; orderId: string; amountQAR: number; types: string[];
   profileId: string; jobNumber: string | undefined;
@@ -79,7 +85,10 @@ export async function recordPaymentIfNew(opts: {
     purpose: isTowing ? "towing" : "service",
     gateway_ref: opts.skipcashId,
   });
-  if (insErr) return { error: insErr.message };
+  if (insErr) {
+    if (insErr.code === "23505") return { alreadyRecorded: true };
+    return { error: insErr.message };
+  }
 
   notifySkipCashPaymentReceived(opts.profileId, opts.jobNumber, opts.amountQAR, isTowing);
   return { recorded: true };

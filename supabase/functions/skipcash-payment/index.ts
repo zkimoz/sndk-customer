@@ -144,10 +144,20 @@ serve(async (req) => {
     const phone = (profile?.phone_number || "").replace(/,/g, "").slice(0, 15);
     const email = (profile?.email || `${phone || "customer"}@sndkqa.com`).replace(/,/g, "").slice(0, 255);
 
+    // Everything else in this system prices to 3 decimals (QAR has no real
+    // sub-fils unit, but that's the house convention — see .toFixed(3)
+    // throughout App.jsx), while SkipCash only accepts 2. Rounding up
+    // (never down) means a 3rd-decimal remainder can never leave a job
+    // card permanently stuck a fraction of a fils short of "fully paid" —
+    // the at-most 0.01 QAR this can overcharge by is already handled the
+    // same way any other overpayment is, credited to the customer's wallet
+    // at job-close time (see creditOverpaymentIfAny in App.jsx).
+    const skipcashAmount = Math.ceil(amountQAR * 100) / 100;
+
     const paymentDetails: Record<string, string> = {
       Uid: crypto.randomUUID(),
       KeyId: SKIPCASH_KEY_ID,
-      Amount: amountQAR.toFixed(2),
+      Amount: skipcashAmount.toFixed(2),
       FirstName: firstName,
       LastName: lastName,
       Phone: phone,
@@ -183,7 +193,7 @@ serve(async (req) => {
     if (!resp.ok || json.hasError || !json.resultObj?.payUrl) {
       return jsonResponse({ error: `SkipCash payment creation failed: ${JSON.stringify(json)}` }, 502);
     }
-    return jsonResponse({ payUrl: json.resultObj.payUrl, amountQAR });
+    return jsonResponse({ payUrl: json.resultObj.payUrl, amountQAR: skipcashAmount });
   } catch (e) {
     return jsonResponse({ error: String(e) }, 500);
   }

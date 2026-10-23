@@ -1960,7 +1960,13 @@ function PaymentMethodModal({ orderId, types, amount, user, customerName, isRtl,
     if (skipcashLoading) return;
     setSkipcashLoading(true);
     setSkipcashError(null);
-    const returnUrl = `${window.location.origin}${window.location.pathname}?skipcash_order=${orderId}`;
+    // Built via URL/searchParams rather than string concatenation — a stray
+    // pre-existing query param on this page (e.g. an unstripped ?jc= deep
+    // link) would otherwise produce a double "?", which the top-level
+    // return-effect's URLSearchParams parse could then mis-read.
+    const returnUrlObj = new URL(window.location.origin + window.location.pathname);
+    returnUrlObj.searchParams.set('skipcash_order', orderId);
+    const returnUrl = returnUrlObj.toString();
     const { data, error } = await supabase.functions.invoke('skipcash-payment', { body: { orderId, types, returnUrl } });
     if (error || !data?.payUrl) {
       const msg = data?.error || error?.message || (isRtl ? 'تعذر بدء الدفع' : 'Could not start payment');
