@@ -208,6 +208,12 @@ const T = {
     jc_awaiting_invoice:'في انتظار إصدار الفاتورة',
     jc_returning:'السيارة في طريقها للعودة',
     jc_delivered:'تم تسليم السيارة',
+    // Parts-only job cards (auto-opened for a standalone paid spare-parts
+    // request) reuse the same job_status key values but no car is involved,
+    // so they get their own wording for the same 3 keys.
+    jc_parts_waiting:'جاري تجهيز القطعة',
+    jc_parts_confirmed:'جاهزة للتسليم',
+    jc_parts_delivered:'تم تسليم القطعة',
     jc_number:'أمر الشغل',
   },
   en: {
@@ -367,6 +373,9 @@ const T = {
     jc_awaiting_invoice:'Awaiting Invoice',
     jc_returning:'Car Returning',
     jc_delivered:'Delivered',
+    jc_parts_waiting:'Preparing the part',
+    jc_parts_confirmed:'Ready for pickup/delivery',
+    jc_parts_delivered:'Part delivered',
     jc_number:'Job Card',
   },
 };
@@ -379,6 +388,11 @@ const JC_STATUS_COLOR = {
   returning:'#f59e0b', delivered:'#16a34a',
 };
 const JOB_STATUS_ORDER = ['waiting','confirmed','en_route','car_received','at_workshop','inspecting','in_maintenance','maintenance_done','washing','awaiting_invoice','returning','delivered'];
+// A job card auto-opened for a standalone paid spare-parts request
+// (job_cards.is_parts_only) never has a car coming in — reuses the same
+// job_status key values ('waiting'/'confirmed'/'delivered') but with their
+// own parts-flavored labels (jc_parts_* in T) and a much shorter sequence.
+const PARTS_ONLY_JOB_STATUS_ORDER = ['waiting','confirmed','delivered'];
 
 // Spare-parts status shown to the customer next to the main job status —
 // separate from order.status's broader lifecycle values (draft/pending/etc.),
@@ -513,7 +527,9 @@ const JobStatusVideoBlock = ({ videos, isRtl, jcId, videoKeyPrefix, openVideoId,
 };
 
 const JobStatusTimeline = ({ jobCard, isRtl, tr, textColor, mutedColor, fg, receptionVideos = [], workshopVideos = [], openVideoId, setOpenVideoId, partsOverride = false, rejectedOverride = false }) => {
-  const currentIdx = JOB_STATUS_ORDER.indexOf(jobCard.job_status);
+  const isPartsOnly = !!jobCard.is_parts_only;
+  const statusOrder = isPartsOnly ? PARTS_ONLY_JOB_STATUS_ORDER : JOB_STATUS_ORDER;
+  const currentIdx = statusOrder.indexOf(jobCard.job_status);
   const fmtDT = iso => iso ? new Date(iso).toLocaleString(isRtl?'ar-QA':'en-QA', { dateStyle:'short', timeStyle:'short' }) : '';
   // Staff rejected-and-closed this job card (see sndk-admin's
   // rejectAndCloseJobCard) — job_status isn't one of JOB_STATUS_ORDER's
@@ -553,7 +569,7 @@ const JobStatusTimeline = ({ jobCard, isRtl, tr, textColor, mutedColor, fg, rece
   }
   return (
     <div className="space-y-1">
-      {JOB_STATUS_ORDER.map((key, idx) => {
+      {statusOrder.map((key, idx) => {
         const isCurrent = key === jobCard.job_status;
         const isDone = idx < currentIdx;
         const color = JC_STATUS_COLOR[key];
@@ -566,7 +582,7 @@ const JobStatusTimeline = ({ jobCard, isRtl, tr, textColor, mutedColor, fg, rece
                 {isDone && <Check size={9} color="#fff"/>}
               </span>
               <span className="flex-1 min-w-0">
-                <span className="block text-sm font-bold" style={{ color: isCurrent?color:textColor }}>{tr[`jc_${key}`]||key}</span>
+                <span className="block text-sm font-bold" style={{ color: isCurrent?color:textColor }}>{tr[isPartsOnly ? `jc_parts_${key}` : `jc_${key}`]||key}</span>
                 {times && (
                   <span className="block text-[11px] mt-0.5" style={{ color:mutedColor }}>
                     {fmtDT(times.start)}{times.end ? ` → ${fmtDT(times.end)}` : ` — ${isRtl?'الحالة الحالية':'current'}`}
@@ -4518,7 +4534,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
     if (!user) { setLoading(false); return; }
     loadPartOrders();
     const { data: apptData } = await supabase.from('appointments')
-      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number, registration_image_url, registration_image_url_2), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, general_notes, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot, pickup_tracking_active, return_tracking_active, pickup_driver_id, return_driver_id)')
+      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number, registration_image_url, registration_image_url_2), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, general_notes, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot, pickup_tracking_active, return_tracking_active, pickup_driver_id, return_driver_id, is_parts_only)')
       .eq('profile_id', user.id)
       .order('appointment_date', { ascending: false });
     setAppts(apptData || []);
@@ -5138,7 +5154,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                   const partsOverride = relOrd?.status === 'unavailable';
                   const rejectedOverride = rejectedAllOverride(relOrd);
                   const jcColor = rejectedOverride ? REJECTED_ALL_COLOR : partsOverride ? PARTS_STATUS_COLOR.unavailable : (JC_STATUS_COLOR[jc.job_status] || '#94a3b8');
-                  const jcLabel = rejectedOverride ? (isRtl ? REJECTED_ALL_LABEL.ar : REJECTED_ALL_LABEL.en) : partsOverride ? (isRtl ? PARTS_STATUS_LABEL.unavailable.ar : PARTS_STATUS_LABEL.unavailable.en) : (tr[`jc_${jc.job_status}`] || jc.job_status);
+                  const jcLabel = rejectedOverride ? (isRtl ? REJECTED_ALL_LABEL.ar : REJECTED_ALL_LABEL.en) : partsOverride ? (isRtl ? PARTS_STATUS_LABEL.unavailable.ar : PARTS_STATUS_LABEL.unavailable.en) : (tr[jc.is_parts_only ? `jc_parts_${jc.job_status}` : `jc_${jc.job_status}`] || jc.job_status);
                   const isHighlighted = highlightJobNumber && jc.job_number === highlightJobNumber;
                   const isExpanded = expandedOrderId === a.id;
                   // Same per-service check the pending-count badge/Confirm
@@ -6970,7 +6986,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
     if (history[carId]) return;
     const { data } = await supabase
       .from('appointments')
-      .select('*, orders(*, order_items(*), payments(*)), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, general_notes, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot, pickup_tracking_active, return_tracking_active)')
+      .select('*, orders(*, order_items(*), payments(*)), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, general_notes, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot, pickup_tracking_active, return_tracking_active, is_parts_only)')
       .eq('car_id', carId)
       .order('appointment_date', { ascending: false });
     setHistory(p => ({ ...p, [carId]: data || [] }));
@@ -7766,7 +7782,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                             const ORD_COLOR = { draft:'#94a3b8', pending:'#60a5fa', sourcing:'#eab308', ready:'#22c55e', delivered:'#a855f7', completed:'#22c55e', cancelled:'#ef4444' };
                             const rejectedOverride = rejectedAllOverride(order);
                             const jcColor = rejectedOverride ? REJECTED_ALL_COLOR : jobCard ? (JC_STATUS_COLOR[jobCard.job_status] || '#94a3b8') : null;
-                            const jcLabel = rejectedOverride ? (isRtl ? REJECTED_ALL_LABEL.ar : REJECTED_ALL_LABEL.en) : jobCard ? (tr[`jc_${jobCard.job_status}`] || jobCard.job_status) : null;
+                            const jcLabel = rejectedOverride ? (isRtl ? REJECTED_ALL_LABEL.ar : REJECTED_ALL_LABEL.en) : jobCard ? (tr[jobCard.is_parts_only ? `jc_parts_${jobCard.job_status}` : `jc_${jobCard.job_status}`] || jobCard.job_status) : null;
                             const isHistOpen = expandedHistoryId === appt.id;
                             const RowTag = jobCard ? 'button' : 'div';
                             return (
