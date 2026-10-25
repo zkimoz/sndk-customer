@@ -2408,7 +2408,19 @@ function PartOrderPaymentModal({ partOrderId, amount, requestNumber, customerNam
 
   useEffect(() => {
     supabase.from('payment_methods').select('*').eq('is_active', true).order('sort_order')
-      .then(({ data }) => { setMethods((data || []).filter(pm => pm.show_to_customer !== false)); setLoadingMethods(false); });
+      .then(({ data }) => {
+        // This flow only ever knows how to render PayPal's own buttons for a
+        // gateway method (see the PayPal SDK script below) — it has no idea
+        // how to handle SkipCash. The two gateways share this same table,
+        // and 'skipcash' is customer-visible for the job-card payment flow
+        // (PaymentMethodModal), which DOES know how to render it; 'paypal'
+        // stays hidden there on purpose so staff don't see two card-payment
+        // options. Forcing that split here too (instead of trusting the
+        // shared show_to_customer flag) is what keeps the two gateways from
+        // leaking into each other's flow.
+        const methods = (data || []).filter(pm => pm.key !== 'skipcash' && (pm.key === 'paypal' || pm.show_to_customer !== false));
+        setMethods(methods); setLoadingMethods(false);
+      });
   }, []);
 
   useEffect(() => {
