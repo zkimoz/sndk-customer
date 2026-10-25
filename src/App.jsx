@@ -1085,6 +1085,16 @@ export default function App() {
   // initial session restore finishes.
   const [deepLinkJobNumber, setDeepLinkJobNumber] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
+  // A staff-shared parts-quote link (?po=<share_token>) — unlike ?jc= above,
+  // this one does NOT wait for authChecked or require login: it's a public,
+  // read-only preview (see part-order-public), the same sensitivity as a
+  // PDF quote already sent by email/WhatsApp. Login is only required once
+  // the customer actually tries to approve (see PublicPartOrderView) — at
+  // that point highlightRequestNumber carries them into the normal
+  // authenticated MyOrdersView flow for this exact request, same mechanism
+  // deepLinkJobNumber/highlightJobNumber already uses for job cards.
+  const [publicShareToken, setPublicShareToken] = useState(null);
+  const [highlightRequestNumber, setHighlightRequestNumber] = useState(null);
   const addToCart    = (catId, subId, subName, catName) =>
     setCart(p => p.find(x => x.id === subId) ? p : [...p, { id: subId, name: subName, catId, catName }]);
   const removeFromCart = (subId) => setCart(p => p.filter(x => x.id !== subId));
@@ -1157,6 +1167,17 @@ export default function App() {
     // time user changes afterward.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authChecked]);
+
+  // Public parts-quote link — opens immediately, no auth wait (see the
+  // publicShareToken comment above for why this one's different from ?jc=).
+  useEffect(() => {
+    const po = new URLSearchParams(window.location.search).get('po');
+    if (!po) return;
+    window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+    setPublicShareToken(po);
+    setPage('part-quote');
+    setMenuOpen(false);
+  }, []);
 
   // Returning from a SkipCash hosted-checkout redirect — "the browser came
   // back" doesn't by itself mean the card was actually charged (a decline
@@ -1521,8 +1542,10 @@ export default function App() {
               : <ServicesView lang={lang} tr={tr} isRtl={isRtl} user={user} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} theme={theme} goParts={goParts} goRenewal={goRenewal}/>)}
             {page==='renewal' && user && <RenewalFlowView key="renewal" lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories} timeSlots={timeSlots} serviceCategories={serviceCategories} allSubServices={allSubServices} goHome={goHome} goOrders={goOrders}/>}
             {page==='profile' && user && <ProfileView lang={lang} tr={tr} isRtl={isRtl} profile={profile} user={user} onBook={(car)=>bookFromProfile(car)} goServices={goServices} goOrders={goOrders} onProfileUpdated={()=>fetchProfile(user.id)} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories}/>}
-            {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount} theme={theme} highlightJobNumber={deepLinkJobNumber}/>}
+            {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount} theme={theme} highlightJobNumber={deepLinkJobNumber} highlightRequestNumber={highlightRequestNumber}/>}
             {page==='contact' && <ContactView isRtl={isRtl} user={user}/>}
+            {page==='part-quote' && <PublicPartOrderView isRtl={isRtl} user={user} token={publicShareToken}
+              onApproveClick={(requestNumber)=>{ setHighlightRequestNumber(requestNumber); setPage('orders'); if (!user) setAuthModal('signin'); }}/>}
             {page==='parts'   && <PartsFlowView lang={lang} isRtl={isRtl} user={user} profile={profile} goHome={goHome} carBrands={carBrands} carCategories={carCategories}/>}
             {page==='booking' && step===2 && <DetailsStep {...shared} prevStep={()=>setPage('home')}/>}
             {page==='booking' && step===3 && <ScheduleStep {...shared} prevStep={()=>setStep(2)}/>}
@@ -2873,6 +2896,173 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, profile, onClose, on
       </div>
     )}
     </>
+  );
+}
+
+// A public, login-free page for a staff-shared "Copy Link" (?po=<share_token>)
+// — fetches straight from part-order-public (service-role, exact-token-match
+// only, see that function's own comment) and renders the same item-card
+// layout PartOrderDetailModal uses, minus any approve/reject/pay controls:
+// this page only ever reads. The single CTA hands off to onApproveClick,
+// which App() uses to open the sign-in modal and carry the customer into
+// the normal authenticated PartOrderDetailModal flow once they're logged in.
+function PublicPartOrderView({ isRtl, token, onApproveClick }) {
+  const [po, setPo] = useState(null);
+  const [loadState, setLoadState] = useState('loading'); // 'loading' | 'ready' | 'error'
+  const [zoomImage, setZoomImage] = useState(null);
+  const lang = isRtl ? 'ar' : 'en';
+
+  useEffect(() => {
+    if (!token) { setLoadState('error'); return; }
+    supabase.functions.invoke('part-order-public', { body: { token } }).then(({ data, error }) => {
+      if (error || !data?.partOrder) { setLoadState('error'); return; }
+      setPo(data.partOrder);
+      setLoadState('ready');
+    }).catch(() => setLoadState('error'));
+  }, [token]);
+
+  if (loadState === 'loading') {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 size={28} className="animate-spin" style={{ color: C.gold }}/>
+      </div>
+    );
+  }
+  if (loadState === 'error' || !po) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-2 px-4 text-center">
+        <p className="text-lg font-bold" style={{ color: C.text }}>{isRtl ? 'الرابط غير صالح أو منتهي' : 'This link is invalid or no longer available'}</p>
+        <p className="text-sm" style={{ color: C.muted }}>{isRtl ? 'تواصل مع فريق سندك للحصول على رابط جديد' : 'Contact SNDK for a new link'}</p>
+      </div>
+    );
+  }
+
+  const isApproved = !!po.customer_approved_at;
+  const items = po.part_order_items || [];
+  const lineTotal = i => Number(i.quoted_sell_price||0)*Number(i.quantity||1);
+  const approvedItems = isApproved ? items.filter(it => (po.item_decisions||{})[it.id] === 'approved') : items;
+  const rejectedItems = isApproved ? items.filter(it => (po.item_decisions||{})[it.id] === 'rejected') : [];
+  const totalQuoted = approvedItems.reduce((s,i)=>s+lineTotal(i), 0);
+  const paidSoFar = (po.part_order_payments || []).reduce((s,p)=>s+Number(p.amount||0), 0);
+  const isPaid = paidSoFar >= totalQuoted - 0.001 && totalQuoted > 0;
+  const title = items.length > 1
+    ? (isRtl ? `${items.length} قطع غيار` : `${items.length} spare parts`)
+    : (items[0]?.part_snapshot?.name?.[lang] || items[0]?.part_snapshot?.name?.ar || '—');
+
+  return (
+    <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-4">
+      <div className="text-center mb-2">
+        <img src="/logo-static.png" alt="SNDK" className="h-12 mx-auto mb-2"/>
+        <p className="text-xs" style={{ color: C.muted }}>{isRtl ? 'عرض سعر قطع غيار' : 'Spare-Parts Price Quote'}</p>
+      </div>
+
+      <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card }}>
+        <div>
+          <h3 className="font-black text-lg" style={{ color: C.cardText }}>{title}</h3>
+          <p className="text-xs mt-1 font-mono" style={{ color: C.cardMuted }}>{po.request_number}</p>
+        </div>
+
+        <div className="space-y-4">
+          {approvedItems.map(it => {
+            const photos = it.admin_image_urls?.length ? it.admin_image_urls : (it.part_snapshot?.image_url ? [it.part_snapshot.image_url] : []);
+            const description = it.admin_description?.[lang] || it.admin_description?.ar;
+            const compatibleCars = it.compatible_cars?.[lang] || it.compatible_cars?.ar;
+            const availabilityEta = it.availability_eta?.[lang] || it.availability_eta?.ar;
+            return (
+              <div key={it.id} className="rounded-xl p-4 space-y-2.5 shadow-sm" style={{ background: C.input, border: `1px solid ${C.gold}35` }}>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-bold text-base" style={{ color: C.text }}>
+                    {it.part_snapshot?.name?.[lang] || it.part_snapshot?.name?.ar}
+                    {Number(it.quantity||1) > 1 && <span style={{ color: C.muted }}> × {it.quantity}</span>}
+                  </p>
+                  {Number(it.quoted_sell_price) > 0 && (
+                    <span className="font-black text-sm flex-shrink-0" style={{ color: C.gold }}>{lineTotal(it).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                  )}
+                </div>
+                {it.part_number && (
+                  <p className="text-xs font-mono" style={{ color: C.muted }}>{isRtl?'رقم القطعة':'Part No.'}: {it.part_number}</p>
+                )}
+                {it.source_country && (
+                  <p className="text-xs" style={{ color: C.muted }}>{isRtl?'بلد المنشأ':'Country of Origin'}: {it.source_country}</p>
+                )}
+                {photos.length > 0 && (
+                  <div className="flex gap-2.5 overflow-x-auto">
+                    {photos.map(url => (
+                      <img key={url} src={url} alt="" onClick={()=>setZoomImage(url)}
+                        className="h-44 rounded-xl object-cover flex-shrink-0 cursor-zoom-in active:opacity-80 transition-opacity"/>
+                    ))}
+                  </div>
+                )}
+                {description && <p className="text-sm leading-relaxed" style={{ color: C.muted }}>{description}</p>}
+                {compatibleCars && (
+                  <div className="pt-1" style={{ borderTop: `1px dashed ${C.gold}25` }}>
+                    <p className="text-xs font-bold mb-0.5" style={{ color: C.muted }}>{isRtl?'تركّب على':'Fits'}</p>
+                    <p className="text-sm" style={{ color: C.text }}>{compatibleCars}</p>
+                  </div>
+                )}
+                {availabilityEta && (
+                  <div>
+                    <p className="text-xs font-bold mb-0.5" style={{ color: C.muted }}>{isRtl?'مدة التوفير':'Availability'}</p>
+                    <p className="text-sm" style={{ color: C.text }}>{availabilityEta}</p>
+                  </div>
+                )}
+                {it.tracking_stage && (
+                  <div className="pt-2" style={{ borderTop: `1px dashed ${C.gold}25` }}>
+                    <p className="text-xs font-bold mb-2" style={{ color: C.muted }}>{isRtl?'تتبع القطعة':'Part Tracking'}</p>
+                    <TrackingTimeline stage={it.tracking_stage} isRtl={isRtl}/>
+                    {it.tracking_number && (
+                      <p className="text-xs font-mono mt-1" style={{ color: C.muted }}>{isRtl?'رقم الشحنة':'Shipment No.'}: {it.tracking_number}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {rejectedItems.length > 0 && (
+          <div className="rounded-xl p-3" style={{ background:'rgba(239,68,68,0.1)', border:'1px solid rgba(239,68,68,0.25)' }}>
+            <p className="text-xs font-bold mb-1" style={{ color:'#ef4444' }}>{isRtl?'القطع المرفوضة':'Rejected Items'}</p>
+            {rejectedItems.map(it => (
+              <p key={it.id} className="text-sm" style={{ color:'#ef4444' }}>— {it.part_snapshot?.name?.[lang] || it.part_snapshot?.name?.ar}</p>
+            ))}
+          </div>
+        )}
+
+        {totalQuoted > 0 && (
+          <div className="flex items-center justify-between pt-2" style={{ borderTop: `1px dashed ${C.gold}30` }}>
+            <span className="text-sm font-bold" style={{ color: C.cardMuted }}>{isRtl?'الإجمالي':'Total'}</span>
+            <p className="text-2xl font-black" style={{ color: C.gold }}>{totalQuoted.toFixed(3)} {isRtl?'ر.ق':'QAR'}</p>
+          </div>
+        )}
+
+        {isApproved && (
+          <div className="rounded-xl p-3" style={{ background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.3)' }}>
+            <p className="text-xs font-bold" style={{ color:'#22c55e' }}>
+              {isRtl ? '✓ تمت الموافقة على الطلب' : '✓ Request Approved'}
+              {po.approval_signed_by && ` — ${po.approval_signed_by}`}
+            </p>
+          </div>
+        )}
+
+        {isPaid ? (
+          <p className="text-sm font-bold text-center" style={{ color:'#22c55e' }}>{isRtl ? '✅ تم دفع هذا الطلب بالكامل' : '✅ This request has been paid in full'}</p>
+        ) : totalQuoted > 0.01 && (
+          <button onClick={()=>onApproveClick(po.request_number)}
+            className="w-full py-3 rounded-xl text-sm font-black transition-all active:scale-95"
+            style={{ background:'#722F37', color:'#fff' }}>
+            {isRtl ? 'سجّل الدخول للموافقة والدفع' : 'Log In to Approve & Pay'}
+          </button>
+        )}
+      </div>
+
+      {zoomImage && (
+        <div className="fixed inset-0 bg-black/95 z-[60] flex items-center justify-center p-4" onClick={()=>setZoomImage(null)}>
+          <button onClick={()=>setZoomImage(null)} className="absolute top-4 text-white/80 p-2" style={{ [isRtl?'left':'right']:16 }}><X size={26}/></button>
+          <img src={zoomImage} alt="" className="max-w-full max-h-full object-contain rounded-lg" onClick={e=>e.stopPropagation()}/>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -4665,7 +4855,7 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome, carBrands, carCateg
   );
 }
 
-function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, highlightJobNumber }) {
+function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, highlightJobNumber, highlightRequestNumber }) {
   const [tab, setTab]           = useState('active');
   const [appts, setAppts]       = useState([]);
   const [orders, setOrders]     = useState([]);
@@ -4710,6 +4900,15 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
   const [partOrders, setPartOrders] = useState([]);
   const [payPartOrderModal, setPayPartOrderModal] = useState(null); // { partOrderId, amount, requestNumber } | null
   const [viewPartOrder, setViewPartOrder] = useState(null); // the tapped part_orders row, or null
+  // Carried in from PublicPartOrderView's "Approve & Pay" button once the
+  // customer logs in — same spirit as highlightJobNumber above, but opens
+  // the part-order detail modal instead of expanding a job-card order.
+  const partOrderOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!highlightRequestNumber || partOrderOpenedRef.current) return;
+    const match = partOrders.find(po => po.request_number === highlightRequestNumber);
+    if (match) { setViewPartOrder(match); partOrderOpenedRef.current = true; }
+  }, [highlightRequestNumber, partOrders]);
   const [serviceSelections, setServiceSelections] = useState({}); // { [orderId]: { [serviceKey]: boolean } }
   // Collapsed by default once a service is approved — only its priority,
   // title and final price show until this is toggled open, so an order with
