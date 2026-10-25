@@ -2718,17 +2718,17 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, profile, onClose, on
                   {!isApproved ? (
                     <div className="flex gap-2">
                       <button onClick={()=>setItemDecision(it.id,'approved')}
-                        className="flex-1 py-2 rounded-lg text-sm font-bold transition-all active:scale-95"
+                        className="flex-1 py-2.5 rounded-lg text-sm font-bold transition-all active:scale-95 border-2"
                         style={decision==='approved'
-                          ? { background:'#16a34a', color:'#fff' }
-                          : { background:'transparent', color:C.muted, border:`1px solid ${C.gold}40` }}>
+                          ? { background:'#16a34a', color:'#fff', borderColor:'#16a34a' }
+                          : { background:'rgba(34,197,94,0.12)', color:'#16a34a', borderColor:'rgba(34,197,94,0.4)' }}>
                         {isRtl?'✓ موافق':'✓ Approve'}
                       </button>
                       <button onClick={()=>setItemDecision(it.id,'rejected')}
-                        className="flex-1 py-2 rounded-lg text-sm font-bold transition-all active:scale-95"
+                        className="flex-1 py-2.5 rounded-lg text-sm font-bold transition-all active:scale-95 border-2"
                         style={decision==='rejected'
-                          ? { background:'#ef4444', color:'#fff' }
-                          : { background:'transparent', color:C.muted, border:`1px solid ${C.gold}40` }}>
+                          ? { background:'#ef4444', color:'#fff', borderColor:'#ef4444' }
+                          : { background:'rgba(239,68,68,0.12)', color:'#ef4444', borderColor:'rgba(239,68,68,0.4)' }}>
                         {isRtl?'✗ غير موافق':'✗ Not Approved'}
                       </button>
                     </div>
