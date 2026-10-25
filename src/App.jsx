@@ -2846,8 +2846,8 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, profile, onClose, on
 
           {(isApproved ? totalQuoted > 0.01 : items.reduce((s,i)=>s+lineTotal(i),0) > 0.01) && (
             <button onClick={()=>openPartsQuotePDF({ ...po, part_order_items: items, item_decisions: localDecisions, customer_approved_at: localApproval.customer_approved_at, approval_signature_data: localApproval.approval_signature_data, approval_signed_by: localApproval.approval_signed_by }, profile)}
-              className="w-full py-3 rounded-xl text-sm font-black transition-all active:scale-95 border"
-              style={{ borderColor:C.gold, color:C.gold }}>
+              className="w-full py-3 rounded-xl text-sm font-black transition-all active:scale-95 border-2"
+              style={{ borderColor:'#722F37', color:'#722F37' }}>
               {isRtl ? '🖨️ عرض عرض السعر PDF' : '🖨️ View Price Quote PDF'}
             </button>
           )}
