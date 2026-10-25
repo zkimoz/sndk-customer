@@ -40,7 +40,7 @@ function jsonResponse(body: unknown, status = 200) {
 // across every part in the request), never a client-supplied amount.
 function computeAmountDueQAR(partOrder: any): number {
   const totalQuoted = (partOrder.part_order_items || [])
-    .reduce((s: number, i: any) => s + Number(i.quoted_sell_price || 0), 0);
+    .reduce((s: number, i: any) => s + Number(i.quoted_sell_price || 0) * Number(i.quantity || 1), 0);
   const paidSoFar = (partOrder.part_order_payments || [])
     .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
   return Math.max(totalQuoted - paidSoFar, 0);
@@ -68,7 +68,7 @@ async function loadOwnedPartOrder(userClient: any, partOrderId: string) {
 
   const { data: partOrder } = await adminClient
     .from("part_orders")
-    .select("id, profile_id, request_number, part_order_items(quoted_sell_price), part_order_payments(amount)")
+    .select("id, profile_id, request_number, part_order_items(quoted_sell_price, quantity), part_order_payments(amount)")
     .eq("id", partOrderId)
     .maybeSingle();
   if (!partOrder) return { error: jsonResponse({ error: "Request not found" }, 404) };
@@ -216,9 +216,9 @@ serve(async (req) => {
       // price but may no longer cover the current total; unconditionally
       // flipping status here would silently mark an underpaid request as
       // fully paid, with no record anywhere that it's actually short.
-      const { data: freshItems } = await adminClient.from("part_order_items").select("quoted_sell_price").eq("part_order_id", partOrderId);
+      const { data: freshItems } = await adminClient.from("part_order_items").select("quoted_sell_price, quantity").eq("part_order_id", partOrderId);
       const { data: freshPayments } = await adminClient.from("part_order_payments").select("amount").eq("part_order_id", partOrderId);
-      const freshTotalQuoted = (freshItems || []).reduce((s: number, i: any) => s + Number(i.quoted_sell_price || 0), 0);
+      const freshTotalQuoted = (freshItems || []).reduce((s: number, i: any) => s + Number(i.quoted_sell_price || 0) * Number(i.quantity || 1), 0);
       const freshTotalPaid = (freshPayments || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
       const fullyCovered = freshTotalPaid >= freshTotalQuoted - 0.001;
 

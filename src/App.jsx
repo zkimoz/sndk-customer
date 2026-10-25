@@ -2619,7 +2619,7 @@ function TrackingTimeline({ stage, isRtl }) {
   );
 }
 
-function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
+function PartOrderDetailModal({ partOrder: po, lang, isRtl, profile, onClose, onPay }) {
   const [zoomImage, setZoomImage] = useState(null);
   const [sigOpen, setSigOpen] = useState(false);
   // Local override so the "sign to approve" step reflects instantly without
@@ -2656,7 +2656,7 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
   };
   const st = ST[po.status] || ST.pending;
   const items = po.part_order_items || [];
-  const totalQuoted = items.reduce((s,i)=>s+Number(i.quoted_sell_price||0), 0);
+  const totalQuoted = items.reduce((s,i)=>s+Number(i.quoted_sell_price||0)*Number(i.quantity||1), 0);
   const paidSoFar = (po.part_order_payments || []).reduce((s,p)=>s+Number(p.amount||0), 0);
   const amountDue = Math.max(totalQuoted - paidSoFar, 0);
   const needsApproval = ['priced','awaiting_payment'].includes(po.status) && !isApproved && totalQuoted > 0.01;
@@ -2690,9 +2690,12 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
               return (
                 <div key={it.id} className="rounded-xl p-3 space-y-2" style={{ background:`${C.gold}0a`, border:`1px solid ${C.gold}20` }}>
                   <div className="flex items-center justify-between gap-2">
-                    <p className="font-bold text-sm" style={{ color:C.cardText }}>{it.part_snapshot?.name?.[lang] || it.part_snapshot?.name?.ar}</p>
+                    <p className="font-bold text-sm" style={{ color:C.cardText }}>
+                      {it.part_snapshot?.name?.[lang] || it.part_snapshot?.name?.ar}
+                      {Number(it.quantity||1) > 1 && <span style={{ color:C.cardMuted }}> × {it.quantity}</span>}
+                    </p>
                     {Number(it.quoted_sell_price) > 0 && (
-                      <span className="font-black text-sm flex-shrink-0" style={{ color:C.gold }}>{Number(it.quoted_sell_price).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                      <span className="font-black text-sm flex-shrink-0" style={{ color:C.gold }}>{(Number(it.quoted_sell_price)*Number(it.quantity||1)).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
                     )}
                   </div>
                   {it.part_number && (
@@ -2766,6 +2769,14 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, onClose, onPay }) {
                 <img src={localApproval.approval_signature_data} alt="" className="h-10 mt-1 rounded bg-white"/>
               )}
             </div>
+          )}
+
+          {totalQuoted > 0.01 && (
+            <button onClick={()=>openPartsQuotePDF({ ...po, part_order_items: items, customer_approved_at: localApproval.customer_approved_at, approval_signature_data: localApproval.approval_signature_data, approval_signed_by: localApproval.approval_signed_by }, profile)}
+              className="w-full py-3 rounded-xl text-sm font-black transition-all active:scale-95 border"
+              style={{ borderColor:C.gold, color:C.gold }}>
+              {isRtl ? '🖨️ عرض عرض السعر PDF' : '🖨️ View Price Quote PDF'}
+            </button>
           )}
 
           {needsApproval && (
@@ -3113,6 +3124,165 @@ ${isApproved ? `
   فريقنا والورشة غير مسؤولين عن أي متعلقات شخصية تُترك داخل السيارة.<br>
   Our team and the workshop are not responsible for any personal belongings left inside the car.
 </div>
+
+<div class="footer">
+  <span>سندك — قطر / SNDK — Qatar</span>
+  <span>${new Date().toLocaleDateString('ar-QA')}</span>
+</div>
+</body></html>`;
+
+  const w = window.open('', '_blank');
+  if (w) { w.document.write(html); w.document.close(); }
+}
+
+// Printable price-quote PDF for a standalone spare-parts request
+// (part_orders/part_order_items) — same window.open+print pattern and CSS
+// language as openQuotationPDF above, just a flat parts table instead of a
+// service-grouped one (parts requests have no labor/towing/service
+// grouping at all). Used by both the customer (web) and staff (sndk-admin,
+// which has its own identical copy — this codebase duplicates print/PDF
+// builders between the two apps the same way printJobCard/printInvoice/
+// printTaxInvoice already are, rather than sharing a module).
+function openPartsQuotePDF(partOrder, profile) {
+  const items = partOrder.part_order_items || [];
+  const car = partOrder.car_snapshot || {};
+  const lineTotal = it => Number(it.quoted_sell_price||0) * Number(it.quantity||1);
+  const grandTotal = items.reduce((s,it)=>s+lineTotal(it),0);
+  const totalPaid = (partOrder.part_order_payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
+  const remainingDue = grandTotal - totalPaid;
+  const isApproved = !!partOrder.customer_approved_at;
+  const approvalDate = partOrder.customer_approved_at
+    ? new Date(partOrder.customer_approved_at).toLocaleString('ar-QA', { dateStyle:'long', timeStyle:'short' }) : '';
+  const approvalDateEn = partOrder.customer_approved_at
+    ? new Date(partOrder.customer_approved_at).toLocaleString('en-QA', { dateStyle:'long', timeStyle:'short' }) : '';
+
+  const rowsHtml = items.map((item, idx) => {
+    const nameAr = item.part_snapshot?.name?.ar || '—';
+    const nameEn = item.part_snapshot?.name?.en || '';
+    return `<tr>
+      <td style="color:#999;font-size:11px">${idx+1}</td>
+      <td>
+        <span style="font-weight:600">${escapeHtml(nameAr)}</span>
+        ${nameEn && nameEn !== nameAr ? `<span style="font-size:11px;color:#666;margin-right:5px">(${escapeHtml(nameEn)})</span>` : ''}
+        ${item.part_number ? `<span style="font-size:10px;color:#aaa;display:block;font-family:monospace">${escapeHtml(item.part_number)}</span>` : ''}
+      </td>
+      <td style="text-align:center;font-weight:600">${item.quantity||1}</td>
+      <td dir="ltr" style="font-size:12px;font-weight:600">${Number(item.quoted_sell_price||0).toFixed(3)}</td>
+      <td dir="ltr" style="font-weight:700;color:#8A1538">${lineTotal(item).toFixed(3)}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>عرض سعر قطع الغيار – SNDK Spare-Parts Quote</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}
+  body{font-family:Arial,sans-serif;background:#fff;color:#1a1a1a;padding:24px;max-width:820px;margin:0 auto}
+  .print-btn{position:fixed;top:14px;right:14px;background:#8A1538;color:#fff;border:none;padding:10px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;z-index:999;box-shadow:0 2px 8px rgba(0,0,0,0.2)}
+  .close-btn{position:fixed;top:14px;left:14px;background:#fff;color:#8A1538;border:1.5px solid #8A1538;padding:10px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;z-index:999;box-shadow:0 2px 8px rgba(0,0,0,0.2)}
+  @media print{.print-btn,.close-btn{display:none}body{padding:0}}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;padding:18px 0 14px;border-bottom:3px solid #8A1538;margin-bottom:18px}
+  .brand-sub{font-size:11px;color:#999;margin-top:2px}
+  .doc-info{text-align:left}
+  .doc-title-ar{font-size:16px;font-weight:900;color:#8A1538}
+  .doc-title-en{font-size:12px;font-weight:700;color:#666;margin-top:2px}
+  .doc-num{font-size:13px;font-weight:700;color:#8A1538;margin-top:5px;font-family:monospace}
+  .section{margin-bottom:14px}
+  .section-title{font-size:10px;font-weight:700;color:#8A1538;letter-spacing:1px;text-transform:uppercase;padding:4px 0;border-bottom:1px solid #f5e6e6;margin-bottom:9px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .field{background:#f8fafc;border-radius:7px;padding:8px 10px}
+  .field-label{font-size:10px;color:#999;margin-bottom:2px}
+  .field-value{font-size:13px;font-weight:600;color:#1a1a1a}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  thead tr{background:#8A1538;color:#fff}
+  thead th{padding:8px 10px;text-align:right;font-weight:700;font-size:11px}
+  tbody tr:nth-child(even){background:#fdf8f5}
+  tbody td{padding:7px 10px;border-bottom:1px solid #f5ece6;vertical-align:top}
+  .totals{margin-top:12px;background:#fdf8f5;border:1px solid #f5e6d3;border-radius:9px;padding:12px 15px}
+  .totals-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:3px 0}
+  .totals-grand{font-size:16px;font-weight:900;color:#8A1538;border-top:2px solid #8A1538;margin-top:7px;padding-top:8px}
+  .approval-box{margin-top:20px;padding:20px;border:2px solid #16a34a;border-radius:11px;background:#f0fdf4;text-align:center}
+  .approval-icon{font-size:36px;margin-bottom:8px}
+  .approval-ar{font-size:16px;font-weight:900;color:#15803d;margin-bottom:4px}
+  .approval-en{font-size:13px;font-weight:700;color:#15803d;margin-bottom:10px}
+  .approval-date{font-size:11px;color:#555;border-top:1px dashed #86efac;padding-top:8px}
+  .pending-box{margin-top:16px;padding:12px;border:2px dashed #f59e0b;border-radius:9px;background:#fffbeb;text-align:center;font-size:12px;color:#92400e}
+  .footer{margin-top:24px;padding-top:10px;border-top:1px solid #eee;display:flex;justify-content:space-between;font-size:10px;color:#aaa}
+</style>
+</head>
+<body>
+<button class="close-btn" onclick="window.close()">✕ إغلاق / Close</button>
+<button class="print-btn" onclick="window.print()">🖨️ طباعة / Save as PDF</button>
+
+<div class="header">
+  <div style="text-align:center">
+    <img src="${window.location.origin}/logo-static.png" alt="SNDK" style="height:64px;display:block;margin:0 auto"/>
+    <div class="brand-sub" style="margin-top:4px;line-height:1.5">
+      <div>سندك — قطر</div>
+      <div style="direction:ltr">SNDK — Qatar</div>
+    </div>
+  </div>
+  <div class="doc-info">
+    <div class="doc-title-ar">عرض سعر قطع الغيار / Spare-Parts Quote</div>
+    <div class="doc-title-en">Price Quote</div>
+    <div class="doc-num">${escapeHtml(partOrder.request_number)}</div>
+    <div style="font-size:11px;color:#999;margin-top:3px">${new Date(partOrder.created_at || Date.now()).toLocaleDateString('ar-QA')}</div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">بيانات العميل / Customer Info</div>
+  <div class="grid2">
+    <div class="field"><div class="field-label">الاسم / Name</div><div class="field-value">${escapeHtml(profile?.full_name) || '—'}</div></div>
+    <div class="field"><div class="field-label">الجوال / Phone</div><div class="field-value" dir="ltr">${profile?.phone_number ? '+974 ' + escapeHtml(profile.phone_number) : '—'}</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">بيانات السيارة / Car Info</div>
+  <div class="grid2">
+    <div class="field"><div class="field-label">السيارة / Car</div><div class="field-value">${escapeHtml([car.car_type, car.car_category, car.production_year].filter(Boolean).join(' ')) || '—'}</div></div>
+    <div class="field"><div class="field-label">اللوحة / Plate</div><div class="field-value" dir="ltr">${escapeHtml(car.plate_number) || '—'}</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">القطع / Parts</div>
+  <table>
+    <thead><tr><th>#</th><th>القطعة / Part</th><th style="text-align:center">الكمية / Qty</th><th>سعر الوحدة / Unit</th><th>الإجمالي / Total</th></tr></thead>
+    <tbody>${rowsHtml}</tbody>
+  </table>
+  <div class="totals">
+    ${totalPaid > 0 ? `
+    <div class="totals-row"><span>الإجمالي / Total</span><span dir="ltr">${grandTotal.toFixed(3)} QAR</span></div>
+    <div class="totals-row"><span>المدفوع / Paid</span><span dir="ltr">${totalPaid.toFixed(3)} QAR</span></div>
+    <div class="totals-row totals-grand"><span>المتبقي / Remaining</span><span dir="ltr">${remainingDue.toFixed(3)} QAR</span></div>
+    ` : `<div class="totals-row totals-grand"><span>الإجمالي / Total</span><span dir="ltr">${grandTotal.toFixed(3)} QAR</span></div>`}
+  </div>
+</div>
+
+${isApproved ? `
+<div class="approval-box">
+  <div class="approval-icon">✅</div>
+  <div class="approval-ar">تمت موافقة العميل</div>
+  <div class="approval-en">Customer Approved</div>
+  <div class="approval-date">
+    وقت الموافقة / Approval Time:<br>
+    <strong>${approvalDate}</strong><br><strong>${approvalDateEn}</strong>
+  </div>
+  ${partOrder.approval_signature_data ? `
+  <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #86efac">
+    <p style="font-size:11px;color:#555;margin-bottom:6px">توقيع العميل / Customer Signature:</p>
+    <img src="${partOrder.approval_signature_data}" style="max-width:220px;height:auto;border:1px solid #d1fae5;border-radius:8px;background:#fff;padding:4px;display:block;margin:0 auto"/>
+  </div>` : ''}
+  ${partOrder.approval_signed_by ? `
+  <div style="margin-top:12px;padding-top:10px;border-top:1px dashed #86efac;text-align:center">
+    <p style="font-size:22px;font-family:Georgia,serif;font-style:italic;color:#15803d">${escapeHtml(partOrder.approval_signed_by)}</p>
+  </div>` : ''}
+</div>` : `
+<div class="pending-box">⏳ بانتظار موافقة العميل / Pending Customer Approval</div>`}
 
 <div class="footer">
   <span>سندك — قطر / SNDK — Qatar</span>
@@ -4989,7 +5159,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
     const badgeC = CARD_BG_CYCLE[(pi + 1) % 2];
     const st = PART_ORDER_ST[po.status] || PART_ORDER_ST.pending;
     const items = po.part_order_items || [];
-    const totalQuoted = items.reduce((s,i)=>s+Number(i.quoted_sell_price||0), 0);
+    const totalQuoted = items.reduce((s,i)=>s+Number(i.quoted_sell_price||0)*Number(i.quantity||1), 0);
     const title = items.length > 1
       ? (isRtl ? `${items.length} قطع غيار` : `${items.length} spare parts`)
       : (items[0]?.part_snapshot?.name?.[lang] || items[0]?.part_snapshot?.name?.ar || '—');
@@ -6220,6 +6390,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
           partOrder={viewPartOrder}
           lang={lang}
           isRtl={isRtl}
+          profile={profile}
           onClose={() => setViewPartOrder(null)}
           onPay={(amountDue) => { setPayPartOrderModal({ partOrderId:viewPartOrder.id, amount:amountDue, requestNumber:viewPartOrder.request_number }); setViewPartOrder(null); }}
         />
