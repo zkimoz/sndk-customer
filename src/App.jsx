@@ -1231,6 +1231,51 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authChecked]);
 
+  // Same as the job-card return-handler above, but for a spare-parts
+  // request's SkipCash checkout (see PartOrderPaymentModal's paySkipcash) —
+  // a distinct query param and sessionStorage key so the two can never
+  // collide. part_order_payments only ever gets written by
+  // skipcash-parts-webhook server-to-server; this is read-only.
+  useEffect(() => {
+    if (!authChecked) return;
+    const params = new URLSearchParams(window.location.search);
+    const poSkipcashOrder = params.get('po_skipcash_order');
+    if (!poSkipcashOrder) return;
+    let skipcashId = null;
+    try { skipcashId = sessionStorage.getItem('skipcash_parts_pending_id') || null; sessionStorage.removeItem('skipcash_parts_pending_id'); } catch { /* fine, falls back below */ }
+    window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+    setPendingQuotCount(0);
+    setPage('orders');
+    setMenuOpen(false);
+
+    const fallbackMsg = isRtl
+      ? 'شكرًا! سيتم تأكيد الدفع وتحديث حالة طلبك خلال لحظات.'
+      : 'Thank you! Your payment will be confirmed and your request updated shortly.';
+    if (!skipcashId) { alert(fallbackMsg); return; }
+
+    (async () => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const { data } = await supabase.functions.invoke('skipcash-parts-payment', {
+          body: { action: 'status', partOrderId: poSkipcashOrder, skipcashId },
+        });
+        const statusId = data?.statusId;
+        if (statusId === 2) {
+          alert(isRtl ? '✅ تم الدفع بنجاح' : '✅ Payment successful');
+          return;
+        }
+        if ([3, 4, 5].includes(statusId)) {
+          alert(isRtl
+            ? '⚠️ لم يكتمل الدفع (تم إلغاؤه أو رفضه) — حاول مرة أخرى'
+            : '⚠️ Payment was not completed (cancelled or declined) — please try again');
+          return;
+        }
+        if (attempt < 2) await new Promise(r => setTimeout(r, 1500));
+      }
+      alert(fallbackMsg);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authChecked]);
+
   const loadReferenceData = () => {
     // Load dynamic car brands, categories, and brand-category links
     supabase.from('car_brands').select('id,name_ar,name_en').or('is_active.eq.true,is_active.is.null').order('sort_order').order('id')
@@ -2401,30 +2446,43 @@ function PartOrderPaymentModal({ partOrderId, amount, requestNumber, customerNam
   const paypalContainerRef = useRef(null);
   const needsReceipt = chosenKey === 'instant_transfer';
   const chosenMethod = methods.find(m => m.key === chosenKey);
-  const isGateway = chosenMethod?.method_type === 'gateway';
+  const isPaypal = chosenKey === 'paypal';
+  const isSkipcash = chosenKey === 'skipcash';
+  const [skipcashLoading, setSkipcashLoading] = useState(false);
+  const [skipcashError, setSkipcashError] = useState(null);
 
   const latestRef = useRef({ partOrderId, isRtl, onDone });
   useEffect(() => { latestRef.current = { partOrderId, isRtl, onDone }; });
 
   useEffect(() => {
     supabase.from('payment_methods').select('*').eq('is_active', true).order('sort_order')
-      .then(({ data }) => {
-        // This flow only ever knows how to render PayPal's own buttons for a
-        // gateway method (see the PayPal SDK script below) — it has no idea
-        // how to handle SkipCash. The two gateways share this same table,
-        // and 'skipcash' is customer-visible for the job-card payment flow
-        // (PaymentMethodModal), which DOES know how to render it; 'paypal'
-        // stays hidden there on purpose so staff don't see two card-payment
-        // options. Forcing that split here too (instead of trusting the
-        // shared show_to_customer flag) is what keeps the two gateways from
-        // leaking into each other's flow.
-        const methods = (data || []).filter(pm => pm.key !== 'skipcash' && (pm.key === 'paypal' || pm.show_to_customer !== false));
-        setMethods(methods); setLoadingMethods(false);
-      });
+      .then(({ data }) => { setMethods((data || []).filter(pm => pm.show_to_customer !== false)); setLoadingMethods(false); });
   }, []);
 
+  // Same pattern as PaymentMethodModal's own paySkipcash — distinct query
+  // param (po_skipcash_order) and sessionStorage key from the job-card
+  // flow's, so the two return-handlers (both live in App()) can never
+  // collide or consume each other's pending id.
+  const paySkipcash = async () => {
+    if (skipcashLoading) return;
+    setSkipcashLoading(true);
+    setSkipcashError(null);
+    const returnUrlObj = new URL(window.location.origin + window.location.pathname);
+    returnUrlObj.searchParams.set('po_skipcash_order', partOrderId);
+    const returnUrl = returnUrlObj.toString();
+    const { data, error } = await supabase.functions.invoke('skipcash-parts-payment', { body: { action: 'create', partOrderId, returnUrl } });
+    if (error || !data?.payUrl) {
+      const msg = data?.error || error?.message || (isRtl ? 'تعذر بدء الدفع' : 'Could not start payment');
+      setSkipcashError(msg);
+      setSkipcashLoading(false);
+      return;
+    }
+    try { sessionStorage.setItem('skipcash_parts_pending_id', data.skipcashId || ''); } catch { /* private browsing, etc. — degrades to the neutral fallback message */ }
+    window.location.href = data.payUrl;
+  };
+
   useEffect(() => {
-    if (!isGateway || !chosenMethod?.client_id) return;
+    if (!isPaypal || !chosenMethod?.client_id) return;
     let cancelled = false;
     let buttons = null;
 
@@ -2484,7 +2542,7 @@ function PartOrderPaymentModal({ partOrderId, amount, requestNumber, customerNam
     }
 
     return () => { cancelled = true; if (buttons?.close) buttons.close(); };
-  }, [isGateway, chosenMethod?.client_id]);
+  }, [isPaypal, chosenMethod?.client_id]);
 
   const confirm = async () => {
     if (!chosenKey || saving) return;
@@ -2587,7 +2645,7 @@ function PartOrderPaymentModal({ partOrderId, amount, requestNumber, customerNam
             </div>
           )}
         </div>
-        {isGateway ? (
+        {isPaypal ? (
           <div className="p-5 pt-0 space-y-2">
             <div ref={paypalContainerRef}/>
             {saving && (
@@ -2596,6 +2654,27 @@ function PartOrderPaymentModal({ partOrderId, amount, requestNumber, customerNam
             <p className="text-[11px] text-center" style={{ color:mc.sub }}>
               {isRtl ? 'سيتم تحويل المبلغ تلقائيًا لدولار أمريكي بسعر الصرف الثابت (٣.٦٥ ر.ق = ١$)' : 'The amount is automatically converted to US Dollars at the fixed exchange rate (3.65 QAR = $1)'}
             </p>
+          </div>
+        ) : isSkipcash ? (
+          <div className="p-5 pt-0 space-y-3">
+            <div className="rounded-xl p-3 space-y-2.5" style={{ background:'rgba(0,0,0,0.12)', border:'1px dashed rgba(255,255,255,0.25)' }}>
+              <p className="font-bold text-sm" style={{ color:mc.txt }}>{isRtl?'الدفع بالبطاقة':'Pay by Card'}</p>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <VisaMark/><MastercardMark/><ApplePayMark/><NapsMark/>
+              </div>
+            </div>
+            <button onClick={paySkipcash} disabled={skipcashLoading}
+              className="w-full py-3.5 rounded-xl font-black text-sm transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60"
+              style={{ background:'#8A1538', color:'#fff' }}>
+              {skipcashLoading
+                ? <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"/>{isRtl ? 'جاري التحويل...' : 'Redirecting...'}</>
+                : <><CreditCard size={16}/>{isRtl ? 'متابعة الدفع بالبطاقة' : 'Continue to Card Payment'}</>
+              }
+            </button>
+            <p className="text-[11px] text-center flex items-center justify-center gap-1" style={{ color:mc.sub }}>
+              <Lock size={11}/>{isRtl ? 'دفع آمن ومشفر بالكامل' : 'Fully secure, encrypted payment'}
+            </p>
+            {skipcashError && <p className="text-xs font-bold text-center" style={{ color:'#fca5a5' }}>{skipcashError}</p>}
           </div>
         ) : (
           <div className="p-5 pt-0">

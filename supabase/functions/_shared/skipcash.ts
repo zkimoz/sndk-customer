@@ -60,6 +60,70 @@ export async function loadOrderContactInfo(orderId: string) {
   return { profileId: appt.profile_id as string, jobNumber: appt.job_cards?.job_number as string | undefined };
 }
 
+// Staff-only notification, mirroring paypal-parts-payment's own
+// notifyPaymentReceived exactly (same event, same lack of a customer-facing
+// receipt email — that gap already exists for the PayPal parts flow too,
+// so this stays consistent with it rather than reusing
+// notifySkipCashPaymentReceived below, which is job-card-specific and
+// would mislabel a request number as a job number).
+function notifySkipCashPartOrderPaymentReceived(profileId: string, requestNumber: string | undefined, amountQAR: number) {
+  adminClient.from("profiles").select("full_name").eq("id", profileId).maybeSingle().then(({ data }) => {
+    adminClient.functions.invoke("clever-endpoint", {
+      body: {
+        event: "part_order_payment_received",
+        requestNumber,
+        customerName: data?.full_name,
+        amountQAR,
+        methodAr: "سكيب كاش",
+        methodEn: "SkipCash",
+      },
+    }).catch(() => {});
+  });
+}
+
+// Looks up what recordPartOrderPaymentIfNew needs purely from the part
+// order itself — used by skipcash-parts-webhook, which has no authenticated
+// caller to derive it from (unlike skipcash-parts-payment's
+// loadOwnedPartOrder). profile_id is direct on part_orders, no appointment
+// join needed, same as paypal-parts-payment's loadOwnedPartOrder.
+export async function loadPartOrderContactInfo(partOrderId: string) {
+  const { data: partOrder } = await adminClient
+    .from("part_orders")
+    .select("profile_id, request_number")
+    .eq("id", partOrderId)
+    .maybeSingle();
+  if (!partOrder) return null;
+  return { profileId: partOrder.profile_id as string, requestNumber: partOrder.request_number as string };
+}
+
+// Idempotent on part_order_payments.gateway_ref — same reasoning as
+// recordPaymentIfNew below (a losing INSERT fails with 23505 instead of
+// duplicating a row, which is what's actually trusted as "already
+// recorded"). No purpose/towing split needed — spare-parts requests have
+// none of that.
+export async function recordPartOrderPaymentIfNew(opts: {
+  skipcashId: string; partOrderId: string; amountQAR: number;
+  profileId: string; requestNumber: string | undefined;
+}): Promise<{ alreadyRecorded?: true; recorded?: true; error?: string }> {
+  const { data: existing } = await adminClient.from("part_order_payments").select("id").eq("gateway_ref", opts.skipcashId).maybeSingle();
+  if (existing) return { alreadyRecorded: true };
+
+  const { error: insErr } = await adminClient.from("part_order_payments").insert({
+    part_order_id: opts.partOrderId,
+    amount: opts.amountQAR,
+    method: "skipcash",
+    recorded_by: null,
+    gateway_ref: opts.skipcashId,
+  });
+  if (insErr) {
+    if (insErr.code === "23505") return { alreadyRecorded: true };
+    return { error: insErr.message };
+  }
+
+  notifySkipCashPartOrderPaymentReceived(opts.profileId, opts.requestNumber, opts.amountQAR);
+  return { recorded: true };
+}
+
 // Idempotent on payments.gateway_ref — SkipCash retries a webhook delivery
 // it didn't get a prompt 200 for (and a slow response can make its own HTTP
 // client retry a request we're already mid-processing), so two deliveries
