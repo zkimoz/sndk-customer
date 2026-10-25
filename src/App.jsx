@@ -5068,7 +5068,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
     if (!user) { setLoading(false); return; }
     loadPartOrders();
     const { data: apptData } = await supabase.from('appointments')
-      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number, registration_image_url, registration_image_url_2), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, general_notes, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot, pickup_tracking_active, return_tracking_active, pickup_driver_id, return_driver_id, is_parts_only)')
+      .select('*, cars(car_type, car_category, production_year, plate_number, chassis_number, registration_image_url, registration_image_url_2), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, general_notes, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot, pickup_tracking_active, return_tracking_active, pickup_driver_id, return_driver_id, is_parts_only, source_part_order_id)')
       .eq('profile_id', user.id)
       .order('appointment_date', { ascending: false });
     setAppts(apptData || []);
@@ -5500,8 +5500,17 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
   const noJcAppts        = appts.filter(a => !a.job_cards?.length && a.status !== 'cancelled');
   const jcAppts          = appts.filter(a => a.job_cards?.length > 0 && !a.job_cards[0].closed_at && a.status !== 'cancelled' && !rejectedAllOverride(orderByApptId[a.id]));
   const cancelledAppts   = appts.filter(a => a.status === 'cancelled');
-  const activePartOrders = partOrders.filter(po => !['cancelled','declined'].includes(po.status));
-  const cancelledPartOrders = partOrders.filter(po => ['cancelled','declined'].includes(po.status));
+  const partOrderById = Object.fromEntries(partOrders.map(po => [po.id, po]));
+  // A parts-only job card already shows its own source part_order's
+  // request number/price/paid status inline (see linkedPO below) — without
+  // this, the exact same request showed twice: once as this job card and
+  // once as its own standalone "Spare Parts Request" card.
+  const linkedPartOrderIds = new Set(
+    jcAppts.filter(a => a.job_cards[0].is_parts_only && a.job_cards[0].source_part_order_id)
+      .map(a => a.job_cards[0].source_part_order_id)
+  );
+  const activePartOrders = partOrders.filter(po => !['cancelled','declined'].includes(po.status) && !linkedPartOrderIds.has(po.id));
+  const cancelledPartOrders = partOrders.filter(po => ['cancelled','declined'].includes(po.status) && !linkedPartOrderIds.has(po.id));
   const activeIsEmpty    = noJcAppts.length === 0 && jcAppts.length === 0 && activePartOrders.length === 0;
   const cancelledIsEmpty = cancelledAppts.length === 0 && cancelledPartOrders.length === 0;
   // Same catName-based category chip mobile shows — read off service_type
@@ -5673,6 +5682,19 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                   const jc     = publishedJobCard(a.job_cards[0]);
                   const car    = a.cars;
                   const relOrd = orderByApptId[a.id];
+                  // Merges this job card's header with its source spare-parts
+                  // request (title, request number, price, paid status) —
+                  // see linkedPartOrderIds above for why the request no
+                  // longer also shows as its own separate card.
+                  const linkedPO = jc.is_parts_only ? partOrderById[jc.source_part_order_id] : null;
+                  const linkedPOItems = linkedPO?.part_order_items || [];
+                  const linkedPODecisions = linkedPO?.item_decisions || {};
+                  const linkedPOBillable = linkedPO?.customer_approved_at ? linkedPOItems.filter(i => linkedPODecisions[i.id]==='approved') : linkedPOItems;
+                  const linkedPOTotal = linkedPOBillable.reduce((s,i)=>s+Number(i.quoted_sell_price||0)*Number(i.quantity||1), 0);
+                  const linkedPOPaid = (linkedPO?.part_order_payments||[]).reduce((s,p)=>s+Number(p.amount||0),0);
+                  const linkedPOTitle = linkedPOItems.length > 1
+                    ? (isRtl ? `${linkedPOItems.length} قطع غيار` : `${linkedPOItems.length} spare parts`)
+                    : (linkedPOItems[0]?.part_snapshot?.name?.[lang] || linkedPOItems[0]?.part_snapshot?.name?.ar || '—');
                   // Staff added "Car Registration Renewal" straight onto the job card
                   // (walk-in) instead of the customer booking it through the app's own
                   // renewal flow — there's a priced line item but no authorization on
@@ -5730,20 +5752,40 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                         className="w-full text-inherit px-4 py-3 flex items-center justify-between gap-3 transition-all cursor-pointer"
                         style={{ borderBottom: isExpanded ? `1px solid ${cc.div}` : 'none', textAlign: isRtl ? 'right' : 'left' }}>
                         <div className="flex-1 min-w-0">
-                          {categoryOf(a) && (
-                            <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-1" style={{ background:'rgba(255,255,255,0.15)', color:'#fff' }}>
-                              {categoryOf(a)}
+                          {linkedPO ? (
+                            <>
+                              <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-1" style={{ background:'rgba(255,255,255,0.15)', color:'#fff' }}>
+                                {isRtl ? 'طلب قطع غيار' : 'Spare Parts Request'}
+                              </span>
+                              <p className="text-sm font-bold" style={{ color:cc.txt }}>{linkedPOTitle}</p>
+                              <p className="text-[11px] mt-0.5 font-mono" style={{ color:cc.sub }}>{linkedPO.request_number}</p>
+                            </>
+                          ) : (
+                            <>
+                              {categoryOf(a) && (
+                                <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-1" style={{ background:'rgba(255,255,255,0.15)', color:'#fff' }}>
+                                  {categoryOf(a)}
+                                </span>
+                              )}
+                              {car && (
+                                <p className="text-sm font-bold" style={{ color:cc.txt }}>
+                                  {[carTypeLabel(car, carBrandsRef, lang), carCategoryLabel(car, carCatsRef, lang), car.production_year].filter(Boolean).join(' · ')}
+                                </p>
+                              )}
+                              {a.appointment_date && (
+                                <p className="text-[11px] mt-0.5 flex items-center gap-1" style={{ color:cc.sub }}>
+                                  <Calendar size={9}/>{a.appointment_date}
+                                </p>
+                              )}
+                            </>
+                          )}
+                          {linkedPO && linkedPOTotal > 0.001 && (
+                            <p className="text-sm font-black mt-1" style={{ color:C.gold }}>{linkedPOTotal.toFixed(3)} {isRtl?'ر.ق':'QAR'}</p>
+                          )}
+                          {linkedPO && linkedPOPaid > 0.001 && (
+                            <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mt-1" style={{ background:'rgba(34,197,94,0.25)', color:'#dcfce7' }}>
+                              {isRtl ? 'تم الدفع' : 'Paid'}: {linkedPOPaid.toFixed(3)}
                             </span>
-                          )}
-                          {car && (
-                            <p className="text-sm font-bold" style={{ color:cc.txt }}>
-                              {[carTypeLabel(car, carBrandsRef, lang), carCategoryLabel(car, carCatsRef, lang), car.production_year].filter(Boolean).join(' · ')}
-                            </p>
-                          )}
-                          {a.appointment_date && (
-                            <p className="text-[11px] mt-0.5 flex items-center gap-1" style={{ color:cc.sub }}>
-                              <Calendar size={9}/>{a.appointment_date}
-                            </p>
                           )}
                         </div>
                         {/* Job status + number */}
@@ -5781,6 +5823,15 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
 
                       {isExpanded && (
                       <>
+                      {linkedPO && (
+                        <div className="px-4 pt-3">
+                          <button type="button" onClick={e => { e.stopPropagation(); setViewPartOrder(linkedPO); }}
+                            className="flex items-center gap-1.5 text-sm font-bold px-3 py-1.5 rounded-xl transition-all active:scale-95"
+                            style={{ background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.25)', color:'#fff' }}>
+                            {isRtl ? 'عرض تفاصيل الطلب والسعر' : 'View request & price details'}
+                          </button>
+                        </div>
+                      )}
                       {/* ── العنوان (الخدمات المعتمدة) والشكوى وملاحظات الموظف — كانت جوه الهيدر الدايم الظهور، اتنقلت هنا عشان الهيدر يفضل صغير ── */}
                       {(() => {
                         const svcs = parseServices(a.service_type);
@@ -5818,7 +5869,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                         }
                         return (
                           <div className="px-4 pt-3">
-                            {titleNode}
+                            {!linkedPO && titleNode}
                             {jc.customer_complaints && (
                               <p className="text-base font-bold mt-1.5" style={{ color:cc.txt }}>{jc.customer_complaints}</p>
                             )}
