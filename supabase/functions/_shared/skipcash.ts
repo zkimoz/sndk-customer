@@ -120,6 +120,35 @@ export async function recordPartOrderPaymentIfNew(opts: {
     return { error: insErr.message };
   }
 
+  // Promote to "paid" (which is also what auto_open_parts_job_card listens
+  // for) once the fresh total is actually covered — same re-check
+  // paypal-parts-payment's own capture does, since staff could have
+  // re-quoted since this payment was created. Unlike the PayPal flow,
+  // there's no client-invoked "capture" step here — the webhook is the
+  // only place a SkipCash parts payment is ever recorded — so this status
+  // flip has to happen right here, or the request is left looking unpaid
+  // forever despite the payment row existing.
+  const { data: partOrder } = await adminClient
+    .from("part_orders")
+    .select("item_decisions, customer_approved_at")
+    .eq("id", opts.partOrderId)
+    .maybeSingle();
+  const { data: freshItems } = await adminClient.from("part_order_items").select("id, quoted_sell_price, quantity").eq("part_order_id", opts.partOrderId);
+  const { data: freshPayments } = await adminClient.from("part_order_payments").select("amount").eq("part_order_id", opts.partOrderId);
+  const decisions = partOrder?.item_decisions || {};
+  const billable = partOrder?.customer_approved_at
+    ? (freshItems || []).filter((i: any) => decisions[i.id] === "approved")
+    : (freshItems || []);
+  const totalQuoted = billable.reduce((s: number, i: any) => s + Number(i.quoted_sell_price || 0) * Number(i.quantity || 1), 0);
+  const totalPaid = (freshPayments || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+  const fullyCovered = totalPaid >= totalQuoted - 0.001;
+
+  await adminClient.from("part_orders").update({
+    ...(fullyCovered ? { status: "paid", payment_status: "paid" } : { payment_status: "pending" }),
+    payment_method: "skipcash",
+    updated_at: new Date().toISOString(),
+  }).eq("id", opts.partOrderId);
+
   notifySkipCashPartOrderPaymentReceived(opts.profileId, opts.requestNumber, opts.amountQAR);
   return { recorded: true };
 }
