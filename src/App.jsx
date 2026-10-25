@@ -2668,7 +2668,7 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, profile, onClose, on
   return (
     <>
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto" onClick={e=>e.stopPropagation()}
+      <div className="rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto" onClick={e=>e.stopPropagation()}
         style={{ background:C.card }}>
         <div className="p-5 space-y-4">
           <div className="flex items-start justify-between gap-3">
@@ -2681,56 +2681,56 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, profile, onClose, on
 
           <span className="inline-block px-2.5 py-1 rounded-full text-sm font-bold" style={{ background:st.bg, color:st.text }}>{st.label}</span>
 
-          <div className="space-y-3">
+          <div className="space-y-4">
             {items.map(it => {
               const photos = it.admin_image_urls?.length ? it.admin_image_urls : (it.part_snapshot?.image_url ? [it.part_snapshot.image_url] : []);
               const description = it.admin_description?.[lang] || it.admin_description?.ar;
               const compatibleCars = it.compatible_cars?.[lang] || it.compatible_cars?.ar;
               const availabilityEta = it.availability_eta?.[lang] || it.availability_eta?.ar;
               return (
-                <div key={it.id} className="rounded-xl p-3 space-y-2" style={{ background:`${C.gold}0a`, border:`1px solid ${C.gold}20` }}>
+                <div key={it.id} className="rounded-xl p-4 space-y-2.5 shadow-sm" style={{ background:C.input, border:`1px solid ${C.gold}35` }}>
                   <div className="flex items-center justify-between gap-2">
-                    <p className="font-bold text-sm" style={{ color:C.cardText }}>
+                    <p className="font-bold text-base" style={{ color:C.text }}>
                       {it.part_snapshot?.name?.[lang] || it.part_snapshot?.name?.ar}
-                      {Number(it.quantity||1) > 1 && <span style={{ color:C.cardMuted }}> × {it.quantity}</span>}
+                      {Number(it.quantity||1) > 1 && <span style={{ color:C.muted }}> × {it.quantity}</span>}
                     </p>
                     {Number(it.quoted_sell_price) > 0 && (
                       <span className="font-black text-sm flex-shrink-0" style={{ color:C.gold }}>{(Number(it.quoted_sell_price)*Number(it.quantity||1)).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
                     )}
                   </div>
                   {it.part_number && (
-                    <p className="text-xs font-mono" style={{ color:C.cardMuted }}>{isRtl?'رقم القطعة':'Part No.'}: {it.part_number}</p>
+                    <p className="text-xs font-mono" style={{ color:C.muted }}>{isRtl?'رقم القطعة':'Part No.'}: {it.part_number}</p>
                   )}
                   {it.source_country && (
-                    <p className="text-xs" style={{ color:C.cardMuted }}>{isRtl?'بلد المنشأ':'Country of Origin'}: {it.source_country}</p>
+                    <p className="text-xs" style={{ color:C.muted }}>{isRtl?'بلد المنشأ':'Country of Origin'}: {it.source_country}</p>
                   )}
                   {photos.length > 0 && (
-                    <div className="flex gap-2 overflow-x-auto">
+                    <div className="flex gap-2.5 overflow-x-auto">
                       {photos.map(url => (
                         <img key={url} src={url} alt="" onClick={()=>setZoomImage(url)}
-                          className="h-32 rounded-xl object-cover flex-shrink-0 cursor-zoom-in active:opacity-80 transition-opacity"/>
+                          className="h-44 rounded-xl object-cover flex-shrink-0 cursor-zoom-in active:opacity-80 transition-opacity"/>
                       ))}
                     </div>
                   )}
-                  {description && <p className="text-sm leading-relaxed" style={{ color:C.cardMuted }}>{description}</p>}
+                  {description && <p className="text-sm leading-relaxed" style={{ color:C.muted }}>{description}</p>}
                   {compatibleCars && (
                     <div className="pt-1" style={{ borderTop:`1px dashed ${C.gold}25` }}>
-                      <p className="text-xs font-bold mb-0.5" style={{ color:C.cardMuted }}>{isRtl?'تركّب على':'Fits'}</p>
-                      <p className="text-sm" style={{ color:C.cardText }}>{compatibleCars}</p>
+                      <p className="text-xs font-bold mb-0.5" style={{ color:C.muted }}>{isRtl?'تركّب على':'Fits'}</p>
+                      <p className="text-sm" style={{ color:C.text }}>{compatibleCars}</p>
                     </div>
                   )}
                   {availabilityEta && (
                     <div>
-                      <p className="text-xs font-bold mb-0.5" style={{ color:C.cardMuted }}>{isRtl?'مدة التوفير':'Availability'}</p>
-                      <p className="text-sm" style={{ color:C.cardText }}>{availabilityEta}</p>
+                      <p className="text-xs font-bold mb-0.5" style={{ color:C.muted }}>{isRtl?'مدة التوفير':'Availability'}</p>
+                      <p className="text-sm" style={{ color:C.text }}>{availabilityEta}</p>
                     </div>
                   )}
                   {it.tracking_stage && (
                     <div className="pt-2" style={{ borderTop:`1px dashed ${C.gold}25` }}>
-                      <p className="text-xs font-bold mb-2" style={{ color:C.cardMuted }}>{isRtl?'تتبع القطعة':'Part Tracking'}</p>
+                      <p className="text-xs font-bold mb-2" style={{ color:C.muted }}>{isRtl?'تتبع القطعة':'Part Tracking'}</p>
                       <TrackingTimeline stage={it.tracking_stage} isRtl={isRtl}/>
                       {it.tracking_number && (
-                        <p className="text-xs font-mono mt-1" style={{ color:C.cardMuted }}>
+                        <p className="text-xs font-mono mt-1" style={{ color:C.muted }}>
                           {isRtl?'رقم الشحنة':'Shipment No.'}: {it.tracking_number}
                         </p>
                       )}
