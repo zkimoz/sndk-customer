@@ -2630,9 +2630,19 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, profile, onClose, on
     approval_signed_by: po.approval_signed_by,
   });
   const isApproved = !!localApproval.customer_approved_at;
+  // Per-item approve/reject, decided before signing — seeded from whatever
+  // was already saved (re-opening an already-signed request), otherwise
+  // starts empty so every item needs an explicit tap. Kept as the single
+  // source of truth for decisions even right after signing (po itself only
+  // refreshes once the parent refetches).
+  const [localDecisions, setLocalDecisions] = useState(po.item_decisions || {});
+  const setItemDecision = (itemId, decision) => setLocalDecisions(prev => ({ ...prev, [itemId]: decision }));
   const confirmApproval = async (sigData, sigName) => {
     const nowIso = new Date().toISOString();
-    const patch = { customer_approved_at: nowIso, approval_signature_data: sigData || null, approval_signed_by: sigName || null };
+    const patch = {
+      customer_approved_at: nowIso, approval_signature_data: sigData || null, approval_signed_by: sigName || null,
+      item_decisions: localDecisions,
+    };
     if (po.status === 'priced') patch.status = 'awaiting_payment';
     const { error } = await supabase.from('part_orders').update(patch).eq('id', po.id);
     if (error) {
@@ -2656,10 +2666,16 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, profile, onClose, on
   };
   const st = ST[po.status] || ST.pending;
   const items = po.part_order_items || [];
-  const totalQuoted = items.reduce((s,i)=>s+Number(i.quoted_sell_price||0)*Number(i.quantity||1), 0);
+  const lineTotal = i => Number(i.quoted_sell_price||0)*Number(i.quantity||1);
+  // Before signing, the customer sees what's being asked for in full —
+  // decisions only narrow the total down once they're final (signed).
+  const approvedItems = isApproved ? items.filter(it => localDecisions[it.id] === 'approved') : items;
+  const rejectedItems = isApproved ? items.filter(it => localDecisions[it.id] === 'rejected') : [];
+  const totalQuoted = approvedItems.reduce((s,i)=>s+lineTotal(i), 0);
   const paidSoFar = (po.part_order_payments || []).reduce((s,p)=>s+Number(p.amount||0), 0);
   const amountDue = Math.max(totalQuoted - paidSoFar, 0);
-  const needsApproval = ['priced','awaiting_payment'].includes(po.status) && !isApproved && totalQuoted > 0.01;
+  const allDecided = items.length > 0 && items.every(it => localDecisions[it.id] === 'approved' || localDecisions[it.id] === 'rejected');
+  const needsApproval = ['priced','awaiting_payment'].includes(po.status) && !isApproved && items.reduce((s,i)=>s+lineTotal(i),0) > 0.01;
   const canPay = ['priced','awaiting_payment'].includes(po.status) && po.payment_status !== 'paid' && amountDue > 0.01 && isApproved;
   const title = items.length > 1
     ? (isRtl ? `${items.length} قطع غيار` : `${items.length} spare parts`)
@@ -2682,11 +2698,12 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, profile, onClose, on
           <span className="inline-block px-2.5 py-1 rounded-full text-sm font-bold" style={{ background:st.bg, color:st.text }}>{st.label}</span>
 
           <div className="space-y-4">
-            {items.map(it => {
+            {approvedItems.map(it => {
               const photos = it.admin_image_urls?.length ? it.admin_image_urls : (it.part_snapshot?.image_url ? [it.part_snapshot.image_url] : []);
               const description = it.admin_description?.[lang] || it.admin_description?.ar;
               const compatibleCars = it.compatible_cars?.[lang] || it.compatible_cars?.ar;
               const availabilityEta = it.availability_eta?.[lang] || it.availability_eta?.ar;
+              const decision = localDecisions[it.id];
               return (
                 <div key={it.id} className="rounded-xl p-4 space-y-2.5 shadow-sm" style={{ background:C.input, border:`1px solid ${C.gold}35` }}>
                   <div className="flex items-center justify-between gap-2">
@@ -2698,6 +2715,28 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, profile, onClose, on
                       <span className="font-black text-sm flex-shrink-0" style={{ color:C.gold }}>{(Number(it.quoted_sell_price)*Number(it.quantity||1)).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
                     )}
                   </div>
+                  {!isApproved ? (
+                    <div className="flex gap-2">
+                      <button onClick={()=>setItemDecision(it.id,'approved')}
+                        className="flex-1 py-2 rounded-lg text-sm font-bold transition-all active:scale-95"
+                        style={decision==='approved'
+                          ? { background:'#16a34a', color:'#fff' }
+                          : { background:'transparent', color:C.muted, border:`1px solid ${C.gold}40` }}>
+                        {isRtl?'✓ موافق':'✓ Approve'}
+                      </button>
+                      <button onClick={()=>setItemDecision(it.id,'rejected')}
+                        className="flex-1 py-2 rounded-lg text-sm font-bold transition-all active:scale-95"
+                        style={decision==='rejected'
+                          ? { background:'#ef4444', color:'#fff' }
+                          : { background:'transparent', color:C.muted, border:`1px solid ${C.gold}40` }}>
+                        {isRtl?'✗ غير موافق':'✗ Not Approved'}
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="inline-block px-2 py-0.5 rounded-full text-xs font-bold" style={{ background:'rgba(34,197,94,0.15)', color:'#16a34a' }}>
+                      {isRtl?'✓ موافَق عليها':'✓ Approved'}
+                    </span>
+                  )}
                   {it.part_number && (
                     <p className="text-xs font-mono" style={{ color:C.muted }}>{isRtl?'رقم القطعة':'Part No.'}: {it.part_number}</p>
                   )}
@@ -2741,6 +2780,17 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, profile, onClose, on
             })}
           </div>
 
+          {rejectedItems.length > 0 && (
+            <div className="rounded-xl p-3" style={{ background:'rgba(239,68,68,0.1)', border:'1px solid rgba(239,68,68,0.25)' }}>
+              <p className="text-xs font-bold mb-1" style={{ color:'#ef4444' }}>{isRtl?'القطع المرفوضة':'Rejected Items'}</p>
+              {rejectedItems.map(it => (
+                <p key={it.id} className="text-sm" style={{ color:'#ef4444' }}>
+                  — {it.part_snapshot?.name?.[lang] || it.part_snapshot?.name?.ar}
+                </p>
+              ))}
+            </div>
+          )}
+
           {totalQuoted > 0 && (
             <div className="flex items-center justify-between pt-2" style={{ borderTop:`1px dashed ${C.gold}30` }}>
               <span className="text-sm font-bold" style={{ color:C.cardMuted }}>{isRtl?'الإجمالي':'Total'}</span>
@@ -2771,8 +2821,8 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, profile, onClose, on
             </div>
           )}
 
-          {totalQuoted > 0.01 && (
-            <button onClick={()=>openPartsQuotePDF({ ...po, part_order_items: items, customer_approved_at: localApproval.customer_approved_at, approval_signature_data: localApproval.approval_signature_data, approval_signed_by: localApproval.approval_signed_by }, profile)}
+          {(isApproved ? totalQuoted > 0.01 : items.reduce((s,i)=>s+lineTotal(i),0) > 0.01) && (
+            <button onClick={()=>openPartsQuotePDF({ ...po, part_order_items: items, item_decisions: localDecisions, customer_approved_at: localApproval.customer_approved_at, approval_signature_data: localApproval.approval_signature_data, approval_signed_by: localApproval.approval_signed_by }, profile)}
               className="w-full py-3 rounded-xl text-sm font-black transition-all active:scale-95 border"
               style={{ borderColor:C.gold, color:C.gold }}>
               {isRtl ? '🖨️ عرض عرض السعر PDF' : '🖨️ View Price Quote PDF'}
@@ -2780,11 +2830,18 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, profile, onClose, on
           )}
 
           {needsApproval && (
-            <button onClick={()=>setSigOpen(true)}
-              className="w-full py-3 rounded-xl text-sm font-black transition-all active:scale-95"
-              style={{ background:'#722F37', color:'#fff' }}>
-              {isRtl ? 'الموافقة والتوقيع على الطلب' : 'Approve & Sign the Request'}
-            </button>
+            <div className="space-y-1.5">
+              <button onClick={()=>allDecided && setSigOpen(true)} disabled={!allDecided}
+                className="w-full py-3 rounded-xl text-sm font-black transition-all active:scale-95 disabled:opacity-50"
+                style={{ background:'#722F37', color:'#fff' }}>
+                {isRtl ? 'الموافقة والتوقيع على الطلب' : 'Approve & Sign the Request'}
+              </button>
+              {!allDecided && (
+                <p className="text-xs text-center font-semibold" style={{ color:C.cardMuted }}>
+                  {isRtl ? 'حدد موافق أو غير موافق على كل قطعة أولاً' : 'Decide Approve or Not Approved on every item first'}
+                </p>
+              )}
+            </div>
           )}
 
           {canPay && (
@@ -3144,17 +3201,25 @@ ${isApproved ? `
 // builders between the two apps the same way printJobCard/printInvoice/
 // printTaxInvoice already are, rather than sharing a module).
 function openPartsQuotePDF(partOrder, profile) {
-  const items = partOrder.part_order_items || [];
+  const allItems = partOrder.part_order_items || [];
+  const decisions = partOrder.item_decisions || {};
+  const isApproved = !!partOrder.customer_approved_at;
+  // Once signed, the quote only lists what the customer actually approved —
+  // the rest show separately as rejected, not in the priced table at all.
+  const items = isApproved ? allItems.filter(it => decisions[it.id] === 'approved') : allItems;
+  const rejectedItems = isApproved ? allItems.filter(it => decisions[it.id] === 'rejected') : [];
   const car = partOrder.car_snapshot || {};
   const lineTotal = it => Number(it.quoted_sell_price||0) * Number(it.quantity||1);
   const grandTotal = items.reduce((s,it)=>s+lineTotal(it),0);
   const totalPaid = (partOrder.part_order_payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
   const remainingDue = grandTotal - totalPaid;
-  const isApproved = !!partOrder.customer_approved_at;
   const approvalDate = partOrder.customer_approved_at
     ? new Date(partOrder.customer_approved_at).toLocaleString('ar-QA', { dateStyle:'long', timeStyle:'short' }) : '';
   const approvalDateEn = partOrder.customer_approved_at
     ? new Date(partOrder.customer_approved_at).toLocaleString('en-QA', { dateStyle:'long', timeStyle:'short' }) : '';
+  const rejectedNamesHtml = rejectedItems.map(it =>
+    `<li>${escapeHtml(it.part_snapshot?.name?.ar || it.part_snapshot?.name?.en || '—')}</li>`
+  ).join('');
 
   const rowsHtml = items.map((item, idx) => {
     const nameAr = item.part_snapshot?.name?.ar || '—';
@@ -3209,6 +3274,9 @@ function openPartsQuotePDF(partOrder, profile) {
   .approval-en{font-size:13px;font-weight:700;color:#15803d;margin-bottom:10px}
   .approval-date{font-size:11px;color:#555;border-top:1px dashed #86efac;padding-top:8px}
   .pending-box{margin-top:16px;padding:12px;border:2px dashed #f59e0b;border-radius:9px;background:#fffbeb;text-align:center;font-size:12px;color:#92400e}
+  .rejected-box{margin-top:12px;padding:12px 14px;border:1.5px solid #fecaca;border-radius:9px;background:#fef2f2}
+  .rejected-box p{font-size:11px;font-weight:700;color:#991b1b;margin-bottom:5px}
+  .rejected-box ul{margin:0;padding-inline-start:18px;font-size:12px;color:#991b1b}
   .footer{margin-top:24px;padding-top:10px;border-top:1px solid #eee;display:flex;justify-content:space-between;font-size:10px;color:#aaa}
 </style>
 </head>
@@ -3231,6 +3299,12 @@ function openPartsQuotePDF(partOrder, profile) {
     <div style="font-size:11px;color:#999;margin-top:3px">${new Date(partOrder.created_at || Date.now()).toLocaleDateString('ar-QA')}</div>
   </div>
 </div>
+
+${rejectedItems.length > 0 ? `
+<div class="rejected-box">
+  <p>القطع المرفوضة / Rejected Items</p>
+  <ul>${rejectedNamesHtml}</ul>
+</div>` : ''}
 
 <div class="section">
   <div class="section-title">بيانات العميل / Customer Info</div>

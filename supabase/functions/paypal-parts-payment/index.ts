@@ -37,9 +37,18 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 // Recomputes what's owed server-side from the staff-set prices (summed
-// across every part in the request), never a client-supplied amount.
+// across every part in the request), never a client-supplied amount. Once
+// the customer has signed, only the items they actually approved count —
+// payment is already gated on isApproved client-side, so the "sum
+// everything" branch below is just a defensive fallback for the (shouldn't
+// happen) case this is somehow called before signing.
 function computeAmountDueQAR(partOrder: any): number {
-  const totalQuoted = (partOrder.part_order_items || [])
+  const items: any[] = partOrder.part_order_items || [];
+  const decisions = partOrder.item_decisions || {};
+  const billable = partOrder.customer_approved_at
+    ? items.filter((i) => decisions[i.id] === "approved")
+    : items;
+  const totalQuoted = billable
     .reduce((s: number, i: any) => s + Number(i.quoted_sell_price || 0) * Number(i.quantity || 1), 0);
   const paidSoFar = (partOrder.part_order_payments || [])
     .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
@@ -68,7 +77,7 @@ async function loadOwnedPartOrder(userClient: any, partOrderId: string) {
 
   const { data: partOrder } = await adminClient
     .from("part_orders")
-    .select("id, profile_id, request_number, part_order_items(quoted_sell_price, quantity), part_order_payments(amount)")
+    .select("id, profile_id, request_number, customer_approved_at, item_decisions, part_order_items(id, quoted_sell_price, quantity), part_order_payments(amount)")
     .eq("id", partOrderId)
     .maybeSingle();
   if (!partOrder) return { error: jsonResponse({ error: "Request not found" }, 404) };
@@ -216,9 +225,13 @@ serve(async (req) => {
       // price but may no longer cover the current total; unconditionally
       // flipping status here would silently mark an underpaid request as
       // fully paid, with no record anywhere that it's actually short.
-      const { data: freshItems } = await adminClient.from("part_order_items").select("quoted_sell_price, quantity").eq("part_order_id", partOrderId);
+      const { data: freshItems } = await adminClient.from("part_order_items").select("id, quoted_sell_price, quantity").eq("part_order_id", partOrderId);
       const { data: freshPayments } = await adminClient.from("part_order_payments").select("amount").eq("part_order_id", partOrderId);
-      const freshTotalQuoted = (freshItems || []).reduce((s: number, i: any) => s + Number(i.quoted_sell_price || 0) * Number(i.quantity || 1), 0);
+      const freshDecisions = partOrder.item_decisions || {};
+      const freshBillable = partOrder.customer_approved_at
+        ? (freshItems || []).filter((i: any) => freshDecisions[i.id] === "approved")
+        : (freshItems || []);
+      const freshTotalQuoted = freshBillable.reduce((s: number, i: any) => s + Number(i.quoted_sell_price || 0) * Number(i.quantity || 1), 0);
       const freshTotalPaid = (freshPayments || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
       const fullyCovered = freshTotalPaid >= freshTotalQuoted - 0.001;
 
