@@ -1169,15 +1169,35 @@ export default function App() {
 
     let geo = { country: null, city: null };
     let cancelled = false;
-
+    // supabase-js's .upsert() (INSERT ... ON CONFLICT DO UPDATE) gets
+    // rejected by RLS here even on a session_id that has no existing row at
+    // all — seemingly a PostgREST/RLS quirk with ON CONFLICT specifically
+    // (plain INSERT and plain UPDATE both work fine on their own, confirmed
+    // directly against the REST API). Insert-once-then-always-update sidesteps
+    // it entirely: the first beat tries a plain insert (23505 = someone/some
+    // earlier tab already created this session's row — fine, ignore it),
+    // every beat (including that first one) then does a plain update.
+    let inserted = false;
     const beat = () => {
-      supabase.from('site_visits').upsert({
-        session_id: sessionId,
+      const row = {
         profile_id: user?.id ?? null,
         country: geo.country,
         city: geo.city,
         last_seen_at: new Date().toISOString(),
-      }, { onConflict: 'session_id' }).then(() => {});
+      };
+      if (inserted) {
+        supabase.from('site_visits').update(row).eq('session_id', sessionId).then(() => {});
+        return;
+      }
+      supabase.from('site_visits').insert({ session_id: sessionId, ...row }).then(({ error }) => {
+        inserted = true;
+        // 23505 = a row for this session_id already exists (an earlier tab/
+        // reload in the same sessionStorage session beat us to it) — just
+        // fall back to updating it instead.
+        if (error?.code === '23505') {
+          supabase.from('site_visits').update(row).eq('session_id', sessionId).then(() => {});
+        }
+      });
     };
 
     fetch('/api/geo').then(r => r.json()).then(data => {
