@@ -1149,6 +1149,47 @@ export default function App() {
     return () => clearTimeout(t);
   }, [emailConfirmedBanner]);
 
+  // Live visitor tracking for the staff dashboard (سندك-admin's "Live
+  // Visitors Now") — one row per browser session (cached in sessionStorage,
+  // so a reload doesn't start a new one), country/city read once from
+  // api/geo.js (a Vercel serverless function — every request to it already
+  // carries Vercel's own x-vercel-ip-country/-city headers, no third-party
+  // geo-IP lookup needed), then a heartbeat keeps last_seen_at fresh so the
+  // admin side can tell who's actually still here vs. gone. Best-effort
+  // throughout — any failure here must never affect the app itself.
+  useEffect(() => {
+    let sessionId;
+    try {
+      sessionId = sessionStorage.getItem('sndk_session_id');
+      if (!sessionId) {
+        sessionId = crypto.randomUUID();
+        sessionStorage.setItem('sndk_session_id', sessionId);
+      }
+    } catch { sessionId = crypto.randomUUID(); }
+
+    let geo = { country: null, city: null };
+    let cancelled = false;
+
+    const beat = () => {
+      supabase.from('site_visits').upsert({
+        session_id: sessionId,
+        profile_id: user?.id ?? null,
+        country: geo.country,
+        city: geo.city,
+        last_seen_at: new Date().toISOString(),
+      }, { onConflict: 'session_id' }).then(() => {});
+    };
+
+    fetch('/api/geo').then(r => r.json()).then(data => {
+      if (cancelled) return;
+      geo = data || geo;
+      beat();
+    }).catch(() => beat());
+
+    const interval = setInterval(beat, 30000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [user?.id]);
+
   // Staff-shared signing link — waits for the initial session check
   // (authChecked) so an already-logged-in customer never sees a login
   // prompt flash before their session restores.
