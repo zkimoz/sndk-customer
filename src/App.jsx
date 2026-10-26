@@ -2943,6 +2943,18 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, profile, onClose, on
             </button>
           )}
 
+          {/* Staff-generated official document — stays a payment receipt
+              until the request is delivered, then switches to a tax invoice
+              (see sndk-admin's generatePartOrderDoc). invoice_url wins once
+              set since it supersedes the receipt. */}
+          {(po.invoice_url || po.receipt_url) && (
+            <a href={po.invoice_url || po.receipt_url} target="_blank" rel="noreferrer"
+              className="w-full block text-center py-3 rounded-xl text-sm font-black transition-all active:scale-95 border-2"
+              style={{ borderColor:'#722F37', color:'#722F37' }}>
+              {po.invoice_url ? (isRtl ? '🧾 عرض الفاتورة الضريبية' : '🧾 View Tax Invoice') : (isRtl ? '🧾 عرض إيصال الدفع' : '🧾 View Payment Receipt')}
+            </a>
+          )}
+
           {needsApproval && (
             <div className="space-y-1.5">
               <button onClick={()=>allDecided && setSigOpen(true)} disabled={!allDecided}
@@ -5970,7 +5982,11 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                         </div>
                       )}
 
-                      {/* ── عرض السعر + موافقة ── */}
+                      {/* ── عرض السعر + موافقة + نقل بالساطحة + الدفع (أوامر الشغل
+                          العادية فقط — أمر الشغل الخاص بقطع الغيار فقط مفيش له
+                          orders/order_items أصلاً، السعر والدفع بتاعه ظاهر
+                          بالفعل فوق من linkedPO) ── */}
+                      {!jc.is_parts_only && (<>
                       {relOrd?.sent_to_customer ? (
                         <div className="p-4 space-y-3">
                           {/* Requested services + priority + approve/reject selection */}
@@ -6655,6 +6671,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                           <span className="text-sm font-bold">{isRtl ? 'جاري إعداد عرض السعر...' : 'Preparing quotation...'}</span>
                         </div>
                       )}
+                      </>)}
                       </>
                       )}
                     </div>
