@@ -7488,10 +7488,10 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                 onClick={() => inCart ? removeFromCart(sub.id) : addToCart(cat.id, sub.id, subName, catName)}
                 className="rounded-2xl p-5 flex flex-col items-center text-center gap-3 transition-all active:scale-95"
                 style={{ background:cc.bg, border:`2px solid ${inCart ? cc.fg : `${cc.fg}25`}` }}>
-                <div className="w-20 h-20 rounded-2xl flex items-center justify-center overflow-hidden" style={{ background:cc.ic }}>
+                <div className="w-full aspect-square rounded-2xl flex items-center justify-center overflow-hidden" style={{ background:cc.ic }}>
                   {sub.icon
-                    ? <img src={sub.icon} alt="" className="w-full h-full object-contain p-2.5"/>
-                    : <Sparkles size={36} style={{ color:cc.fg }}/>}
+                    ? <img src={sub.icon} alt="" className="w-full h-full object-contain p-1"/>
+                    : <Sparkles size={48} style={{ color:cc.fg }}/>}
                 </div>
                 <p className="font-bold text-base leading-snug" style={{ color:cc.txt }}>{subName}</p>
                 {inCart && (
