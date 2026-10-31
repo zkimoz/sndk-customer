@@ -8,7 +8,6 @@ import {
   Wrench, ArrowRight, Lock, LogOut, MapPin, Mail,
   ClipboardList, Package, ShoppingCart, Trash2, Upload, FileImage, Pencil, Check,
   Sun, Moon, Eye, EyeOff, PlayCircle, Wallet, AlertCircle, Download, HelpCircle, CreditCard,
-  Gem, SprayCan, Droplet, Waves, Armchair, Brush, CarFront, Wind, Shield,
 } from 'lucide-react';
 
 // Re-runs `onChange` (usually a view's own `load`) whenever any row in the
@@ -759,14 +758,6 @@ const DEFAULT_CAT_STYLES = [
   { icon:Wrench },
   { icon:Search },
 ];
-// Per-service card icon (e.g. "العناية بالسيارات"'s card-grid page) — same
-// curated key set سندك-admin's ServiceModal icon picker offers (SERVICE_ICONS
-// there), so every icon staff can choose is guaranteed to render here too.
-const SERVICE_ICON_MAP = {
-  sparkles: Sparkles, gem: Gem, 'spray-can': SprayCan, droplet: Droplet,
-  droplets: Droplets, waves: Waves, armchair: Armchair, brush: Brush,
-  shield: Shield, 'shield-check': ShieldCheck, 'car-front': CarFront, wind: Wind,
-};
 // ── Push Notifications ────────────────────────────────────────────────────
 const VAPID_PUBLIC_KEY = 'BI7jNwdDx9eYM2bVIWSytWhDiZcmYI_8HFYc4fqF97vbej-zxPIXfS0nP8mrjQJPzeGcO76tN26vBK8vvg3qPRE';
 function urlBase64ToUint8Array(b64) {
@@ -7488,15 +7479,16 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
           {subs.map((sub, i) => {
             const inCart = cart.some(x => x.id === sub.id);
             const subName = sub.name?.[lang] || sub.name?.ar || '';
-            const Icon = SERVICE_ICON_MAP[sub.icon] || Sparkles;
             const cc = CARD_BG_CYCLE[i % 2];
             return (
               <button key={sub.id}
                 onClick={() => inCart ? removeFromCart(sub.id) : addToCart(cat.id, sub.id, subName, catName)}
                 className="rounded-2xl p-4 flex flex-col items-center text-center gap-2.5 transition-all active:scale-95"
                 style={{ background:cc.bg, border:`2px solid ${inCart ? cc.fg : `${cc.fg}25`}` }}>
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background:cc.ic }}>
-                  <Icon size={22} style={{ color:cc.fg }}/>
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden" style={{ background:cc.ic }}>
+                  {sub.icon
+                    ? <img src={sub.icon} alt="" className="w-full h-full object-contain p-1.5"/>
+                    : <Sparkles size={22} style={{ color:cc.fg }}/>}
                 </div>
                 <p className="font-bold text-sm leading-snug" style={{ color:cc.txt }}>{subName}</p>
                 {inCart && (
