@@ -38,9 +38,10 @@ function useLiveTables(tables, onChange, enabled = true) {
 // play at all, alpha or not. Chrome/Firefox/Edge can't play HEVC in
 // <video> and fall through to the WebM/VP9 source correctly.
 // Replaces the old logo-animated.gif everywhere it appeared.
-function AnimatedLogo({ className, style }) {
+function AnimatedLogo({ className, style, onClick }) {
   return (
-    <video className={className} style={style} autoPlay loop muted playsInline disablePictureInPicture>
+    <video className={className} style={onClick ? { ...style, cursor:'pointer' } : style} onClick={onClick}
+      autoPlay loop muted playsInline disablePictureInPicture>
       <source src="/logo-alpha.mov" type="video/mp4; codecs=hvc1"/>
       <source src="/logo-alpha.webm" type="video/webm"/>
     </video>
@@ -1477,7 +1478,7 @@ export default function App() {
         <aside className="hidden md:flex md:flex-col md:w-72 md:flex-shrink-0 md:h-full"
           style={{ background:C.panel, borderInlineEnd:`1px solid ${C.border}` }}>
           <div className="flex items-center justify-center px-2 py-1" style={{ borderBottom:`1px solid ${C.border}` }}>
-            <AnimatedLogo style={{ width:'100%', height:'auto' }}/>
+            <AnimatedLogo style={{ width:'100%', height:'auto' }} onClick={goHome}/>
           </div>
           <nav className="flex-1 px-3 py-5 space-y-1">
             {[
@@ -1597,7 +1598,7 @@ export default function App() {
             <button onClick={()=>setMenuOpen(true)} className="p-2 rounded-lg transition-colors" style={{ color:C.gold }}>
               <Menu size={22}/>
             </button>
-            <AnimatedLogo style={{ height:112, width:'auto' }}/>
+            <AnimatedLogo style={{ height:112, width:'auto' }} onClick={goHome}/>
             <div className="flex items-center gap-1">
               <button onClick={toggleTheme} className="p-2 rounded-lg transition-colors" style={{ color:C.gold }}>
                 {theme==='dark' ? <Sun size={17}/> : <Moon size={17}/>}
@@ -1649,7 +1650,7 @@ export default function App() {
             {page==='services'&& (COMPLIANCE_MODE && !user
               ? <ComplianceServicesView isRtl={isRtl}/>
               : <ServicesView lang={lang} tr={tr} isRtl={isRtl} user={user} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} theme={theme} goParts={goParts} goRenewal={goRenewal} goCare={goCare}/>)}
-            {page==='care'    && <CarCareView lang={lang} isRtl={isRtl} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart}/>}
+            {page==='care'    && <CarCareView lang={lang} isRtl={isRtl} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} goHome={goHome}/>}
             {page==='renewal' && user && <RenewalFlowView key="renewal" lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories} timeSlots={timeSlots} serviceCategories={serviceCategories} allSubServices={allSubServices} goHome={goHome} goOrders={goOrders}/>}
             {page==='profile' && user && <ProfileView lang={lang} tr={tr} isRtl={isRtl} profile={profile} user={user} onBook={(car)=>bookFromProfile(car)} goServices={goServices} goOrders={goOrders} onProfileUpdated={()=>fetchProfile(user.id)} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories}/>}
             {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount} theme={theme} highlightJobNumber={deepLinkJobNumber} highlightRequestNumber={highlightRequestNumber}/>}
@@ -1778,7 +1779,7 @@ export default function App() {
           <div className="absolute inset-0" style={{ background:'rgba(0,0,0,0.65)', backdropFilter:'blur(4px)' }} onClick={()=>setMenuOpen(false)}/>
           <div className="relative w-72 h-full flex flex-col shadow-2xl" style={{ background:C.panel }}>
             <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom:`1px solid ${C.border}` }}>
-              <AnimatedLogo style={{ height:96, width:'auto' }}/>
+              <AnimatedLogo style={{ height:96, width:'auto' }} onClick={goHome}/>
               <button onClick={()=>setMenuOpen(false)} style={{ color:C.muted }}><X size={20}/></button>
             </div>
             <nav className="flex-1 p-3 space-y-1">
@@ -7451,7 +7452,7 @@ function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCat
 // write to, so the existing floating cart button/drawer and the rest of the
 // booking wizard work completely unchanged — this page only needs to toggle
 // cards in and out of that same cart.
-function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, addToCart, removeFromCart }) {
+function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, addToCart, removeFromCart, goHome }) {
   const loading = serviceCategories.length === 0;
   const cat = serviceCategories.find(c => CARE_CAT_NAMES.has(c.name?.ar) || CARE_CAT_NAMES.has(c.name?.en));
   const subs = (cat ? allSubServices.filter(s => s.category_id === cat.id) : [])
@@ -7461,9 +7462,11 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
 
   return (
     <div className="p-4 md:p-8 max-w-3xl md:mx-auto space-y-4">
-      <div className="mb-2">
+      <div className="flex items-center gap-3 mb-2">
+        <button onClick={goHome} className="p-2 rounded-full flex-shrink-0" style={{ background:C.panel, border:`1px solid ${C.border}` }}>
+          {isRtl ? <ArrowRight size={16} style={{ color:C.text }}/> : <ChevronLeft size={16} style={{ color:C.text }}/>}
+        </button>
         <h1 className={`text-2xl font-black ${C.selectCls}`}>{catName}</h1>
-        <div className="w-10 h-0.5 rounded-full mt-2" style={{ background:`${C.gold}70` }}/>
       </div>
 
       {loading ? (
@@ -7475,7 +7478,7 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
           {isRtl ? 'لا توجد خدمات متاحة حالياً' : 'No services available yet'}
         </p>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           {subs.map((sub, i) => {
             const inCart = cart.some(x => x.id === sub.id);
             const subName = sub.name?.[lang] || sub.name?.ar || '';
@@ -7483,14 +7486,14 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
             return (
               <button key={sub.id}
                 onClick={() => inCart ? removeFromCart(sub.id) : addToCart(cat.id, sub.id, subName, catName)}
-                className="rounded-2xl p-4 flex flex-col items-center text-center gap-2.5 transition-all active:scale-95"
+                className="rounded-2xl p-5 flex flex-col items-center text-center gap-3 transition-all active:scale-95"
                 style={{ background:cc.bg, border:`2px solid ${inCart ? cc.fg : `${cc.fg}25`}` }}>
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden" style={{ background:cc.ic }}>
+                <div className="w-20 h-20 rounded-2xl flex items-center justify-center overflow-hidden" style={{ background:cc.ic }}>
                   {sub.icon
-                    ? <img src={sub.icon} alt="" className="w-full h-full object-contain p-1.5"/>
-                    : <Sparkles size={22} style={{ color:cc.fg }}/>}
+                    ? <img src={sub.icon} alt="" className="w-full h-full object-contain p-2.5"/>
+                    : <Sparkles size={36} style={{ color:cc.fg }}/>}
                 </div>
-                <p className="font-bold text-sm leading-snug" style={{ color:cc.txt }}>{subName}</p>
+                <p className="font-bold text-base leading-snug" style={{ color:cc.txt }}>{subName}</p>
                 {inCart && (
                   <span className="text-[11px] font-black px-2 py-0.5 rounded-full" style={{ background:cc.fg, color:cc.bg }}>
                     {isRtl ? '✓ مُضافة' : '✓ Added'}
