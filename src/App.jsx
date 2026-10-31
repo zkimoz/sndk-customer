@@ -7523,6 +7523,7 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                     {opts.map(opt => {
                       const optId = `${sub.id}-${opt.id}`;
                       const optName = opt[lang === 'ar' ? 'name_ar' : 'name_en'] || opt.name_ar || '';
+                      const optPrice = Number(opt.sell_price || 0);
                       const optInCart = cart.some(x => x.id === optId);
                       return (
                         <button key={opt.id}
@@ -7532,7 +7533,14 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                             ? { background:C.gold, color:C.btnTxt }
                             : { background:C.input, border:`1px solid ${C.border}`, color:C.text }}>
                           <span className="font-semibold text-sm">{optName}</span>
-                          {optInCart && <Check size={16}/>}
+                          <span className="flex items-center gap-2 flex-shrink-0">
+                            {optPrice > 0 && (
+                              <span className="font-black text-sm" style={optInCart ? undefined : { color:C.gold }}>
+                                {optPrice.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}
+                              </span>
+                            )}
+                            {optInCart && <Check size={16}/>}
+                          </span>
                         </button>
                       );
                     })}
