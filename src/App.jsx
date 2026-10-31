@@ -8,6 +8,7 @@ import {
   Wrench, ArrowRight, Lock, LogOut, MapPin, Mail,
   ClipboardList, Package, ShoppingCart, Trash2, Upload, FileImage, Pencil, Check,
   Sun, Moon, Eye, EyeOff, PlayCircle, Wallet, AlertCircle, Download, HelpCircle, CreditCard,
+  Gem, SprayCan, Droplet, Waves, Armchair, Brush, CarFront, Wind, Shield,
 } from 'lucide-react';
 
 // Re-runs `onChange` (usually a view's own `load`) whenever any row in the
@@ -726,7 +727,7 @@ const CAR_BRANDS = [
 // ── Category style map (icon + colors) keyed by name ──────────────────
 const CAT_STYLE = {
   'صيانة دورية':        { icon:Cog },
-  'عناية بالسيارات':    { icon:Sparkles },
+  'العناية بالسيارات':  { icon:Sparkles },
   'توفير قطع غيار':     { icon:PackageSearch },
   'إصلاح وتشخيص أعطال':{ icon:Search },
   'إصلاح حوادث':        { icon:ShieldCheck },
@@ -745,7 +746,7 @@ const CAT_STYLE = {
 // plain icon for any category without one of these.
 const CAT_LOGO_IMG = {
   'صيانة دورية':'/periodic-service.png', 'Periodic Maintenance':'/periodic-service.png',
-  'عناية بالسيارات':'/car-care.png', 'Car Care':'/car-care.png',
+  'العناية بالسيارات':'/car-care.png', 'Car Care':'/car-care.png',
   'توفير قطع غيار':'/parts-logo.png', 'Spare Parts':'/parts-logo.png',
   'إصلاح وتشخيص أعطال':'/diagnosis.png', 'Fault Diagnosis':'/diagnosis.png',
   'إصلاح حوادث':'/accident.png', 'Collision Repair':'/accident.png',
@@ -758,6 +759,14 @@ const DEFAULT_CAT_STYLES = [
   { icon:Wrench },
   { icon:Search },
 ];
+// Per-service card icon (e.g. "العناية بالسيارات"'s card-grid page) — same
+// curated key set سندك-admin's ServiceModal icon picker offers (SERVICE_ICONS
+// there), so every icon staff can choose is guaranteed to render here too.
+const SERVICE_ICON_MAP = {
+  sparkles: Sparkles, gem: Gem, 'spray-can': SprayCan, droplet: Droplet,
+  droplets: Droplets, waves: Waves, armchair: Armchair, brush: Brush,
+  shield: Shield, 'shield-check': ShieldCheck, 'car-front': CarFront, wind: Wind,
+};
 // ── Push Notifications ────────────────────────────────────────────────────
 const VAPID_PUBLIC_KEY = 'BI7jNwdDx9eYM2bVIWSytWhDiZcmYI_8HFYc4fqF97vbej-zxPIXfS0nP8mrjQJPzeGcO76tN26vBK8vvg3qPRE';
 function urlBase64ToUint8Array(b64) {
@@ -794,13 +803,15 @@ const SPAN_CYCLE = [1, 2, 2, 1];
 // instead of silently looking bookable like the ones that actually work.
 const COMING_SOON_CAT_NAMES = new Set([
   'إصلاح حوادث', 'Collision Repair',
-  'عناية بالسيارات', 'Car Care',
   'إكسسوارات', 'Accessories',
 ]);
 // Car registration renewal is its own flow (RenewalFlowView) — authorization
 // letter + two signatures + a fixed fee — not a sub-services accordion, so
 // its tile/row routes straight into that instead of expanding, same way
 // spare parts does.
+// "العناية بالسيارات" is its own card-grid page (CarCareView) instead of the
+// generic accordion — same routing idea as parts/renewal above.
+const CARE_CAT_NAMES = new Set(['العناية بالسيارات', 'Car Care']);
 // Was a TEMPORARY flag during Skip Cash / Qatar Central Bank's payment-
 // gateway review, showing not-logged-in visitors a page describing only
 // the two licensed Commercial Registration activities instead of the
@@ -1435,6 +1446,7 @@ export default function App() {
 
   const goHome     = () => { setPage('home'); setStep(1); resetForm(); setMenuOpen(false); };
   const goServices = () => { setPage('services'); setExpandedService(null); setMenuOpen(false); };
+  const goCare     = () => { setPage('care'); setMenuOpen(false); };
   const goContact  = () => { setPage('contact'); setMenuOpen(false); };
   const goParts    = () => {
     if (!user) { setAuthModal('signin'); return; }
@@ -1642,10 +1654,11 @@ export default function App() {
           <main className="flex-1 overflow-y-auto pb-24 md:pb-8">
             {page==='home'    && (COMPLIANCE_MODE && !user
               ? <ComplianceLandingView isRtl={isRtl} setAuthModal={setAuthModal}/>
-              : <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements} goOrders={goOrders} goParts={goParts} goRenewal={goRenewal} pendingQuotCount={pendingQuotCount}/>)}
+              : <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements} goOrders={goOrders} goParts={goParts} goRenewal={goRenewal} goCare={goCare} pendingQuotCount={pendingQuotCount}/>)}
             {page==='services'&& (COMPLIANCE_MODE && !user
               ? <ComplianceServicesView isRtl={isRtl}/>
-              : <ServicesView lang={lang} tr={tr} isRtl={isRtl} user={user} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} theme={theme} goParts={goParts} goRenewal={goRenewal}/>)}
+              : <ServicesView lang={lang} tr={tr} isRtl={isRtl} user={user} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} theme={theme} goParts={goParts} goRenewal={goRenewal} goCare={goCare}/>)}
+            {page==='care'    && <CarCareView lang={lang} isRtl={isRtl} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart}/>}
             {page==='renewal' && user && <RenewalFlowView key="renewal" lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories} timeSlots={timeSlots} serviceCategories={serviceCategories} allSubServices={allSubServices} goHome={goHome} goOrders={goOrders}/>}
             {page==='profile' && user && <ProfileView lang={lang} tr={tr} isRtl={isRtl} profile={profile} user={user} onBook={(car)=>bookFromProfile(car)} goServices={goServices} goOrders={goOrders} onProfileUpdated={()=>fetchProfile(user.id)} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories}/>}
             {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount} theme={theme} highlightJobNumber={deepLinkJobNumber} highlightRequestNumber={highlightRequestNumber}/>}
@@ -7114,7 +7127,7 @@ function ComplianceServicesView({ isRtl }) {
   );
 }
 
-function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, serviceCategories, homeAnnouncements, user, goOrders, goParts, goRenewal, pendingQuotCount }) {
+function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, serviceCategories, homeAnnouncements, user, goOrders, goParts, goRenewal, goCare, pendingQuotCount }) {
   const cats = serviceCategories.map(enrichCat);
   const goToCat = (cat) => {
     // Only routes into the real parts flow once staff have turned off
@@ -7122,6 +7135,7 @@ function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, service
     // the other not-yet-live tiles (still visually shows the overlay).
     if (!cat.comingSoon && (PARTS_CAT_NAMES.has(cat.ar) || PARTS_CAT_NAMES.has(cat.en))) { goParts?.(); return; }
     if (RENEWAL_CAT_NAMES.has(cat.ar) || RENEWAL_CAT_NAMES.has(cat.en)) { goRenewal?.(); return; }
+    if (CARE_CAT_NAMES.has(cat.ar) || CARE_CAT_NAMES.has(cat.en)) { goCare?.(); return; }
     setFormData(p => ({ ...p, serviceKey: cat.id, serviceName: cat.ar }));
     goServices?.();
   };
@@ -7276,7 +7290,7 @@ function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, service
 }
 
 // ── SERVICES VIEW ──────────────────────────────────────────────────────
-function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCategories, allSubServices, cart, addToCart, removeFromCart, theme, goParts, goRenewal }) {
+function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCategories, allSubServices, cart, addToCart, removeFromCart, theme, goParts, goRenewal, goCare }) {
   const btnAccent = theme === 'light' ? '#8A1538' : C.gold;
   const loading = serviceCategories.length === 0;
   const [unsureOpenFor, setUnsureOpenFor] = useState(null); // category id whose "describe your fault" box is open
@@ -7324,9 +7338,11 @@ function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCat
           const isPartsCat = PARTS_CAT_NAMES.has(cat.name?.ar) || PARTS_CAT_NAMES.has(cat.name?.en);
           const isComingSoon = COMING_SOON_CAT_NAMES.has(cat.name?.ar) || COMING_SOON_CAT_NAMES.has(cat.name?.en);
           const isRenewalCat = RENEWAL_CAT_NAMES.has(cat.name?.ar) || RENEWAL_CAT_NAMES.has(cat.name?.en);
+          const isCareCat = CARE_CAT_NAMES.has(cat.name?.ar) || CARE_CAT_NAMES.has(cat.name?.en);
           const onRowClick = () => {
             if (isPartsCat && !isComingSoon) { goParts?.(); return; }
             if (isRenewalCat) { goRenewal?.(); return; }
+            if (isCareCat) { goCare?.(); return; }
             setExpanded(isOpen?null:cat.id);
           };
           return (
@@ -7352,7 +7368,7 @@ function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCat
                         </>}
                   </p>
                 </div>
-                <div className="transition-transform" style={{ transform:(isOpen&&!isPartsCat&&!isRenewalCat)?'rotate(90deg)':'', color:cc.sub }}>
+                <div className="transition-transform" style={{ transform:(isOpen&&!isPartsCat&&!isRenewalCat&&!isCareCat)?'rotate(90deg)':'', color:cc.sub }}>
                   {isRtl?<ChevronLeft size={18}/>:<ChevronRight size={18}/>}
                 </div>
               </button>
@@ -7434,6 +7450,65 @@ function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCat
         })}
       </div>
 
+    </div>
+  );
+}
+
+// ── "العناية بالسيارات" (Car Care) — a dedicated card-grid page instead of
+// the generic accordion (see CARE_CAT_NAMES), reusing the exact same shared
+// cart (addToCart/removeFromCart) the accordion's "Add" buttons already
+// write to, so the existing floating cart button/drawer and the rest of the
+// booking wizard work completely unchanged — this page only needs to toggle
+// cards in and out of that same cart.
+function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, addToCart, removeFromCart }) {
+  const loading = serviceCategories.length === 0;
+  const cat = serviceCategories.find(c => CARE_CAT_NAMES.has(c.name?.ar) || CARE_CAT_NAMES.has(c.name?.en));
+  const subs = (cat ? allSubServices.filter(s => s.category_id === cat.id) : [])
+    .filter(s => s.is_active !== false)
+    .sort((a, b) => (a.sort_order ?? 9999) - (b.sort_order ?? 9999));
+  const catName = cat?.name?.[lang] || cat?.name?.ar || '';
+
+  return (
+    <div className="p-4 md:p-8 max-w-3xl md:mx-auto space-y-4">
+      <div className="mb-2">
+        <h1 className={`text-2xl font-black ${C.selectCls}`}>{catName}</h1>
+        <div className="w-10 h-0.5 rounded-full mt-2" style={{ background:`${C.gold}70` }}/>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-12" style={{ color:C.gold }}>
+          <Loader2 size={24} className="animate-spin"/>
+        </div>
+      ) : subs.length === 0 ? (
+        <p className="py-12 text-center text-sm" style={{ color:C.muted }}>
+          {isRtl ? 'لا توجد خدمات متاحة حالياً' : 'No services available yet'}
+        </p>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {subs.map((sub, i) => {
+            const inCart = cart.some(x => x.id === sub.id);
+            const subName = sub.name?.[lang] || sub.name?.ar || '';
+            const Icon = SERVICE_ICON_MAP[sub.icon] || Sparkles;
+            const cc = CARD_BG_CYCLE[i % 2];
+            return (
+              <button key={sub.id}
+                onClick={() => inCart ? removeFromCart(sub.id) : addToCart(cat.id, sub.id, subName, catName)}
+                className="rounded-2xl p-4 flex flex-col items-center text-center gap-2.5 transition-all active:scale-95"
+                style={{ background:cc.bg, border:`2px solid ${inCart ? cc.fg : `${cc.fg}25`}` }}>
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background:cc.ic }}>
+                  <Icon size={22} style={{ color:cc.fg }}/>
+                </div>
+                <p className="font-bold text-sm leading-snug" style={{ color:cc.txt }}>{subName}</p>
+                {inCart && (
+                  <span className="text-[11px] font-black px-2 py-0.5 rounded-full" style={{ background:cc.fg, color:cc.bg }}>
+                    {isRtl ? '✓ مُضافة' : '✓ Added'}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
