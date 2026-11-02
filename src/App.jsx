@@ -1098,8 +1098,12 @@ export default function App() {
   // deepLinkJobNumber/highlightJobNumber already uses for job cards.
   const [publicShareToken, setPublicShareToken] = useState(null);
   const [highlightRequestNumber, setHighlightRequestNumber] = useState(null);
-  const addToCart    = (catId, subId, subName, catName) =>
-    setCart(p => p.find(x => x.id === subId) ? p : [...p, { id: subId, name: subName, catId, catName }]);
+  // price is only ever passed for a priced Car Care option (see
+  // CarCareView) — everything else (the normal accordion, etc.) keeps
+  // calling this with 4 args, so `price` stays undefined there and the cart
+  // item looks exactly like it always has.
+  const addToCart    = (catId, subId, subName, catName, price) =>
+    setCart(p => p.find(x => x.id === subId) ? p : [...p, { id: subId, name: subName, catId, catName, ...(price > 0 ? { price } : {}) }]);
   const removeFromCart = (subId) => setCart(p => p.filter(x => x.id !== subId));
   const clearCart = () => setCart([]);
   const [formData, setFormData] = useState({
@@ -7587,7 +7591,7 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                   const optInCart = cart.some(x => x.id === optId);
                   return (
                     <button key={opt.id}
-                      onClick={() => optInCart ? removeFromCart(optId) : addToCart(cat.id, optId, `${subName} — ${optName}`, catName)}
+                      onClick={() => optInCart ? removeFromCart(optId) : addToCart(cat.id, optId, `${subName} — ${optName}`, catName, optPrice)}
                       className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-start transition-all active:scale-[0.98]"
                       style={optInCart
                         ? { background:C.gold, color:C.btnTxt }
@@ -9942,7 +9946,7 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
           ...(registration_image_url_2 ? { registration_image_url_2 } : {}),
         }).eq('id', carId);
       }
-      const { error: apptErr } = await supabase.from('appointments').insert([{
+      const { data: newAppt, error: apptErr } = await supabase.from('appointments').insert([{
         profile_id: user.id, car_id: carId,
         appointment_date: formData.isQuoteOnly ? null : formData.date,
         appointment_time: formData.isQuoteOnly ? null : formData.timeKey,
@@ -9950,8 +9954,34 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
         service_type: serviceType,
         customer_notes: formData.notes, status: 'pending',
         carried_forward_service: formData.carriedForwardService || null,
-      }]);
+      }]).select('id').single();
       if (apptErr) throw apptErr;
+      // A priced Car Care option (see CarCareView/addToCart) already has a
+      // known, customer-facing price — pre-fill it as a real quotation line
+      // so staff see it ready instead of retyping the exact same thing when
+      // they open the job card. Best-effort: if this fails, staff just
+      // builds the quotation from scratch like they always used to — must
+      // never block or fail the booking itself, same as the notify call below.
+      const pricedItems = cart.filter(x => x.price > 0);
+      if (pricedItems.length > 0) {
+        try {
+          const { data: newOrder, error: orderErr } = await supabase.from('orders')
+            .insert({ appointment_id: newAppt.id }).select('id').single();
+          if (orderErr) throw orderErr;
+          const { error: itemsErr } = await supabase.from('order_items').insert(
+            pricedItems.map(it => ({
+              order_id: newOrder.id,
+              item_type: 'labor', // a bundled service price, not a physical part
+              item_name: { ar: it.name, en: it.name },
+              service_name: { ar: it.catName, en: it.catName },
+              sell_price: it.price, quantity: 1,
+            }))
+          );
+          if (itemsErr) throw itemsErr;
+          const totalLabor = pricedItems.reduce((s,x)=>s+Number(x.price||0),0);
+          await supabase.from('orders').update({ total_labor_price: totalLabor }).eq('id', newOrder.id);
+        } catch (e) { console.error('auto-quote item creation failed:', e); }
+      }
       const serviceLabel = cart.length > 0 ? cart.map(s => s.name).join(' · ') : (formData.serviceName || '');
       // Fire-and-forget — the booking itself must never hang or fail because a staff
       // notification is slow/broken. Still logged (not silently swallowed) so a
