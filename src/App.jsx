@@ -866,6 +866,10 @@ const PPF_ORIGINS = [
   { key:'german', ar:'ألماني', en:'German' },
   { key:'chinese', ar:'صيني', en:'Chinese' },
 ];
+// A fixed maroon for the PPF picker's selected state — the card's own
+// cc.fg flips to near-black on half the grid's cards (CARD_BG_CYCLE), which
+// read as a plain on/off toggle instead of a deliberate brand color.
+const PPF_ACCENT = '#722F37';
 // Was a TEMPORARY flag during Skip Cash / Qatar Central Bank's payment-
 // gateway review, showing not-logged-in visitors a page describing only
 // the two licensed Commercial Registration activities instead of the
@@ -7580,10 +7584,11 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
   // separate, unrelated single-pick for the film's origin.
   const [ppfFinish, setPpfFinish] = useState(null);
   const [ppfColor, setPpfColor] = useState(null);
+  const [ppfCustomColorText, setPpfCustomColorText] = useState(''); // free-text fallback if the palette doesn't have it
   const [ppfOrigin, setPpfOrigin] = useState(null);
   const resetCustomize = () => {
     setCustomizing(null); setCustomizeColors([]); setCustomizePhotos([]);
-    setPpfFinish(null); setPpfColor(null); setPpfOrigin(null);
+    setPpfFinish(null); setPpfColor(null); setPpfCustomColorText(''); setPpfOrigin(null);
   };
 
   const uploadDesignPhotos = async (fileList, optId) => {
@@ -7705,7 +7710,7 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                   // already worked before PPF existed.
                   const ppfNeedsColor = ppfFinish?.key === 'color' || ppfFinish?.key === 'matte_color';
                   const ppfPalette = ppfFinish?.key === 'color' ? PPF_COLORS : ppfFinish?.key === 'matte_color' ? PPF_MATTE_COLORS : null;
-                  const canConfirm = !isPpf || (ppfFinish && (!ppfNeedsColor || ppfColor) && ppfOrigin);
+                  const canConfirm = !isPpf || (ppfFinish && (!ppfNeedsColor || ppfColor || ppfCustomColorText.trim()) && ppfOrigin);
 
                   // Mid-pick: this option's own glass card swaps to the
                   // customize sub-view (colors/finish, if any, + photo
@@ -7748,10 +7753,10 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                                 const picked = ppfFinish?.key === f.key;
                                 return (
                                   <button key={f.key} type="button"
-                                    onClick={() => { setPpfFinish(f); setPpfColor(null); }}
+                                    onClick={() => { setPpfFinish(f); setPpfColor(null); setPpfCustomColorText(''); }}
                                     className="py-2 rounded-lg text-xs font-bold transition-all"
                                     style={picked
-                                      ? { background:cc.fg, color:cc.bg }
+                                      ? { background:PPF_ACCENT, color:'#fff' }
                                       : { background:'rgba(255,255,255,0.08)', color:cc.txt, border:`1px solid ${cc.fg}30` }}>
                                     {isRtl ? f.ar : f.en}
                                   </button>
@@ -7768,15 +7773,19 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                                 {ppfPalette.map(c => {
                                   const picked = ppfColor?.key === c.key;
                                   return (
-                                    <button key={c.key} type="button" onClick={() => setPpfColor(c)}
+                                    <button key={c.key} type="button" onClick={() => { setPpfColor(c); setPpfCustomColorText(''); }}
                                       className="flex flex-col items-center gap-1 p-1.5 rounded-lg transition-all"
-                                      style={{ background: picked ? `${cc.fg}25` : 'transparent', border: picked ? `1.5px solid ${cc.fg}` : '1.5px solid transparent' }}>
+                                      style={{ background: picked ? `${PPF_ACCENT}25` : 'transparent', border: picked ? `1.5px solid ${PPF_ACCENT}` : '1.5px solid transparent' }}>
                                       <span className="w-7 h-7 rounded-full" style={{ background:c.hex, border:'1px solid rgba(0,0,0,0.25)' }}/>
                                       <span className="text-[10px] font-semibold leading-tight" style={{ color:cc.txt }}>{isRtl ? c.ar : c.en}</span>
                                     </button>
                                   );
                                 })}
                               </div>
+                              <input value={ppfCustomColorText} onChange={e => { setPpfCustomColorText(e.target.value); if (e.target.value.trim()) setPpfColor(null); }}
+                                placeholder={isRtl ? 'اللون مش موجود؟ اكتبيه هنا' : "Color not listed? Type it here"}
+                                className="w-full mt-2 px-3 py-2 rounded-lg text-xs outline-none"
+                                style={{ background:'rgba(255,255,255,0.08)', border:`1px solid ${cc.fg}30`, color:cc.txt }}/>
                             </div>
                           )}
                           <div>
@@ -7790,7 +7799,7 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                                   <button key={o.key} type="button" onClick={() => setPpfOrigin(o)}
                                     className="py-2 rounded-lg text-xs font-bold transition-all"
                                     style={picked
-                                      ? { background:cc.fg, color:cc.bg }
+                                      ? { background:PPF_ACCENT, color:'#fff' }
                                       : { background:'rgba(255,255,255,0.08)', color:cc.txt, border:`1px solid ${cc.fg}30` }}>
                                     {isRtl ? o.ar : o.en}
                                   </button>
@@ -7800,6 +7809,7 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                           </div>
                         </div>
                       )}
+                      {!isPpf && (
                       <div>
                         <p className="text-[11px] font-bold mb-1.5" style={{ color:cc.sub }}>
                           {isRtl ? 'صور للتصميم المطلوب (اختياري)' : 'Design reference photos (optional)'}
@@ -7824,6 +7834,7 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                           </label>
                         </div>
                       </div>
+                      )}
                       <div className="flex items-center gap-2">
                         <button type="button" onClick={resetCustomize}
                           className="flex-1 py-2 rounded-lg text-sm font-bold" style={{ color:cc.txt, background:'rgba(255,255,255,0.08)' }}>
@@ -7835,8 +7846,11 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                             if (palette && customizeColors.length) {
                               extraLabel = { ar:customizeColors.map(c=>c.ar).join('، '), en:customizeColors.map(c=>c.en).join(', ') };
                             } else if (isPpf && ppfFinish) {
-                              const arParts = [ppfFinish.ar, ...(ppfColor?[ppfColor.ar]:[]), ...(ppfOrigin?[ppfOrigin.ar]:[])];
-                              const enParts = [ppfFinish.en, ...(ppfColor?[ppfColor.en]:[]), ...(ppfOrigin?[ppfOrigin.en]:[])];
+                              const typedColor = ppfCustomColorText.trim();
+                              const colorAr = typedColor || ppfColor?.ar;
+                              const colorEn = typedColor || ppfColor?.en;
+                              const arParts = [ppfFinish.ar, ...(colorAr?[colorAr]:[]), ...(ppfOrigin?[ppfOrigin.ar]:[])];
+                              const enParts = [ppfFinish.en, ...(colorEn?[colorEn]:[]), ...(ppfOrigin?[ppfOrigin.en]:[])];
                               extraLabel = { ar:arParts.join('، '), en:enParts.join(', ') };
                             }
                             addToCart(cat.id, optId, `${subName} — ${optName}`, catName, optPrice, { extraLabel, photoUrls:customizePhotos.map(p=>p.url) });
