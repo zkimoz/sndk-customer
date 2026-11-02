@@ -7710,6 +7710,14 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                   const ppfNeedsColor = ppfFinish?.key === 'color' || ppfFinish?.key === 'matte_color';
                   const ppfPalette = ppfFinish?.key === 'color' ? PPF_COLORS : ppfFinish?.key === 'matte_color' ? PPF_MATTE_COLORS : null;
                   const canConfirm = !isPpf || (ppfFinish && (!ppfNeedsColor || ppfColor || ppfCustomColorText.trim()) && ppfCarSize);
+                  // A PPF option's price depends on the finish×car-size cell
+                  // staff priced in سندك-admin — only known once both are
+                  // picked, unlike every other option's single flat price.
+                  const ppfPrice = isPpf && ppfFinish && ppfCarSize ? Number(opt.ppf_prices?.[ppfFinish.key]?.[ppfCarSize.key] || 0) : 0;
+                  // Before/outside the customize step, a PPF option has no
+                  // single price to show — once it's in the cart, show the
+                  // price that was actually locked in for that pick.
+                  const rowPrice = isPpf ? Number(cart.find(x => x.id === optId)?.price || 0) : optPrice;
 
                   // Mid-pick: this option's own glass card swaps to the
                   // customize sub-view (colors/finish, if any, + photo
@@ -7834,6 +7842,12 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                         </div>
                       </div>
                       )}
+                      {isPpf && ppfFinish && ppfCarSize && (
+                        <div className="flex items-center justify-between px-1">
+                          <span className="text-[11px] font-bold" style={{ color:cc.sub }}>{isRtl ? 'السعر' : 'Price'}</span>
+                          <span className="font-black text-sm" style={{ color:cc.fg }}>{ppfPrice.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
+                        </div>
+                      )}
                       <div className="flex items-center gap-2">
                         <button type="button" onClick={resetCustomize}
                           className="flex-1 py-2 rounded-lg text-sm font-bold" style={{ color:cc.txt, background:'rgba(255,255,255,0.08)' }}>
@@ -7852,7 +7866,7 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                               const enParts = [ppfFinish.en, ...(colorEn?[colorEn]:[]), ...(ppfCarSize?[ppfCarSize.en]:[])];
                               extraLabel = { ar:arParts.join('، '), en:enParts.join(', ') };
                             }
-                            addToCart(cat.id, optId, `${subName} — ${optName}`, catName, optPrice, { extraLabel, photoUrls:customizePhotos.map(p=>p.url) });
+                            addToCart(cat.id, optId, `${subName} — ${optName}`, catName, isPpf ? ppfPrice : optPrice, { extraLabel, photoUrls:customizePhotos.map(p=>p.url) });
                             resetCustomize();
                           }}
                           className="flex-1 py-2 rounded-lg text-sm font-black disabled:opacity-40"
@@ -7872,9 +7886,9 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                         : { background:'rgba(255,255,255,0.1)', backdropFilter:'blur(10px)', WebkitBackdropFilter:'blur(10px)', border:`1px solid ${cc.fg}30`, color:cc.txt }}>
                       <span className="font-semibold text-sm">{optName}</span>
                       <span className="flex items-center gap-2 flex-shrink-0">
-                        {optPrice > 0 && (
+                        {rowPrice > 0 && (
                           <span className="font-black text-sm" style={optInCart ? undefined : { color:cc.fg }}>
-                            {optPrice.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}
+                            {rowPrice.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}
                           </span>
                         )}
                         {optInCart && <Check size={16}/>}
