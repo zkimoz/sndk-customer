@@ -7567,7 +7567,7 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
           <div className="spotlight-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
             style={{ background:'rgba(0,0,0,0.6)', backdropFilter:'blur(6px)' }}
             onClick={() => setExpandedId(null)}>
-            <div ref={panelRef} className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-3xl p-5 space-y-4"
+            <div ref={panelRef} className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-3xl p-5 space-y-4"
               style={{ background:cc.bg }} onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between">
                 <span/>
@@ -7595,7 +7595,7 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                       className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-start transition-all active:scale-[0.98]"
                       style={optInCart
                         ? { background:C.gold, color:C.btnTxt }
-                        : { background:'rgba(255,255,255,0.5)', border:`1px solid ${cc.fg}30`, color:cc.txt }}>
+                        : { background:'rgba(255,255,255,0.1)', backdropFilter:'blur(10px)', WebkitBackdropFilter:'blur(10px)', border:`1px solid ${cc.fg}30`, color:cc.txt }}>
                       <span className="font-semibold text-sm">{optName}</span>
                       <span className="flex items-center gap-2 flex-shrink-0">
                         {optPrice > 0 && (
