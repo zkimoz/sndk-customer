@@ -7572,10 +7572,10 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                 </button>
               </div>
               <div className="flex flex-col items-center text-center gap-3">
-                <div className="w-36 h-36 rounded-2xl flex items-center justify-center overflow-hidden" style={{ background:cc.ic }}>
+                <div className="w-full aspect-square rounded-2xl flex items-center justify-center overflow-hidden" style={{ background:cc.ic }}>
                   {sub.icon
                     ? <img src={sub.icon} alt="" className="w-full h-full object-contain p-2"/>
-                    : <Sparkles size={56} style={{ color:cc.fg }}/>}
+                    : <Sparkles size={72} style={{ color:cc.fg }}/>}
                 </div>
                 <p className="font-black text-xl" style={{ color:cc.txt }}>{subName}</p>
               </div>
