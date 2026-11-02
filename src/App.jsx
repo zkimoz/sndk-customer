@@ -7489,68 +7489,96 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
             const inCart = cart.some(x => x.id === sub.id);
             const subName = sub.name?.[lang] || sub.name?.ar || '';
             const cc = CARD_BG_CYCLE[i % 2];
-            const isExpanded = expandedId === sub.id;
             const anyOptionSelected = hasOptions && opts.some(o => cart.some(x => x.id === `${sub.id}-${o.id}`));
             return (
-              <React.Fragment key={sub.id}>
-                <button
-                  onClick={() => hasOptions
-                    ? setExpandedId(isExpanded ? null : sub.id)
-                    : (inCart ? removeFromCart(sub.id) : addToCart(cat.id, sub.id, subName, catName))}
-                  className="rounded-2xl p-5 flex flex-col items-center text-center gap-3 transition-all active:scale-95"
-                  style={{ background:cc.bg, border:`2px solid ${(inCart || isExpanded) ? cc.fg : `${cc.fg}25`}` }}>
-                  <div className="w-full aspect-square rounded-2xl flex items-center justify-center overflow-hidden" style={{ background:cc.ic }}>
-                    {sub.icon
-                      ? <img src={sub.icon} alt="" className="w-full h-full object-contain p-1"/>
-                      : <Sparkles size={48} style={{ color:cc.fg }}/>}
-                  </div>
-                  <p className="font-bold text-base leading-snug" style={{ color:cc.txt }}>{subName}</p>
-                  {hasOptions ? (
-                    <span className="flex items-center gap-1 text-[11px] font-bold" style={{ color:cc.sub }}>
-                      {anyOptionSelected && (isRtl ? '✓ تم الاختيار · ' : '✓ Selected · ')}
-                      {isRtl ? 'اختر الخيار' : 'Choose an option'}
-                      <ChevronDown size={12} style={{ transform:isExpanded?'rotate(180deg)':'', transition:'transform 0.2s' }}/>
-                    </span>
-                  ) : inCart && (
-                    <span className="text-[11px] font-black px-2 py-0.5 rounded-full" style={{ background:cc.fg, color:cc.bg }}>
-                      {isRtl ? '✓ مُضافة' : '✓ Added'}
-                    </span>
-                  )}
-                </button>
-
-                {isExpanded && (
-                  <div className="rounded-2xl p-3 space-y-2" style={{ gridColumn:'1 / -1', background:C.panel, border:`1px solid ${C.border}` }}>
-                    {opts.map(opt => {
-                      const optId = `${sub.id}-${opt.id}`;
-                      const optName = opt[lang === 'ar' ? 'name_ar' : 'name_en'] || opt.name_ar || '';
-                      const optPrice = Number(opt.sell_price || 0);
-                      const optInCart = cart.some(x => x.id === optId);
-                      return (
-                        <button key={opt.id}
-                          onClick={() => optInCart ? removeFromCart(optId) : addToCart(cat.id, optId, `${subName} — ${optName}`, catName)}
-                          className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-start transition-all active:scale-[0.98]"
-                          style={optInCart
-                            ? { background:C.gold, color:C.btnTxt }
-                            : { background:C.input, border:`1px solid ${C.border}`, color:C.text }}>
-                          <span className="font-semibold text-sm">{optName}</span>
-                          <span className="flex items-center gap-2 flex-shrink-0">
-                            {optPrice > 0 && (
-                              <span className="font-black text-sm" style={optInCart ? undefined : { color:C.gold }}>
-                                {optPrice.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}
-                              </span>
-                            )}
-                            {optInCart && <Check size={16}/>}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+              <button key={sub.id}
+                onClick={() => hasOptions
+                  ? setExpandedId(sub.id)
+                  : (inCart ? removeFromCart(sub.id) : addToCart(cat.id, sub.id, subName, catName))}
+                className="rounded-2xl p-5 flex flex-col items-center text-center gap-3 transition-all active:scale-95"
+                style={{ background:cc.bg, border:`2px solid ${inCart ? cc.fg : `${cc.fg}25`}` }}>
+                <div className="w-full aspect-square rounded-2xl flex items-center justify-center overflow-hidden" style={{ background:cc.ic }}>
+                  {sub.icon
+                    ? <img src={sub.icon} alt="" className="w-full h-full object-contain p-1"/>
+                    : <Sparkles size={48} style={{ color:cc.fg }}/>}
+                </div>
+                <p className="font-bold text-base leading-snug" style={{ color:cc.txt }}>{subName}</p>
+                {hasOptions ? (
+                  <span className="flex items-center gap-1 text-[11px] font-bold" style={{ color:cc.sub }}>
+                    {anyOptionSelected && (isRtl ? '✓ تم الاختيار · ' : '✓ Selected · ')}
+                    {isRtl ? 'اختر الخيار' : 'Choose an option'}
+                  </span>
+                ) : inCart && (
+                  <span className="text-[11px] font-black px-2 py-0.5 rounded-full" style={{ background:cc.fg, color:cc.bg }}>
+                    {isRtl ? '✓ مُضافة' : '✓ Added'}
+                  </span>
                 )}
-              </React.Fragment>
+              </button>
             );
           })}
         </div>
       )}
+
+      {/* Tapped card pops up centered + enlarged over a blurred backdrop,
+          its options listed right underneath it — instead of dropping the
+          options in as another grid row (Karim's explicit ask: make the
+          tapped card itself the spotlight, not just a small panel below it). */}
+      {expandedId && (() => {
+        const sub = subs.find(s => s.id === expandedId);
+        if (!sub) return null;
+        const opts = sub.options || [];
+        const subName = sub.name?.[lang] || sub.name?.ar || '';
+        const cc = CARD_BG_CYCLE[subs.indexOf(sub) % 2];
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background:'rgba(0,0,0,0.6)', backdropFilter:'blur(6px)' }}
+            onClick={() => setExpandedId(null)}>
+            <div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-3xl p-5 space-y-4"
+              style={{ background:cc.bg }} onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <span/>
+                <button onClick={() => setExpandedId(null)} className="p-1.5 rounded-full" style={{ background:'rgba(0,0,0,0.12)' }}>
+                  <X size={16} style={{ color:cc.txt }}/>
+                </button>
+              </div>
+              <div className="flex flex-col items-center text-center gap-3">
+                <div className="w-36 h-36 rounded-2xl flex items-center justify-center overflow-hidden" style={{ background:cc.ic }}>
+                  {sub.icon
+                    ? <img src={sub.icon} alt="" className="w-full h-full object-contain p-2"/>
+                    : <Sparkles size={56} style={{ color:cc.fg }}/>}
+                </div>
+                <p className="font-black text-xl" style={{ color:cc.txt }}>{subName}</p>
+              </div>
+              <div className="space-y-2">
+                {opts.map(opt => {
+                  const optId = `${sub.id}-${opt.id}`;
+                  const optName = opt[lang === 'ar' ? 'name_ar' : 'name_en'] || opt.name_ar || '';
+                  const optPrice = Number(opt.sell_price || 0);
+                  const optInCart = cart.some(x => x.id === optId);
+                  return (
+                    <button key={opt.id}
+                      onClick={() => optInCart ? removeFromCart(optId) : addToCart(cat.id, optId, `${subName} — ${optName}`, catName)}
+                      className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-start transition-all active:scale-[0.98]"
+                      style={optInCart
+                        ? { background:C.gold, color:C.btnTxt }
+                        : { background:'rgba(255,255,255,0.5)', border:`1px solid ${cc.fg}30`, color:cc.txt }}>
+                      <span className="font-semibold text-sm">{optName}</span>
+                      <span className="flex items-center gap-2 flex-shrink-0">
+                        {optPrice > 0 && (
+                          <span className="font-black text-sm" style={optInCart ? undefined : { color:cc.fg }}>
+                            {optPrice.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}
+                          </span>
+                        )}
+                        {optInCart && <Check size={16}/>}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
