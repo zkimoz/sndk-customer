@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { supabase } from './supabaseClient';
 import { useJsApiLoader, GoogleMap, Marker, Polyline } from '@react-google-maps/api';
 import {
@@ -7463,6 +7463,35 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
   // with no options added yet (staff hasn't built any) just keeps the old
   // tap-straight-into-cart behavior instead of expanding to nothing.
   const [expandedId, setExpandedId] = useState(null);
+  // The tapped card's own on-screen rect at the moment of tap — lets the
+  // overlay grow out from exactly where that card was sitting in the grid
+  // (a FLIP transform: render the overlay at its real final size/position,
+  // then visually distort it with a translate+scale back to the origin
+  // card's rect, and transition that back to identity) instead of just
+  // appearing already centered.
+  const [originRect, setOriginRect] = useState(null);
+  const panelRef = useRef(null);
+  useLayoutEffect(() => {
+    if (!expandedId || !originRect || !panelRef.current) return;
+    const el = panelRef.current;
+    const target = el.getBoundingClientRect();
+    const dx = (originRect.left + originRect.width / 2) - (target.left + target.width / 2);
+    const dy = (originRect.top + originRect.height / 2) - (target.top + target.height / 2);
+    const sx = originRect.width / target.width;
+    const sy = originRect.height / target.height;
+    el.style.transition = 'none';
+    el.style.transform = `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
+    el.style.opacity = '0.5';
+    // Force the browser to apply the above before the next frame flips it —
+    // otherwise both style writes get batched into one and nothing animates.
+    el.getBoundingClientRect();
+    requestAnimationFrame(() => {
+      if (!panelRef.current) return;
+      panelRef.current.style.transition = 'transform 0.4s cubic-bezier(0.22,1,0.36,1), opacity 0.25s ease-out';
+      panelRef.current.style.transform = 'translate(0,0) scale(1,1)';
+      panelRef.current.style.opacity = '1';
+    });
+  }, [expandedId, originRect]);
 
   return (
     <div className="p-4 md:p-8 max-w-3xl md:mx-auto space-y-4">
@@ -7492,9 +7521,10 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
             const anyOptionSelected = hasOptions && opts.some(o => cart.some(x => x.id === `${sub.id}-${o.id}`));
             return (
               <button key={sub.id}
-                onClick={() => hasOptions
-                  ? setExpandedId(sub.id)
-                  : (inCart ? removeFromCart(sub.id) : addToCart(cat.id, sub.id, subName, catName))}
+                onClick={(e) => {
+                  if (hasOptions) { setOriginRect(e.currentTarget.getBoundingClientRect()); setExpandedId(sub.id); return; }
+                  inCart ? removeFromCart(sub.id) : addToCart(cat.id, sub.id, subName, catName);
+                }}
                 className="rounded-2xl p-5 flex flex-col items-center text-center gap-3 transition-all active:scale-95"
                 style={{ background:cc.bg, border:`2px solid ${inCart ? cc.fg : `${cc.fg}25`}` }}>
                 <div className="w-full aspect-square rounded-2xl flex items-center justify-center overflow-hidden" style={{ background:cc.ic }}>
@@ -7533,7 +7563,7 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
           <div className="spotlight-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
             style={{ background:'rgba(0,0,0,0.6)', backdropFilter:'blur(6px)' }}
             onClick={() => setExpandedId(null)}>
-            <div className="spotlight-card w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-3xl p-5 space-y-4"
+            <div ref={panelRef} className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-3xl p-5 space-y-4"
               style={{ background:cc.bg }} onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between">
                 <span/>
