@@ -19,6 +19,17 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .hide-scroll::-webkit-scrollbar { display: none; }
 .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
 
+/* Spotlight card pop-in (Car Care's expanded-options overlay) — the
+   backdrop fades in while the card itself grows out from slightly below
+   and smaller, settling into its full centered size. */
+@keyframes spotlightBackdropIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes spotlightCardIn {
+  from { opacity: 0; transform: scale(0.8) translateY(24px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.spotlight-backdrop { animation: spotlightBackdropIn 0.22s ease-out; }
+.spotlight-card { animation: spotlightCardIn 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
+
 /* Thin gold scrollbar */
 ::-webkit-scrollbar { width: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }

@@ -7530,10 +7530,10 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
         const subName = sub.name?.[lang] || sub.name?.ar || '';
         const cc = CARD_BG_CYCLE[subs.indexOf(sub) % 2];
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          <div className="spotlight-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
             style={{ background:'rgba(0,0,0,0.6)', backdropFilter:'blur(6px)' }}
             onClick={() => setExpandedId(null)}>
-            <div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-3xl p-5 space-y-4"
+            <div className="spotlight-card w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-3xl p-5 space-y-4"
               style={{ background:cc.bg }} onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between">
                 <span/>
