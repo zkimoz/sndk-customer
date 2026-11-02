@@ -827,6 +827,45 @@ const FABRIC_COLORS = [
   { key:'brown', hex:'#5c3a21', ar:'بني', en:'Brown' },
   { key:'cream', hex:'#f2e8d5', ar:'كريمي', en:'Cream' },
 ];
+// PPF (Paint Protection Film) options have their own two-step customization:
+// a finish (clear/matte-clear/colored/matte-colored), then — only for the
+// two colored finishes — a color from the matching gloss/matte palette, then
+// a separate, unrelated single-pick for the film's origin/brand country.
+const PPF_FINISHES = [
+  { key:'clear', ar:'شفاف', en:'Clear' },
+  { key:'matte_clear', ar:'شفاف مطفي', en:'Matte Clear' },
+  { key:'color', ar:'ألوان', en:'Colored' },
+  { key:'matte_color', ar:'ألوان مطفي', en:'Matte Colored' },
+];
+const PPF_COLORS = [
+  { key:'black', hex:'#0a0a0a', ar:'أسود', en:'Black' },
+  { key:'white', hex:'#f5f5f5', ar:'أبيض', en:'White' },
+  { key:'pearl-white', hex:'#f0ece0', ar:'أبيض لؤلؤي', en:'Pearl White' },
+  { key:'silver', hex:'#c0c0c0', ar:'فضي', en:'Silver' },
+  { key:'gunmetal', hex:'#4b4b4d', ar:'رمادي غانميتال', en:'Gunmetal Grey' },
+  { key:'red', hex:'#c21807', ar:'أحمر', en:'Red' },
+  { key:'navy', hex:'#1b2a4a', ar:'كحلي', en:'Navy Blue' },
+  { key:'blue', hex:'#1565c0', ar:'أزرق', en:'Blue' },
+  { key:'green', hex:'#1b5e20', ar:'أخضر', en:'Green' },
+  { key:'yellow', hex:'#f4d03f', ar:'أصفر', en:'Yellow' },
+  { key:'orange', hex:'#e67e22', ar:'برتقالي', en:'Orange' },
+  { key:'gold', hex:'#c9a227', ar:'ذهبي', en:'Gold' },
+];
+const PPF_MATTE_COLORS = [
+  { key:'matte-black', hex:'#1c1c1c', ar:'أسود مطفي', en:'Matte Black' },
+  { key:'matte-grey', hex:'#6e6e6e', ar:'رمادي مطفي', en:'Matte Grey' },
+  { key:'matte-white', hex:'#d9d9d4', ar:'أبيض مطفي', en:'Matte White' },
+  { key:'matte-blue', hex:'#35495e', ar:'أزرق مطفي', en:'Matte Blue' },
+  { key:'matte-red', hex:'#7a2e2e', ar:'أحمر مطفي', en:'Matte Red' },
+  { key:'matte-green', hex:'#3b5e42', ar:'أخضر مطفي', en:'Matte Green' },
+  { key:'matte-gunmetal', hex:'#3a3b3c', ar:'رمادي غانميتال مطفي', en:'Matte Gunmetal' },
+  { key:'matte-bronze', hex:'#6b4e2e', ar:'برونزي مطفي', en:'Matte Bronze' },
+];
+const PPF_ORIGINS = [
+  { key:'american', ar:'أمريكي', en:'American' },
+  { key:'german', ar:'ألماني', en:'German' },
+  { key:'chinese', ar:'صيني', en:'Chinese' },
+];
 // Was a TEMPORARY flag during Skip Cash / Qatar Central Bank's payment-
 // gateway review, showing not-logged-in visitors a page describing only
 // the two licensed Commercial Registration activities instead of the
@@ -1124,12 +1163,14 @@ export default function App() {
   // price/extra are only ever passed for a Car Care option (see CarCareView)
   // — everything else (the normal accordion, etc.) keeps calling this with
   // 4 args, so both stay undefined there and the cart item looks exactly
-  // like it always has. extra carries the customize-step's chosen colors
-  // and/or uploaded design-photo URLs, if any.
+  // like it always has. extra.extraLabel is a ready-to-display {ar,en}
+  // suffix (chosen colors, or a PPF finish/color/origin combo — whatever
+  // the customize step built it as) and extra.photoUrls is any uploaded
+  // design-photo URLs.
   const addToCart    = (catId, subId, subName, catName, price, extra) =>
     setCart(p => p.find(x => x.id === subId) ? p : [...p, { id: subId, name: subName, catId, catName,
       ...(price > 0 ? { price } : {}),
-      ...(extra?.colors?.length ? { colors: extra.colors } : {}),
+      ...(extra?.extraLabel ? { extraLabel: extra.extraLabel } : {}),
       ...(extra?.photoUrls?.length ? { photoUrls: extra.photoUrls } : {}),
     }]);
   const removeFromCart = (subId) => setCart(p => p.filter(x => x.id !== subId));
@@ -7531,10 +7572,19 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
   // resets it so a stale in-progress customization never leaks onto a
   // different option.
   const [customizing, setCustomizing] = useState(null); // `${sub.id}-${opt.id}` or null
-  const [customizeColors, setCustomizeColors] = useState([]);
+  const [customizeColors, setCustomizeColors] = useState([]); // leather/fabric: up to 2
   const [customizePhotos, setCustomizePhotos] = useState([]); // [{url}]
   const [uploadingDesign, setUploadingDesign] = useState(false);
-  const resetCustomize = () => { setCustomizing(null); setCustomizeColors([]); setCustomizePhotos([]); };
+  // PPF's own two-step pick: a finish, then (only for the two colored
+  // finishes) a single color from the matching gloss/matte palette, plus a
+  // separate, unrelated single-pick for the film's origin.
+  const [ppfFinish, setPpfFinish] = useState(null);
+  const [ppfColor, setPpfColor] = useState(null);
+  const [ppfOrigin, setPpfOrigin] = useState(null);
+  const resetCustomize = () => {
+    setCustomizing(null); setCustomizeColors([]); setCustomizePhotos([]);
+    setPpfFinish(null); setPpfColor(null); setPpfOrigin(null);
+  };
 
   const uploadDesignPhotos = async (fileList, optId) => {
     const files = Array.from(fileList || []);
@@ -7648,10 +7698,18 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                   const optInCart = cart.some(x => x.id === optId);
                   const colorType = opt.color_type || 'none';
                   const palette = colorType === 'leather' ? LEATHER_COLORS : colorType === 'fabric' ? FABRIC_COLORS : null;
+                  const isPpf = colorType === 'ppf';
+                  // PPF needs a finish + (if that finish is one of the two
+                  // colored ones) a color before it can be confirmed — the
+                  // leather/fabric colors stay optional, matching how they
+                  // already worked before PPF existed.
+                  const ppfNeedsColor = ppfFinish?.key === 'color' || ppfFinish?.key === 'matte_color';
+                  const ppfPalette = ppfFinish?.key === 'color' ? PPF_COLORS : ppfFinish?.key === 'matte_color' ? PPF_MATTE_COLORS : null;
+                  const canConfirm = !isPpf || (ppfFinish && (!ppfNeedsColor || ppfColor) && ppfOrigin);
 
                   // Mid-pick: this option's own glass card swaps to the
-                  // customize sub-view (colors, if any, + photo upload)
-                  // instead of the normal tap-to-add row.
+                  // customize sub-view (colors/finish, if any, + photo
+                  // upload) instead of the normal tap-to-add row.
                   if (customizing === optId) return (
                     <div key={opt.id} className="rounded-xl p-3 space-y-3"
                       style={{ background:'rgba(255,255,255,0.1)', backdropFilter:'blur(10px)', WebkitBackdropFilter:'blur(10px)', border:`1.5px solid ${cc.fg}50` }}>
@@ -7676,6 +7734,69 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                                 </button>
                               );
                             })}
+                          </div>
+                        </div>
+                      )}
+                      {isPpf && (
+                        <div className="space-y-3">
+                          <div>
+                            <p className="text-[11px] font-bold mb-1.5" style={{ color:cc.sub }}>
+                              {isRtl ? 'نوع التغطية' : 'Finish'}
+                            </p>
+                            <div className="grid grid-cols-2 gap-2">
+                              {PPF_FINISHES.map(f => {
+                                const picked = ppfFinish?.key === f.key;
+                                return (
+                                  <button key={f.key} type="button"
+                                    onClick={() => { setPpfFinish(f); setPpfColor(null); }}
+                                    className="py-2 rounded-lg text-xs font-bold transition-all"
+                                    style={picked
+                                      ? { background:cc.fg, color:cc.bg }
+                                      : { background:'rgba(255,255,255,0.08)', color:cc.txt, border:`1px solid ${cc.fg}30` }}>
+                                    {isRtl ? f.ar : f.en}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          {ppfPalette && (
+                            <div>
+                              <p className="text-[11px] font-bold mb-1.5" style={{ color:cc.sub }}>
+                                {isRtl ? 'اختر اللون' : 'Pick a color'}
+                              </p>
+                              <div className="grid grid-cols-4 gap-2">
+                                {ppfPalette.map(c => {
+                                  const picked = ppfColor?.key === c.key;
+                                  return (
+                                    <button key={c.key} type="button" onClick={() => setPpfColor(c)}
+                                      className="flex flex-col items-center gap-1 p-1.5 rounded-lg transition-all"
+                                      style={{ background: picked ? `${cc.fg}25` : 'transparent', border: picked ? `1.5px solid ${cc.fg}` : '1.5px solid transparent' }}>
+                                      <span className="w-7 h-7 rounded-full" style={{ background:c.hex, border:'1px solid rgba(0,0,0,0.25)' }}/>
+                                      <span className="text-[10px] font-semibold leading-tight" style={{ color:cc.txt }}>{isRtl ? c.ar : c.en}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-[11px] font-bold mb-1.5" style={{ color:cc.sub }}>
+                              {isRtl ? 'منشأ الفيلم' : 'Film Origin'}
+                            </p>
+                            <div className="grid grid-cols-3 gap-2">
+                              {PPF_ORIGINS.map(o => {
+                                const picked = ppfOrigin?.key === o.key;
+                                return (
+                                  <button key={o.key} type="button" onClick={() => setPpfOrigin(o)}
+                                    className="py-2 rounded-lg text-xs font-bold transition-all"
+                                    style={picked
+                                      ? { background:cc.fg, color:cc.bg }
+                                      : { background:'rgba(255,255,255,0.08)', color:cc.txt, border:`1px solid ${cc.fg}30` }}>
+                                    {isRtl ? o.ar : o.en}
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
                         </div>
                       )}
@@ -7708,12 +7829,21 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                           className="flex-1 py-2 rounded-lg text-sm font-bold" style={{ color:cc.txt, background:'rgba(255,255,255,0.08)' }}>
                           {isRtl ? 'إلغاء' : 'Cancel'}
                         </button>
-                        <button type="button"
+                        <button type="button" disabled={!canConfirm}
                           onClick={() => {
-                            addToCart(cat.id, optId, `${subName} — ${optName}`, catName, optPrice, { colors:customizeColors, photoUrls:customizePhotos.map(p=>p.url) });
+                            let extraLabel = null;
+                            if (palette && customizeColors.length) {
+                              extraLabel = { ar:customizeColors.map(c=>c.ar).join('، '), en:customizeColors.map(c=>c.en).join(', ') };
+                            } else if (isPpf && ppfFinish) {
+                              const arParts = [ppfFinish.ar, ...(ppfColor?[ppfColor.ar]:[]), ...(ppfOrigin?[ppfOrigin.ar]:[])];
+                              const enParts = [ppfFinish.en, ...(ppfColor?[ppfColor.en]:[]), ...(ppfOrigin?[ppfOrigin.en]:[])];
+                              extraLabel = { ar:arParts.join('، '), en:enParts.join(', ') };
+                            }
+                            addToCart(cat.id, optId, `${subName} — ${optName}`, catName, optPrice, { extraLabel, photoUrls:customizePhotos.map(p=>p.url) });
                             resetCustomize();
                           }}
-                          className="flex-1 py-2 rounded-lg text-sm font-black" style={{ background:C.gold, color:C.btnTxt }}>
+                          className="flex-1 py-2 rounded-lg text-sm font-black disabled:opacity-40"
+                          style={{ background:C.gold, color:C.btnTxt }}>
                           {isRtl ? 'تأكيد الاختيار' : 'Confirm'}
                         </button>
                       </div>
@@ -10101,16 +10231,17 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
           if (orderErr) throw orderErr;
           const { error: itemsErr } = await supabase.from('order_items').insert(
             pricedItems.map(it => {
-              // Chosen colors (leather/fabric upholstery options) get folded
-              // straight into the line's own name, same spirit as every
-              // other display name here being plain assembled text — staff
-              // then see everything on the one line they already look at.
-              const colorsAr = it.colors?.length ? ` — ${it.colors.map(c=>c.ar).join('، ')}` : '';
-              const colorsEn = it.colors?.length ? ` — ${it.colors.map(c=>c.en).join(', ')}` : '';
+              // Whatever the customize step picked (chosen colors, or a PPF
+              // finish/color/origin combo) gets folded straight into the
+              // line's own name, same spirit as every other display name
+              // here being plain assembled text — staff then see everything
+              // on the one line they already look at.
+              const suffixAr = it.extraLabel?.ar ? ` — ${it.extraLabel.ar}` : '';
+              const suffixEn = it.extraLabel?.en ? ` — ${it.extraLabel.en}` : '';
               return {
                 order_id: newOrder.id,
                 item_type: 'labor', // a bundled service price, not a physical part
-                item_name: { ar: `${it.name}${colorsAr}`, en: `${it.name}${colorsEn}` },
+                item_name: { ar: `${it.name}${suffixAr}`, en: `${it.name}${suffixEn}` },
                 service_name: { ar: it.catName, en: it.catName },
                 sell_price: it.price, quantity: 1,
                 design_photo_urls: it.photoUrls || [],
