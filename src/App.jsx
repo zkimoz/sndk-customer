@@ -804,6 +804,29 @@ const COMING_SOON_CAT_NAMES = new Set([
 // "العناية بالسيارات" is its own card-grid page (CarCareView) instead of the
 // generic accordion — same routing idea as parts/renewal above.
 const CARE_CAT_NAMES = new Set(['العناية بالسيارات', 'Car Care']);
+// Popular-only swatch lists for an upholstery option's color picker — keyed
+// off the option's own `color_type` (set in سندك-admin), not name-matching,
+// so this scales cleanly to any future leather/fabric option.
+const LEATHER_COLORS = [
+  { key:'black', hex:'#1a1a1a', ar:'أسود', en:'Black' },
+  { key:'brown', hex:'#5c3a21', ar:'بني', en:'Brown' },
+  { key:'dark-brown', hex:'#3b2314', ar:'بني غامق', en:'Dark Brown' },
+  { key:'tan', hex:'#c19a6b', ar:'بيج فاتح', en:'Tan' },
+  { key:'beige', hex:'#e8dcc8', ar:'بيج', en:'Beige' },
+  { key:'burgundy', hex:'#6d1b2e', ar:'عنابي', en:'Burgundy' },
+  { key:'grey', hex:'#808080', ar:'رمادي', en:'Grey' },
+  { key:'white', hex:'#f5f5f0', ar:'أبيض', en:'White' },
+];
+const FABRIC_COLORS = [
+  { key:'black', hex:'#1a1a1a', ar:'أسود', en:'Black' },
+  { key:'charcoal', hex:'#36454f', ar:'رمادي غامق', en:'Charcoal' },
+  { key:'grey', hex:'#9a9a9a', ar:'رمادي', en:'Grey' },
+  { key:'beige', hex:'#e3d5b8', ar:'بيج', en:'Beige' },
+  { key:'navy', hex:'#1b2a4a', ar:'كحلي', en:'Navy Blue' },
+  { key:'maroon', hex:'#6d1b2e', ar:'عنابي', en:'Maroon' },
+  { key:'brown', hex:'#5c3a21', ar:'بني', en:'Brown' },
+  { key:'cream', hex:'#f2e8d5', ar:'كريمي', en:'Cream' },
+];
 // Was a TEMPORARY flag during Skip Cash / Qatar Central Bank's payment-
 // gateway review, showing not-logged-in visitors a page describing only
 // the two licensed Commercial Registration activities instead of the
@@ -1098,12 +1121,17 @@ export default function App() {
   // deepLinkJobNumber/highlightJobNumber already uses for job cards.
   const [publicShareToken, setPublicShareToken] = useState(null);
   const [highlightRequestNumber, setHighlightRequestNumber] = useState(null);
-  // price is only ever passed for a priced Car Care option (see
-  // CarCareView) — everything else (the normal accordion, etc.) keeps
-  // calling this with 4 args, so `price` stays undefined there and the cart
-  // item looks exactly like it always has.
-  const addToCart    = (catId, subId, subName, catName, price) =>
-    setCart(p => p.find(x => x.id === subId) ? p : [...p, { id: subId, name: subName, catId, catName, ...(price > 0 ? { price } : {}) }]);
+  // price/extra are only ever passed for a Car Care option (see CarCareView)
+  // — everything else (the normal accordion, etc.) keeps calling this with
+  // 4 args, so both stay undefined there and the cart item looks exactly
+  // like it always has. extra carries the customize-step's chosen colors
+  // and/or uploaded design-photo URLs, if any.
+  const addToCart    = (catId, subId, subName, catName, price, extra) =>
+    setCart(p => p.find(x => x.id === subId) ? p : [...p, { id: subId, name: subName, catId, catName,
+      ...(price > 0 ? { price } : {}),
+      ...(extra?.colors?.length ? { colors: extra.colors } : {}),
+      ...(extra?.photoUrls?.length ? { photoUrls: extra.photoUrls } : {}),
+    }]);
   const removeFromCart = (subId) => setCart(p => p.filter(x => x.id !== subId));
   const clearCart = () => setCart([]);
   const [formData, setFormData] = useState({
@@ -7497,6 +7525,35 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
     });
   }, [expandedId, originRect]);
 
+  // Tapping an un-added option opens this small "customize" sub-step
+  // (photo upload + a color grid, if the option has one) instead of
+  // dropping it straight into the cart — closing/switching cards always
+  // resets it so a stale in-progress customization never leaks onto a
+  // different option.
+  const [customizing, setCustomizing] = useState(null); // `${sub.id}-${opt.id}` or null
+  const [customizeColors, setCustomizeColors] = useState([]);
+  const [customizePhotos, setCustomizePhotos] = useState([]); // [{url}]
+  const [uploadingDesign, setUploadingDesign] = useState(false);
+  const resetCustomize = () => { setCustomizing(null); setCustomizeColors([]); setCustomizePhotos([]); };
+
+  const uploadDesignPhotos = async (fileList, optId) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    setUploadingDesign(true);
+    const uploaded = [];
+    for (const file of files) {
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `${optId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('part-request-photos').upload(path, file, { contentType: file.type });
+      if (!upErr) {
+        const { data: { publicUrl } } = supabase.storage.from('part-request-photos').getPublicUrl(path);
+        uploaded.push({ url: publicUrl });
+      }
+    }
+    setCustomizePhotos(prev => [...prev, ...uploaded]);
+    setUploadingDesign(false);
+  };
+
   return (
     <div className="p-4 md:p-8 max-w-3xl md:mx-auto space-y-4">
       <div className="flex items-center gap-3 mb-2">
@@ -7526,7 +7583,7 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
             return (
               <button key={sub.id}
                 onClick={(e) => {
-                  if (hasOptions) { setOriginRect(e.currentTarget.getBoundingClientRect()); setExpandedId(sub.id); return; }
+                  if (hasOptions) { setOriginRect(e.currentTarget.getBoundingClientRect()); setExpandedId(sub.id); resetCustomize(); return; }
                   inCart ? removeFromCart(sub.id) : addToCart(cat.id, sub.id, subName, catName);
                 }}
                 className="rounded-2xl p-5 flex flex-col items-center text-center gap-3 transition-all active:scale-95"
@@ -7566,12 +7623,12 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
         return (
           <div className="spotlight-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
             style={{ background:'rgba(0,0,0,0.6)', backdropFilter:'blur(6px)' }}
-            onClick={() => setExpandedId(null)}>
+            onClick={() => { setExpandedId(null); resetCustomize(); }}>
             <div ref={panelRef} className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-3xl p-5 space-y-4"
               style={{ background:cc.bg }} onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between">
                 <span/>
-                <button onClick={() => setExpandedId(null)} className="p-1.5 rounded-full" style={{ background:'rgba(0,0,0,0.12)' }}>
+                <button onClick={() => { setExpandedId(null); resetCustomize(); }} className="p-1.5 rounded-full" style={{ background:'rgba(0,0,0,0.12)' }}>
                   <X size={16} style={{ color:cc.txt }}/>
                 </button>
               </div>
@@ -7589,9 +7646,83 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                   const optName = opt[lang === 'ar' ? 'name_ar' : 'name_en'] || opt.name_ar || '';
                   const optPrice = Number(opt.sell_price || 0);
                   const optInCart = cart.some(x => x.id === optId);
+                  const colorType = opt.color_type || 'none';
+                  const palette = colorType === 'leather' ? LEATHER_COLORS : colorType === 'fabric' ? FABRIC_COLORS : null;
+
+                  // Mid-pick: this option's own glass card swaps to the
+                  // customize sub-view (colors, if any, + photo upload)
+                  // instead of the normal tap-to-add row.
+                  if (customizing === optId) return (
+                    <div key={opt.id} className="rounded-xl p-3 space-y-3"
+                      style={{ background:'rgba(255,255,255,0.1)', backdropFilter:'blur(10px)', WebkitBackdropFilter:'blur(10px)', border:`1.5px solid ${cc.fg}50` }}>
+                      <p className="font-bold text-sm" style={{ color:cc.txt }}>{optName}</p>
+                      {palette && (
+                        <div>
+                          <p className="text-[11px] font-bold mb-1.5" style={{ color:cc.sub }}>
+                            {isRtl ? 'اختر لون أو لونين' : 'Pick 1 or 2 colors'}
+                          </p>
+                          <div className="grid grid-cols-4 gap-2">
+                            {palette.map(c => {
+                              const picked = customizeColors.some(k => k.key === c.key);
+                              return (
+                                <button key={c.key} type="button"
+                                  onClick={() => setCustomizeColors(prev => picked
+                                    ? prev.filter(k => k.key !== c.key)
+                                    : (prev.length >= 2 ? [...prev.slice(1), c] : [...prev, c]))}
+                                  className="flex flex-col items-center gap-1 p-1.5 rounded-lg transition-all"
+                                  style={{ background: picked ? `${cc.fg}25` : 'transparent', border: picked ? `1.5px solid ${cc.fg}` : '1.5px solid transparent' }}>
+                                  <span className="w-7 h-7 rounded-full" style={{ background:c.hex, border:'1px solid rgba(0,0,0,0.25)' }}/>
+                                  <span className="text-[10px] font-semibold leading-tight" style={{ color:cc.txt }}>{isRtl ? c.ar : c.en}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-[11px] font-bold mb-1.5" style={{ color:cc.sub }}>
+                          {isRtl ? 'صور للتصميم المطلوب (اختياري)' : 'Design reference photos (optional)'}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {customizePhotos.map((p, idx) => (
+                            <div key={idx} className="relative w-14 h-14 rounded-lg overflow-hidden flex-shrink-0">
+                              <img src={p.url} alt="" className="w-full h-full object-cover"/>
+                              <button type="button" onClick={() => setCustomizePhotos(prev => prev.filter((_, i) => i !== idx))}
+                                className="absolute top-0.5 right-0.5 p-0.5 rounded-full" style={{ background:'rgba(0,0,0,0.6)' }}>
+                                <X size={10} style={{ color:'#fff' }}/>
+                              </button>
+                            </div>
+                          ))}
+                          <label className="w-14 h-14 rounded-lg flex items-center justify-center flex-shrink-0 cursor-pointer"
+                            style={{ border:`1.5px dashed ${cc.fg}50` }}>
+                            {uploadingDesign
+                              ? <Loader2 size={16} className="animate-spin" style={{ color:cc.fg }}/>
+                              : <Upload size={16} style={{ color:cc.fg }}/>}
+                            <input type="file" accept="image/*" multiple className="hidden" disabled={uploadingDesign}
+                              onChange={e => { uploadDesignPhotos(e.target.files, optId); e.target.value = ''; }}/>
+                          </label>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={resetCustomize}
+                          className="flex-1 py-2 rounded-lg text-sm font-bold" style={{ color:cc.txt, background:'rgba(255,255,255,0.08)' }}>
+                          {isRtl ? 'إلغاء' : 'Cancel'}
+                        </button>
+                        <button type="button"
+                          onClick={() => {
+                            addToCart(cat.id, optId, `${subName} — ${optName}`, catName, optPrice, { colors:customizeColors, photoUrls:customizePhotos.map(p=>p.url) });
+                            resetCustomize();
+                          }}
+                          className="flex-1 py-2 rounded-lg text-sm font-black" style={{ background:C.gold, color:C.btnTxt }}>
+                          {isRtl ? 'تأكيد الاختيار' : 'Confirm'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+
                   return (
                     <button key={opt.id}
-                      onClick={() => optInCart ? removeFromCart(optId) : addToCart(cat.id, optId, `${subName} — ${optName}`, catName, optPrice)}
+                      onClick={() => optInCart ? removeFromCart(optId) : setCustomizing(optId)}
                       className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-start transition-all active:scale-[0.98]"
                       style={optInCart
                         ? { background:C.gold, color:C.btnTxt }
@@ -9969,13 +10100,22 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
             .insert({ appointment_id: newAppt.id }).select('id').single();
           if (orderErr) throw orderErr;
           const { error: itemsErr } = await supabase.from('order_items').insert(
-            pricedItems.map(it => ({
-              order_id: newOrder.id,
-              item_type: 'labor', // a bundled service price, not a physical part
-              item_name: { ar: it.name, en: it.name },
-              service_name: { ar: it.catName, en: it.catName },
-              sell_price: it.price, quantity: 1,
-            }))
+            pricedItems.map(it => {
+              // Chosen colors (leather/fabric upholstery options) get folded
+              // straight into the line's own name, same spirit as every
+              // other display name here being plain assembled text — staff
+              // then see everything on the one line they already look at.
+              const colorsAr = it.colors?.length ? ` — ${it.colors.map(c=>c.ar).join('، ')}` : '';
+              const colorsEn = it.colors?.length ? ` — ${it.colors.map(c=>c.en).join(', ')}` : '';
+              return {
+                order_id: newOrder.id,
+                item_type: 'labor', // a bundled service price, not a physical part
+                item_name: { ar: `${it.name}${colorsAr}`, en: `${it.name}${colorsEn}` },
+                service_name: { ar: it.catName, en: it.catName },
+                sell_price: it.price, quantity: 1,
+                design_photo_urls: it.photoUrls || [],
+              };
+            })
           );
           if (itemsErr) throw itemsErr;
           const totalLabor = pricedItems.reduce((s,x)=>s+Number(x.price||0),0);
