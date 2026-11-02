@@ -861,10 +861,9 @@ const PPF_MATTE_COLORS = [
   { key:'matte-gunmetal', hex:'#3a3b3c', ar:'رمادي غانميتال مطفي', en:'Matte Gunmetal' },
   { key:'matte-bronze', hex:'#6b4e2e', ar:'برونزي مطفي', en:'Matte Bronze' },
 ];
-const PPF_ORIGINS = [
-  { key:'american', ar:'أمريكي', en:'American' },
-  { key:'german', ar:'ألماني', en:'German' },
-  { key:'chinese', ar:'صيني', en:'Chinese' },
+const PPF_CAR_SIZES = [
+  { key:'sedan', ar:'سيدان', en:'Sedan' },
+  { key:'suv', ar:'سيارة كبيرة / دفع رباعي', en:'Large / SUV' },
 ];
 // A fixed maroon for the PPF picker's selected state — the card's own
 // cc.fg flips to near-black on half the grid's cards (CARD_BG_CYCLE), which
@@ -7581,14 +7580,14 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
   const [uploadingDesign, setUploadingDesign] = useState(false);
   // PPF's own two-step pick: a finish, then (only for the two colored
   // finishes) a single color from the matching gloss/matte palette, plus a
-  // separate, unrelated single-pick for the film's origin.
+  // separate, unrelated single-pick for the car's size.
   const [ppfFinish, setPpfFinish] = useState(null);
   const [ppfColor, setPpfColor] = useState(null);
   const [ppfCustomColorText, setPpfCustomColorText] = useState(''); // free-text fallback if the palette doesn't have it
-  const [ppfOrigin, setPpfOrigin] = useState(null);
+  const [ppfCarSize, setPpfCarSize] = useState(null);
   const resetCustomize = () => {
     setCustomizing(null); setCustomizeColors([]); setCustomizePhotos([]);
-    setPpfFinish(null); setPpfColor(null); setPpfCustomColorText(''); setPpfOrigin(null);
+    setPpfFinish(null); setPpfColor(null); setPpfCustomColorText(''); setPpfCarSize(null);
   };
 
   const uploadDesignPhotos = async (fileList, optId) => {
@@ -7710,7 +7709,7 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                   // already worked before PPF existed.
                   const ppfNeedsColor = ppfFinish?.key === 'color' || ppfFinish?.key === 'matte_color';
                   const ppfPalette = ppfFinish?.key === 'color' ? PPF_COLORS : ppfFinish?.key === 'matte_color' ? PPF_MATTE_COLORS : null;
-                  const canConfirm = !isPpf || (ppfFinish && (!ppfNeedsColor || ppfColor || ppfCustomColorText.trim()) && ppfOrigin);
+                  const canConfirm = !isPpf || (ppfFinish && (!ppfNeedsColor || ppfColor || ppfCustomColorText.trim()) && ppfCarSize);
 
                   // Mid-pick: this option's own glass card swaps to the
                   // customize sub-view (colors/finish, if any, + photo
@@ -7790,18 +7789,18 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                           )}
                           <div>
                             <p className="text-[11px] font-bold mb-1.5" style={{ color:cc.sub }}>
-                              {isRtl ? 'منشأ الفيلم' : 'Film Origin'}
+                              {isRtl ? 'نوع السيارة' : 'Car Type'}
                             </p>
-                            <div className="grid grid-cols-3 gap-2">
-                              {PPF_ORIGINS.map(o => {
-                                const picked = ppfOrigin?.key === o.key;
+                            <div className="grid grid-cols-2 gap-2">
+                              {PPF_CAR_SIZES.map(s => {
+                                const picked = ppfCarSize?.key === s.key;
                                 return (
-                                  <button key={o.key} type="button" onClick={() => setPpfOrigin(o)}
+                                  <button key={s.key} type="button" onClick={() => setPpfCarSize(s)}
                                     className="py-2 rounded-lg text-xs font-bold transition-all"
                                     style={picked
                                       ? { background:PPF_ACCENT, color:'#fff' }
                                       : { background:'rgba(255,255,255,0.08)', color:cc.txt, border:`1px solid ${cc.fg}30` }}>
-                                    {isRtl ? o.ar : o.en}
+                                    {isRtl ? s.ar : s.en}
                                   </button>
                                 );
                               })}
@@ -7849,8 +7848,8 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                               const typedColor = ppfCustomColorText.trim();
                               const colorAr = typedColor || ppfColor?.ar;
                               const colorEn = typedColor || ppfColor?.en;
-                              const arParts = [ppfFinish.ar, ...(colorAr?[colorAr]:[]), ...(ppfOrigin?[ppfOrigin.ar]:[])];
-                              const enParts = [ppfFinish.en, ...(colorEn?[colorEn]:[]), ...(ppfOrigin?[ppfOrigin.en]:[])];
+                              const arParts = [ppfFinish.ar, ...(colorAr?[colorAr]:[]), ...(ppfCarSize?[ppfCarSize.ar]:[])];
+                              const enParts = [ppfFinish.en, ...(colorEn?[colorEn]:[]), ...(ppfCarSize?[ppfCarSize.en]:[])];
                               extraLabel = { ar:arParts.join('، '), en:enParts.join(', ') };
                             }
                             addToCart(cat.id, optId, `${subName} — ${optName}`, catName, optPrice, { extraLabel, photoUrls:customizePhotos.map(p=>p.url) });
