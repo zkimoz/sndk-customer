@@ -9035,52 +9035,57 @@ function ServiceCard({ service, lang, span, onClick }) {
   const Icon = service.icon;
   return (
     <button onClick={onClick}
-      className={`group relative rounded-2xl overflow-hidden text-start h-36 md:h-48 transition-all duration-300 ${span===2?'col-span-2':'col-span-1'}`}
+      className={`group relative rounded-2xl text-start h-36 md:h-48 transition-all duration-300 hover:z-10 focus:z-10 ${span===2?'col-span-2':'col-span-1'}`}
       style={{ backgroundColor:service.bg, boxShadow:'0 4px 20px rgba(0,0,0,0.35)' }}>
-      <div className="absolute inset-0 pointer-events-none" style={{ background:'linear-gradient(160deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.25) 100%)' }}/>
-      <div className="absolute inset-0 rounded-2xl pointer-events-none" style={{ boxShadow:`inset 0 0 0 1px ${C.gold}25` }}/>
+      {/* Only this layer clips to the card's rounded corners — the logo
+          below sits outside it on purpose, so it's free to grow past the
+          card's edge on hover/press instead of being cut off. */}
+      <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+        <div className="absolute inset-0" style={{ background:'linear-gradient(160deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.25) 100%)' }}/>
+        <div className="absolute inset-0 rounded-2xl" style={{ boxShadow:`inset 0 0 0 1px ${C.gold}25` }}/>
+        {service.comingSoon && (
+          <div className="absolute inset-0 flex items-center justify-center" style={{ background:'rgba(0,0,0,0.55)' }}>
+            <span className="font-black text-white uppercase tracking-wide text-xl md:text-2xl drop-shadow-lg" style={{ textShadow:'0 2px 8px rgba(0,0,0,0.6)' }}>
+              {lang==='ar' ? 'قريباً' : 'Coming Soon'}
+            </span>
+          </div>
+        )}
+      </div>
       <div className="absolute top-0 start-0 p-3 md:p-4 z-10">
         <p className="font-black text-[15px] md:text-[18px] leading-snug text-white"
           style={{ textShadow: service.bg==='#FFCB74' ? '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' : 'none' }}>
           {service[lang]}
         </p>
       </div>
-      <div className="absolute bottom-0 end-0 -mb-3 -me-3 pointer-events-none">
+      <div className="absolute bottom-0 end-0 -mb-3 -me-3 pointer-events-none z-20 transition-transform duration-300 ease-out group-hover:scale-125 group-active:scale-125 group-hover:-translate-y-2 group-active:-translate-y-2 origin-bottom-right">
         {service.ar === 'صيانة دورية' ? (
           <img src="/periodic-service.png" alt="" aria-hidden="true"
-            width={span===2?170:140} className="md:!w-[190px]" style={{ opacity:0.6, transform:'rotate(-6deg)', filter:'drop-shadow(6px 10px 8px rgba(0,0,0,0.45))' }}/>
+            width={span===2?170:140} className="md:!w-[190px] rotate-[-6deg]" style={{ opacity:0.6, filter:'drop-shadow(6px 10px 8px rgba(0,0,0,0.45))' }}/>
         ) : (service.ar === 'توفير قطع غيار' || service.en === 'Spare Parts') ? (
           <img src="/parts-logo.png" alt="" aria-hidden="true"
-            width={span===2?170:140} className="md:!w-[190px]" style={{ opacity:0.6, transform:'rotate(-6deg)', filter:'drop-shadow(6px 10px 8px rgba(0,0,0,0.45))' }}/>
+            width={span===2?170:140} className="md:!w-[190px] rotate-[-6deg]" style={{ opacity:0.6, filter:'drop-shadow(6px 10px 8px rgba(0,0,0,0.45))' }}/>
         ) : (service.ar === 'إصلاح وتشخيص أعطال' || service.en === 'Fault Diagnosis') ? (
           <img src="/diagnosis.png" alt="" aria-hidden="true"
-            width={span===2?170:140} className="md:!w-[190px]" style={{ opacity:0.6, transform:'rotate(-6deg)', filter:'drop-shadow(6px 10px 8px rgba(0,0,0,0.45))' }}/>
+            width={span===2?170:140} className="md:!w-[190px] rotate-[-6deg]" style={{ opacity:0.6, filter:'drop-shadow(6px 10px 8px rgba(0,0,0,0.45))' }}/>
         ) : (service.ar === 'إصلاح حوادث' || service.en === 'Collision Repair') ? (
           <img src="/accident.png" alt="" aria-hidden="true"
-            width={span===2?170:140} className="md:!w-[190px]" style={{ opacity:0.6, transform:'rotate(-6deg)', filter:'drop-shadow(6px 10px 8px rgba(0,0,0,0.45))' }}/>
+            width={span===2?170:140} className="md:!w-[190px] rotate-[-6deg]" style={{ opacity:0.6, filter:'drop-shadow(6px 10px 8px rgba(0,0,0,0.45))' }}/>
         ) : (service.ar === 'تجديد استمارة السيارة' || service.en === 'Car Registration Renewal') ? (
           <img src="/istimara-qatar.png" alt="" aria-hidden="true"
-            width={span===2?170:140} className="md:!w-[190px]" style={{ opacity:0.6, transform:'rotate(-16deg)', filter:'drop-shadow(6px 10px 8px rgba(0,0,0,0.45))' }}/>
+            width={span===2?170:140} className="md:!w-[190px] rotate-[-16deg]" style={{ opacity:0.6, filter:'drop-shadow(6px 10px 8px rgba(0,0,0,0.45))' }}/>
         ) : (service.ar === 'عناية بالسيارات' || service.en === 'Car Care') ? (
           <img src="/car-care.png" alt="" aria-hidden="true"
             width={span===2?170:140} className="md:!w-[190px]" style={{ opacity:0.6, filter:'drop-shadow(6px 10px 8px rgba(0,0,0,0.45))' }}/>
         ) : (service.ar === 'إكسسوارات' || service.en === 'Accessories') ? (
           <img src="/car-accessories.png" alt="" aria-hidden="true"
-            width={span===2?170:140} className="md:!w-[190px]" style={{ opacity:0.6, transform:'rotate(-6deg)', filter:'drop-shadow(6px 10px 8px rgba(0,0,0,0.45))' }}/>
+            width={span===2?170:140} className="md:!w-[190px] rotate-[-6deg]" style={{ opacity:0.6, filter:'drop-shadow(6px 10px 8px rgba(0,0,0,0.45))' }}/>
         ) : (
           <Icon size={span===2?95:75} strokeWidth={1.1} className="md:!w-[110px] md:!h-[110px]" style={{ color:service.ic }}/>
         )}
       </div>
       {service.key==='periodic' && (
-        <div className="absolute bottom-3 start-3">
+        <div className="absolute bottom-3 start-3 z-10">
           <span className="text-[9px] font-black px-2 py-0.5 rounded-full tracking-widest uppercase" style={{ background:C.gold, color:C.btnTxt }}>VIP</span>
-        </div>
-      )}
-      {service.comingSoon && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ background:'rgba(0,0,0,0.55)' }}>
-          <span className="font-black text-white uppercase tracking-wide text-xl md:text-2xl drop-shadow-lg" style={{ textShadow:'0 2px 8px rgba(0,0,0,0.6)' }}>
-            {lang==='ar' ? 'قريباً' : 'Coming Soon'}
-          </span>
         </div>
       )}
     </button>
