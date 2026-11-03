@@ -7640,12 +7640,18 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                   if (hasOptions) { setOriginRect(e.currentTarget.getBoundingClientRect()); setExpandedId(sub.id); resetCustomize(); return; }
                   inCart ? removeFromCart(sub.id) : addToCart(cat.id, sub.id, subName, catName);
                 }}
-                className="rounded-2xl p-5 flex flex-col items-center text-center gap-3 transition-all active:scale-95"
+                className="group relative rounded-2xl p-5 flex flex-col items-center text-center gap-3 transition-all hover:z-10 focus:z-10"
                 style={{ background:cc.bg, border:`2px solid ${inCart ? cc.fg : `${cc.fg}25`}` }}>
-                <div className="w-full aspect-square rounded-2xl flex items-center justify-center overflow-hidden" style={{ background:cc.ic }}>
-                  {sub.icon
-                    ? <img src={sub.icon} alt="" className="w-full h-full object-contain p-1"/>
-                    : <Sparkles size={48} style={{ color:cc.fg }}/>}
+                {/* The card itself stays put — only the icon grows and
+                    spills past its own square (and the card's edge) on
+                    hover/press, same idea as the home screen's category
+                    logos. No overflow-hidden here on purpose. */}
+                <div className="w-full aspect-square rounded-2xl flex items-center justify-center" style={{ background:cc.ic }}>
+                  <div className="w-full h-full flex items-center justify-center transition-transform duration-300 ease-out group-hover:scale-125 group-active:scale-125">
+                    {sub.icon
+                      ? <img src={sub.icon} alt="" className="w-full h-full object-contain p-1"/>
+                      : <Sparkles size={48} style={{ color:cc.fg }}/>}
+                  </div>
                 </div>
                 <p className="font-bold text-base leading-snug" style={{ color:cc.txt }}>{subName}</p>
                 {hasOptions ? (
