@@ -9035,7 +9035,7 @@ function ServiceCard({ service, lang, span, onClick }) {
   const Icon = service.icon;
   return (
     <button onClick={onClick}
-      className={`group relative rounded-2xl overflow-hidden text-start h-36 md:h-48 transition-all duration-300 hover:scale-[1.03] active:scale-[0.97] ${span===2?'col-span-2':'col-span-1'}`}
+      className={`group relative rounded-2xl overflow-hidden text-start h-36 md:h-48 transition-all duration-300 ${span===2?'col-span-2':'col-span-1'}`}
       style={{ backgroundColor:service.bg, boxShadow:'0 4px 20px rgba(0,0,0,0.35)' }}>
       <div className="absolute inset-0 pointer-events-none" style={{ background:'linear-gradient(160deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.25) 100%)' }}/>
       <div className="absolute inset-0 rounded-2xl pointer-events-none" style={{ boxShadow:`inset 0 0 0 1px ${C.gold}25` }}/>
