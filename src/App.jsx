@@ -9057,9 +9057,12 @@ function ServiceCard({ service, lang, span, onClick }) {
           </div>
         )}
       </div>
-      <div className="absolute top-0 start-0 p-3 md:p-4 z-10">
+      {/* Above the logo (z-20) on purpose — the title must stay the
+          clearest thing on the card no matter how busy the artwork behind
+          it is, at rest or mid pop-out. */}
+      <div className="absolute top-0 start-0 end-0 p-3 md:p-4 z-30 pointer-events-none" style={{ background:'linear-gradient(180deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.15) 60%, transparent 100%)' }}>
         <p className="font-black text-[15px] md:text-[18px] leading-snug text-white"
-          style={{ textShadow: service.bg==='#FFCB74' ? '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' : 'none' }}>
+          style={{ textShadow: service.bg==='#FFCB74' ? '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' : '0 1px 3px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,0.75)' }}>
           {service[lang]}
         </p>
       </div>
