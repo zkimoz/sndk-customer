@@ -751,7 +751,7 @@ const CAT_LOGO_IMG = {
   'إصلاح وتشخيص أعطال':'/diagnosis.png', 'Fault Diagnosis':'/diagnosis.png',
   'إصلاح حوادث':'/accident.png', 'Collision Repair':'/accident.png',
   'إكسسوارات':'/car-accessories.png', 'Accessories':'/car-accessories.png',
-  'تجديد استمارة السيارة':'/istimara-qatar.jpg', 'Car Registration Renewal':'/istimara-qatar.jpg',
+  'تجديد استمارة السيارة':'/istimara-qatar.png', 'Car Registration Renewal':'/istimara-qatar.png',
 };
 const DEFAULT_CAT_STYLES = [
   { icon:Cog },
@@ -9059,7 +9059,7 @@ function ServiceCard({ service, lang, span, onClick }) {
           <img src="/accident.png" alt="" aria-hidden="true"
             width={span===2?170:140} className="md:!w-[190px]" style={{ opacity:0.6, transform:'rotate(-6deg)', filter:'drop-shadow(6px 10px 8px rgba(0,0,0,0.45))' }}/>
         ) : (service.ar === 'تجديد استمارة السيارة' || service.en === 'Car Registration Renewal') ? (
-          <img src="/istimara-qatar.jpg" alt="" aria-hidden="true"
+          <img src="/istimara-qatar.png" alt="" aria-hidden="true"
             width={span===2?170:140} className="md:!w-[190px]" style={{ opacity:0.6, transform:'rotate(-16deg)', filter:'drop-shadow(6px 10px 8px rgba(0,0,0,0.45))' }}/>
         ) : (service.ar === 'عناية بالسيارات' || service.en === 'Car Care') ? (
           <img src="/car-care.png" alt="" aria-hidden="true"
