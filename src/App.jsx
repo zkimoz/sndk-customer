@@ -7727,10 +7727,10 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                 style={{ background:ucc.bg, border:`2px dashed ${unsureInCart ? ucc.fg : `${ucc.fg}40`}` }}>
                 <div className="w-full aspect-square rounded-2xl flex items-center justify-center" style={{ background:ucc.ic }}>
                   <div className="w-full h-full flex items-center justify-center transition-transform duration-300 ease-out group-hover:scale-125 group-active:scale-125">
-                    <HelpCircle size={48} style={{ color:ucc.fg }}/>
+                    <img src="/not-sure.png" alt="" className="w-full h-full object-contain p-1"/>
                   </div>
                 </div>
-                <p className="font-bold text-base leading-snug" style={{ color:ucc.txt }}>{isRtl ? 'مش متأكد؟' : 'Not sure?'}</p>
+                <p className="font-bold text-base leading-snug" style={{ color:ucc.txt }}>{isRtl ? 'لست متأكد' : 'Not sure'}</p>
                 {unsureInCart ? (
                   <span className="text-[11px] font-black px-2 py-0.5 rounded-full" style={{ background:ucc.fg, color:ucc.bg }}>
                     {isRtl ? '✓ تم الإرسال' : '✓ Sent'}
@@ -7767,7 +7767,7 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                 </div>
                 <div className="flex flex-col items-center text-center gap-3">
                   <div className="w-full aspect-square rounded-2xl flex items-center justify-center overflow-hidden" style={{ background:ucc.ic }}>
-                    <HelpCircle size={72} style={{ color:ucc.fg }}/>
+                    <img src="/not-sure.png" alt="" className="w-full h-full object-contain p-2"/>
                   </div>
                   <p className="font-black text-xl" style={{ color:ucc.txt }}>{isRtl ? 'مش متأكد من الخدمة المطلوبة؟' : 'Not sure which service you need?'}</p>
                   <p className="text-sm" style={{ color:ucc.sub }}>
