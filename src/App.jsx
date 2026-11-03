@@ -804,6 +804,12 @@ const COMING_SOON_CAT_NAMES = new Set([
 // "العناية بالسيارات" is its own card-grid page (CarCareView) instead of the
 // generic accordion — same routing idea as parts/renewal above.
 const CARE_CAT_NAMES = new Set(['العناية بالسيارات', 'Car Care']);
+// "صيانة دورية" and "إصلاح وتشخيص أعطال" also get their own card-grid page
+// (reusing CarCareView itself, generalized with catNames/showUnsureCard
+// props) instead of falling into the generic accordion — same routing idea
+// as Car Care above.
+const PERIODIC_CAT_NAMES = new Set(['صيانة دورية', 'Periodic Maintenance']);
+const DIAGNOSIS_CAT_NAMES = new Set(['إصلاح وتشخيص أعطال', 'Fault Diagnosis']);
 // Popular-only swatch lists for an upholstery option's color picker — keyed
 // off the option's own `color_type` (set in سندك-admin), not name-matching,
 // so this scales cleanly to any future leather/fabric option.
@@ -869,6 +875,10 @@ const PPF_CAR_SIZES = [
 // cc.fg flips to near-black on half the grid's cards (CARD_BG_CYCLE), which
 // read as a plain on/off toggle instead of a deliberate brand color.
 const PPF_ACCENT = '#722F37';
+// A unique-enough storage path for a customer-uploaded photo — pulled out
+// to module scope so components calling it don't read as directly calling
+// Date.now()/Math.random() from inside their own render path.
+const randomUploadPath = (prefix, ext) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 // Was a TEMPORARY flag during Skip Cash / Qatar Central Bank's payment-
 // gateway review, showing not-logged-in visitors a page describing only
 // the two licensed Commercial Registration activities instead of the
@@ -1515,6 +1525,8 @@ export default function App() {
   const goHome     = () => { setPage('home'); setStep(1); resetForm(); setMenuOpen(false); };
   const goServices = () => { setPage('services'); setExpandedService(null); setMenuOpen(false); };
   const goCare     = () => { setPage('care'); setMenuOpen(false); };
+  const goPeriodic  = () => { setPage('periodic'); setMenuOpen(false); };
+  const goDiagnosis = () => { setPage('diagnosis'); setMenuOpen(false); };
   const goContact  = () => { setPage('contact'); setMenuOpen(false); };
   const goParts    = () => {
     if (!user) { setAuthModal('signin'); return; }
@@ -1722,11 +1734,13 @@ export default function App() {
           <main className="flex-1 overflow-y-auto pb-24 md:pb-8">
             {page==='home'    && (COMPLIANCE_MODE && !user
               ? <ComplianceLandingView isRtl={isRtl} setAuthModal={setAuthModal}/>
-              : <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements} goOrders={goOrders} goParts={goParts} goRenewal={goRenewal} goCare={goCare} pendingQuotCount={pendingQuotCount}/>)}
+              : <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements} goOrders={goOrders} goParts={goParts} goRenewal={goRenewal} goCare={goCare} goPeriodic={goPeriodic} goDiagnosis={goDiagnosis} pendingQuotCount={pendingQuotCount}/>)}
             {page==='services'&& (COMPLIANCE_MODE && !user
               ? <ComplianceServicesView isRtl={isRtl}/>
-              : <ServicesView lang={lang} tr={tr} isRtl={isRtl} user={user} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} theme={theme} goParts={goParts} goRenewal={goRenewal} goCare={goCare}/>)}
+              : <ServicesView lang={lang} tr={tr} isRtl={isRtl} user={user} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} theme={theme} goParts={goParts} goRenewal={goRenewal} goCare={goCare} goPeriodic={goPeriodic} goDiagnosis={goDiagnosis}/>)}
             {page==='care'    && <CarCareView lang={lang} isRtl={isRtl} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} goHome={goHome}/>}
+            {page==='periodic'  && <CarCareView lang={lang} isRtl={isRtl} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} goHome={goHome} catNames={PERIODIC_CAT_NAMES} showUnsureCard/>}
+            {page==='diagnosis' && <CarCareView lang={lang} isRtl={isRtl} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} goHome={goHome} catNames={DIAGNOSIS_CAT_NAMES} showUnsureCard/>}
             {page==='renewal' && user && <RenewalFlowView key="renewal" lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories} timeSlots={timeSlots} serviceCategories={serviceCategories} allSubServices={allSubServices} goHome={goHome} goOrders={goOrders}/>}
             {page==='profile' && user && <ProfileView lang={lang} tr={tr} isRtl={isRtl} profile={profile} user={user} onBook={(car)=>bookFromProfile(car)} goServices={goServices} goOrders={goOrders} onProfileUpdated={()=>fetchProfile(user.id)} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories}/>}
             {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount} theme={theme} highlightJobNumber={deepLinkJobNumber} highlightRequestNumber={highlightRequestNumber}/>}
@@ -7195,7 +7209,7 @@ function ComplianceServicesView({ isRtl }) {
   );
 }
 
-function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, serviceCategories, homeAnnouncements, user, goOrders, goParts, goRenewal, goCare, pendingQuotCount }) {
+function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, serviceCategories, homeAnnouncements, user, goOrders, goParts, goRenewal, goCare, goPeriodic, goDiagnosis, pendingQuotCount }) {
   const cats = serviceCategories.map(enrichCat);
   const goToCat = (cat) => {
     // Only routes into the real parts flow once staff have turned off
@@ -7204,6 +7218,8 @@ function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, service
     if (!cat.comingSoon && (PARTS_CAT_NAMES.has(cat.ar) || PARTS_CAT_NAMES.has(cat.en))) { goParts?.(); return; }
     if (RENEWAL_CAT_NAMES.has(cat.ar) || RENEWAL_CAT_NAMES.has(cat.en)) { goRenewal?.(); return; }
     if (CARE_CAT_NAMES.has(cat.ar) || CARE_CAT_NAMES.has(cat.en)) { goCare?.(); return; }
+    if (PERIODIC_CAT_NAMES.has(cat.ar) || PERIODIC_CAT_NAMES.has(cat.en)) { goPeriodic?.(); return; }
+    if (DIAGNOSIS_CAT_NAMES.has(cat.ar) || DIAGNOSIS_CAT_NAMES.has(cat.en)) { goDiagnosis?.(); return; }
     setFormData(p => ({ ...p, serviceKey: cat.id, serviceName: cat.ar }));
     goServices?.();
   };
@@ -7358,7 +7374,7 @@ function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, service
 }
 
 // ── SERVICES VIEW ──────────────────────────────────────────────────────
-function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCategories, allSubServices, cart, addToCart, removeFromCart, theme, goParts, goRenewal, goCare }) {
+function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCategories, allSubServices, cart, addToCart, removeFromCart, theme, goParts, goRenewal, goCare, goPeriodic, goDiagnosis }) {
   const btnAccent = theme === 'light' ? '#8A1538' : C.gold;
   const loading = serviceCategories.length === 0;
   const [unsureOpenFor, setUnsureOpenFor] = useState(null); // category id whose "describe your fault" box is open
@@ -7407,10 +7423,14 @@ function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCat
           const isComingSoon = COMING_SOON_CAT_NAMES.has(cat.name?.ar) || COMING_SOON_CAT_NAMES.has(cat.name?.en);
           const isRenewalCat = RENEWAL_CAT_NAMES.has(cat.name?.ar) || RENEWAL_CAT_NAMES.has(cat.name?.en);
           const isCareCat = CARE_CAT_NAMES.has(cat.name?.ar) || CARE_CAT_NAMES.has(cat.name?.en);
+          const isPeriodicCat = PERIODIC_CAT_NAMES.has(cat.name?.ar) || PERIODIC_CAT_NAMES.has(cat.name?.en);
+          const isDiagnosisCat = DIAGNOSIS_CAT_NAMES.has(cat.name?.ar) || DIAGNOSIS_CAT_NAMES.has(cat.name?.en);
           const onRowClick = () => {
             if (isPartsCat && !isComingSoon) { goParts?.(); return; }
             if (isRenewalCat) { goRenewal?.(); return; }
             if (isCareCat) { goCare?.(); return; }
+            if (isPeriodicCat) { goPeriodic?.(); return; }
+            if (isDiagnosisCat) { goDiagnosis?.(); return; }
             setExpanded(isOpen?null:cat.id);
           };
           return (
@@ -7528,9 +7548,9 @@ function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCat
 // write to, so the existing floating cart button/drawer and the rest of the
 // booking wizard work completely unchanged — this page only needs to toggle
 // cards in and out of that same cart.
-function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, addToCart, removeFromCart, goHome }) {
+function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, addToCart, removeFromCart, goHome, catNames = CARE_CAT_NAMES, showUnsureCard = false }) {
   const loading = serviceCategories.length === 0;
-  const cat = serviceCategories.find(c => CARE_CAT_NAMES.has(c.name?.ar) || CARE_CAT_NAMES.has(c.name?.en));
+  const cat = serviceCategories.find(c => catNames.has(c.name?.ar) || catNames.has(c.name?.en));
   const subs = (cat ? allSubServices.filter(s => s.category_id === cat.id) : [])
     .filter(s => s.is_active !== false)
     .sort((a, b) => (a.sort_order ?? 9999) - (b.sort_order ?? 9999));
@@ -7585,9 +7605,35 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
   const [ppfColor, setPpfColor] = useState(null);
   const [ppfCustomColorText, setPpfCustomColorText] = useState(''); // free-text fallback if the palette doesn't have it
   const [ppfCarSize, setPpfCarSize] = useState(null);
+  // The "مش متأكد؟" card's own tiny form (description + optional photos) —
+  // only rendered when showUnsureCard is on. Uses the same expandedId/
+  // originRect/panelRef spotlight mechanism as a normal option card, keyed
+  // by the sentinel id '__unsure__' instead of a real sub.id.
+  const [unsureText, setUnsureText] = useState('');
+  const [unsurePhotos, setUnsurePhotos] = useState([]); // [{url}]
+  const [uploadingUnsurePhoto, setUploadingUnsurePhoto] = useState(false);
   const resetCustomize = () => {
     setCustomizing(null); setCustomizeColors([]); setCustomizePhotos([]);
     setPpfFinish(null); setPpfColor(null); setPpfCustomColorText(''); setPpfCarSize(null);
+    setUnsureText(''); setUnsurePhotos([]);
+  };
+
+  const uploadUnsurePhotos = async (fileList, catId) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    setUploadingUnsurePhoto(true);
+    const uploaded = [];
+    for (const file of files) {
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = randomUploadPath(`unsure-${catId}`, ext);
+      const { error: upErr } = await supabase.storage.from('part-request-photos').upload(path, file, { contentType: file.type });
+      if (!upErr) {
+        const { data: { publicUrl } } = supabase.storage.from('part-request-photos').getPublicUrl(path);
+        uploaded.push({ url: publicUrl });
+      }
+    }
+    setUnsurePhotos(prev => [...prev, ...uploaded]);
+    setUploadingUnsurePhoto(false);
   };
 
   const uploadDesignPhotos = async (fileList, optId) => {
@@ -7621,7 +7667,7 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
         <div className="flex justify-center py-12" style={{ color:C.gold }}>
           <Loader2 size={24} className="animate-spin"/>
         </div>
-      ) : subs.length === 0 ? (
+      ) : subs.length === 0 && !showUnsureCard ? (
         <p className="py-12 text-center text-sm" style={{ color:C.muted }}>
           {isRtl ? 'لا توجد خدمات متاحة حالياً' : 'No services available yet'}
         </p>
@@ -7667,6 +7713,34 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
               </button>
             );
           })}
+          {showUnsureCard && (() => {
+            const unsureId = `unsure-${cat.id}`;
+            const unsureInCart = cart.some(x => x.id === unsureId);
+            const ucc = CARD_BG_CYCLE[subs.length % 2];
+            return (
+              <button key="__unsure_card__"
+                onClick={(e) => {
+                  if (unsureInCart) { removeFromCart(unsureId); return; }
+                  setOriginRect(e.currentTarget.getBoundingClientRect()); setExpandedId('__unsure__'); resetCustomize();
+                }}
+                className="group relative rounded-2xl p-5 flex flex-col items-center text-center gap-3 transition-all hover:z-10 focus:z-10"
+                style={{ background:ucc.bg, border:`2px dashed ${unsureInCart ? ucc.fg : `${ucc.fg}40`}` }}>
+                <div className="w-full aspect-square rounded-2xl flex items-center justify-center" style={{ background:ucc.ic }}>
+                  <div className="w-full h-full flex items-center justify-center transition-transform duration-300 ease-out group-hover:scale-125 group-active:scale-125">
+                    <HelpCircle size={48} style={{ color:ucc.fg }}/>
+                  </div>
+                </div>
+                <p className="font-bold text-base leading-snug" style={{ color:ucc.txt }}>{isRtl ? 'مش متأكد؟' : 'Not sure?'}</p>
+                {unsureInCart ? (
+                  <span className="text-[11px] font-black px-2 py-0.5 rounded-full" style={{ background:ucc.fg, color:ucc.bg }}>
+                    {isRtl ? '✓ تم الإرسال' : '✓ Sent'}
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-bold" style={{ color:ucc.sub }}>{isRtl ? 'اوصفلنا المشكلة' : 'Describe it to us'}</span>
+                )}
+              </button>
+            );
+          })()}
         </div>
       )}
 
@@ -7675,6 +7749,72 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
           options in as another grid row (Karim's explicit ask: make the
           tapped card itself the spotlight, not just a small panel below it). */}
       {expandedId && (() => {
+        if (expandedId === '__unsure__') {
+          const ucc = CARD_BG_CYCLE[subs.length % 2];
+          const unsureId = `unsure-${cat.id}`;
+          const canSend = unsureText.trim().length > 0;
+          return (
+            <div className="spotlight-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
+              style={{ background:'rgba(0,0,0,0.6)', backdropFilter:'blur(6px)' }}
+              onClick={() => { setExpandedId(null); resetCustomize(); }}>
+              <div ref={panelRef} className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-3xl p-5 space-y-4"
+                style={{ background:ucc.bg }} onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between">
+                  <span/>
+                  <button onClick={() => { setExpandedId(null); resetCustomize(); }} className="p-1.5 rounded-full" style={{ background:'rgba(0,0,0,0.12)' }}>
+                    <X size={16} style={{ color:ucc.txt }}/>
+                  </button>
+                </div>
+                <div className="flex flex-col items-center text-center gap-3">
+                  <div className="w-full aspect-square rounded-2xl flex items-center justify-center overflow-hidden" style={{ background:ucc.ic }}>
+                    <HelpCircle size={72} style={{ color:ucc.fg }}/>
+                  </div>
+                  <p className="font-black text-xl" style={{ color:ucc.txt }}>{isRtl ? 'مش متأكد من الخدمة المطلوبة؟' : 'Not sure which service you need?'}</p>
+                  <p className="text-sm" style={{ color:ucc.sub }}>
+                    {isRtl ? 'اوصفلنا المشكلة بالتفصيل، وممكن ترفق صور، وهنتواصل معاك بعرض سعر مناسب.' : "Describe the issue in detail, attach photos if you'd like, and we'll get back to you with a quote."}
+                  </p>
+                </div>
+                <textarea value={unsureText} onChange={e => setUnsureText(e.target.value)} rows={4}
+                  placeholder={isRtl ? 'اكتب وصف المشكلة هنا...' : 'Describe the issue here...'}
+                  className="w-full px-4 py-3 rounded-xl text-sm outline-none resize-none"
+                  style={{ background:'rgba(255,255,255,0.1)', border:`1px solid ${ucc.fg}30`, color:ucc.txt }}/>
+                <div>
+                  <p className="text-[11px] font-bold mb-1.5" style={{ color:ucc.sub }}>
+                    {isRtl ? 'صور (اختياري)' : 'Photos (optional)'}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {unsurePhotos.map((p, idx) => (
+                      <div key={idx} className="relative w-14 h-14 rounded-lg overflow-hidden flex-shrink-0">
+                        <img src={p.url} alt="" className="w-full h-full object-cover"/>
+                        <button type="button" onClick={() => setUnsurePhotos(prev => prev.filter((_, i) => i !== idx))}
+                          className="absolute top-0.5 right-0.5 p-0.5 rounded-full" style={{ background:'rgba(0,0,0,0.6)' }}>
+                          <X size={10} style={{ color:'#fff' }}/>
+                        </button>
+                      </div>
+                    ))}
+                    <label className="w-14 h-14 rounded-lg flex items-center justify-center flex-shrink-0 cursor-pointer"
+                      style={{ border:`1.5px dashed ${ucc.fg}50` }}>
+                      {uploadingUnsurePhoto
+                        ? <Loader2 size={16} className="animate-spin" style={{ color:ucc.fg }}/>
+                        : <Upload size={16} style={{ color:ucc.fg }}/>}
+                      <input type="file" accept="image/*" multiple className="hidden" disabled={uploadingUnsurePhoto}
+                        onChange={e => { uploadUnsurePhotos(e.target.files, cat.id); e.target.value = ''; }}/>
+                    </label>
+                  </div>
+                </div>
+                <button type="button" disabled={!canSend}
+                  onClick={() => {
+                    addToCart(cat.id, unsureId, isRtl ? `مش متأكد — ${unsureText.trim()}` : `Not sure — ${unsureText.trim()}`, catName, undefined, { photoUrls: unsurePhotos.map(p=>p.url) });
+                    setExpandedId(null); resetCustomize();
+                  }}
+                  className="w-full py-2.5 rounded-xl text-sm font-black disabled:opacity-40"
+                  style={{ background:C.gold, color:C.btnTxt }}>
+                  {isRtl ? 'إرسال الطلب' : 'Send Request'}
+                </button>
+              </div>
+            </div>
+          );
+        }
         const sub = subs.find(s => s.id === expandedId);
         if (!sub) return null;
         const opts = sub.options || [];
