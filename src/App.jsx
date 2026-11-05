@@ -7849,21 +7849,28 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                   const colorType = opt.color_type || 'none';
                   const palette = colorType === 'leather' ? LEATHER_COLORS : colorType === 'fabric' ? FABRIC_COLORS : null;
                   const isPpf = colorType === 'ppf';
+                  // Same idea as PPF's finish×car-size matrix but with no
+                  // finish axis — just one price per car size (e.g. Polish).
+                  const isCarSize = colorType === 'car_size';
                   // PPF needs a finish + (if that finish is one of the two
                   // colored ones) a color before it can be confirmed — the
                   // leather/fabric colors stay optional, matching how they
                   // already worked before PPF existed.
                   const ppfNeedsColor = ppfFinish?.key === 'color' || ppfFinish?.key === 'matte_color';
                   const ppfPalette = ppfFinish?.key === 'color' ? PPF_COLORS : ppfFinish?.key === 'matte_color' ? PPF_MATTE_COLORS : null;
-                  const canConfirm = !isPpf || (ppfFinish && (!ppfNeedsColor || ppfColor || ppfCustomColorText.trim()) && ppfCarSize);
+                  const canConfirm = (!isPpf || (ppfFinish && (!ppfNeedsColor || ppfColor || ppfCustomColorText.trim()) && ppfCarSize))
+                    && (!isCarSize || ppfCarSize);
                   // A PPF option's price depends on the finish×car-size cell
                   // staff priced in سندك-admin — only known once both are
                   // picked, unlike every other option's single flat price.
                   const ppfPrice = isPpf && ppfFinish && ppfCarSize ? Number(opt.ppf_prices?.[ppfFinish.key]?.[ppfCarSize.key] || 0) : 0;
-                  // Before/outside the customize step, a PPF option has no
-                  // single price to show — once it's in the cart, show the
-                  // price that was actually locked in for that pick.
-                  const rowPrice = isPpf ? Number(cart.find(x => x.id === optId)?.price || 0) : optPrice;
+                  // A car_size option's price depends only on the car-size
+                  // cell — reuses the same ppfCarSize pick, no finish step.
+                  const sizePrice = isCarSize && ppfCarSize ? Number(opt.size_prices?.[ppfCarSize.key] || 0) : 0;
+                  // Before/outside the customize step, a PPF/car_size option
+                  // has no single price to show — once it's in the cart,
+                  // show the price that was actually locked in for that pick.
+                  const rowPrice = (isPpf || isCarSize) ? Number(cart.find(x => x.id === optId)?.price || 0) : optPrice;
 
                   // Mid-pick: this option's own glass card swaps to the
                   // customize sub-view (colors/finish, if any, + photo
@@ -7962,7 +7969,28 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                           </div>
                         </div>
                       )}
-                      {!isPpf && (
+                      {isCarSize && (
+                        <div>
+                          <p className="text-[11px] font-bold mb-1.5" style={{ color:cc.sub }}>
+                            {isRtl ? 'نوع السيارة' : 'Car Type'}
+                          </p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {PPF_CAR_SIZES.map(s => {
+                              const picked = ppfCarSize?.key === s.key;
+                              return (
+                                <button key={s.key} type="button" onClick={() => setPpfCarSize(s)}
+                                  className="py-2 rounded-lg text-xs font-bold transition-all"
+                                  style={picked
+                                    ? { background:cc.fg, color:'#fff' }
+                                    : { background:'rgba(255,255,255,0.08)', color:cc.txt, border:`1px solid ${cc.fg}30` }}>
+                                  {isRtl ? s.ar : s.en}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      {!isPpf && !isCarSize && (
                       <div>
                         <p className="text-[11px] font-bold mb-1.5" style={{ color:cc.sub }}>
                           {isRtl ? 'صور للتصميم المطلوب (اختياري)' : 'Design reference photos (optional)'}
@@ -7994,6 +8022,12 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                           <span className="font-black text-sm" style={{ color:cc.fg }}>{ppfPrice.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
                         </div>
                       )}
+                      {isCarSize && ppfCarSize && (
+                        <div className="flex items-center justify-between px-1">
+                          <span className="text-[11px] font-bold" style={{ color:cc.sub }}>{isRtl ? 'السعر' : 'Price'}</span>
+                          <span className="font-black text-sm" style={{ color:cc.fg }}>{sizePrice.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
+                        </div>
+                      )}
                       <div className="flex items-center gap-2">
                         <button type="button" onClick={resetCustomize}
                           className="flex-1 py-2 rounded-lg text-sm font-bold" style={{ color:cc.txt, background:'rgba(255,255,255,0.08)' }}>
@@ -8011,8 +8045,10 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                               const arParts = [ppfFinish.ar, ...(colorAr?[colorAr]:[]), ...(ppfCarSize?[ppfCarSize.ar]:[])];
                               const enParts = [ppfFinish.en, ...(colorEn?[colorEn]:[]), ...(ppfCarSize?[ppfCarSize.en]:[])];
                               extraLabel = { ar:arParts.join('، '), en:enParts.join(', ') };
+                            } else if (isCarSize && ppfCarSize) {
+                              extraLabel = { ar:ppfCarSize.ar, en:ppfCarSize.en };
                             }
-                            addToCart(cat.id, optId, `${subName} — ${optName}`, catName, isPpf ? ppfPrice : optPrice, { extraLabel, photoUrls:customizePhotos.map(p=>p.url) });
+                            addToCart(cat.id, optId, `${subName} — ${optName}`, catName, isPpf ? ppfPrice : isCarSize ? sizePrice : optPrice, { extraLabel, photoUrls:customizePhotos.map(p=>p.url) });
                             resetCustomize();
                           }}
                           className="flex-1 py-2 rounded-lg text-sm font-black disabled:opacity-40"
