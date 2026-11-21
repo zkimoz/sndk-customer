@@ -788,6 +788,8 @@ const CARD_BG_CYCLE = [
   { bg:'#FFCB74', ic:'rgba(17,17,17,0.12)', fg:'#111111', txt:'#111111', sub:'rgba(17,17,17,0.55)', div:'rgba(17,17,17,0.10)' },
   { bg:'#722F37', ic:'rgba(255,203,116,0.15)', fg:'#FFCB74', txt:'#ffffff', sub:'rgba(255,255,255,0.60)', div:'rgba(255,255,255,0.08)' },
 ];
+// right card big / left card small, flipping every row (mobile 3-col grid)
+const SPAN_CYCLE = [1, 2, 2, 1];
 // Services not live yet — still shown on the home/services grid (so
 // customers know they're coming) but flagged with a "Coming Soon" overlay
 // instead of silently looking bookable like the ones that actually work.
@@ -894,6 +896,14 @@ const RENEWAL_INSURANCE_PRICES = { 4: 401, 6: 601, 8: 801 };
 // customer having booked it through RenewalFlowView above, which is the
 // only other place an appointment's renewal_request normally comes from.
 const isRenewalServiceName = (sn) => sn?.en === 'Car Registration Renewal' || sn?.ar === 'تجديد استمارة السيارة';
+const enrichCat = (cat, idx) => {
+  const style = CAT_STYLE[cat.name?.ar] || CAT_STYLE[cat.name?.en]
+    || DEFAULT_CAT_STYLES[idx % DEFAULT_CAT_STYLES.length];
+  const color = CARD_BG_CYCLE[idx % 2];
+  const span = SPAN_CYCLE[idx % SPAN_CYCLE.length];
+  const comingSoon = COMING_SOON_CAT_NAMES.has(cat.name?.ar) || COMING_SOON_CAT_NAMES.has(cat.name?.en);
+  return { ...style, ...color, span, fg:'#ffffff', id:cat.id, ar:cat.name?.ar||'', en:cat.name?.en||'', key:String(cat.id), comingSoon };
+};
 // ── Helpers ────────────────────────────────────────────────────────────
 const getBrand   = k => CAR_BRANDS.find(b => b.key === k);
 const getCat     = (bk,ck) => getBrand(bk)?.cats.find(c => c.key === ck);
@@ -7269,6 +7279,22 @@ function ComplianceServicesView({ isRtl }) {
 }
 
 function HomeView({ lang, tr, isRtl, onBookNow, goServices, serviceCategories, allSubServices, cart, addToCart, removeFromCart, expanded, setExpanded, theme, homeAnnouncements, user, goOrders, goParts, goRenewal, goCare, goPeriodic, goDiagnosis, pendingQuotCount }) {
+  const cats = serviceCategories.map(enrichCat);
+  const goToCat = (cat) => {
+    // Only routes into the real parts flow once staff have turned off
+    // "Coming Soon" for this category — until then it behaves exactly like
+    // the other not-yet-live tiles (still visually shows the overlay).
+    if (!cat.comingSoon && (PARTS_CAT_NAMES.has(cat.ar) || PARTS_CAT_NAMES.has(cat.en))) { goParts?.(); return; }
+    if (RENEWAL_CAT_NAMES.has(cat.ar) || RENEWAL_CAT_NAMES.has(cat.en)) { goRenewal?.(); return; }
+    if (CARE_CAT_NAMES.has(cat.ar) || CARE_CAT_NAMES.has(cat.en)) { goCare?.(); return; }
+    if (PERIODIC_CAT_NAMES.has(cat.ar) || PERIODIC_CAT_NAMES.has(cat.en)) { goPeriodic?.(); return; }
+    if (DIAGNOSIS_CAT_NAMES.has(cat.ar) || DIAGNOSIS_CAT_NAMES.has(cat.en)) { goDiagnosis?.(); return; }
+    // Everything else (the "plain accordion" categories) just toggles
+    // inline below the grid instead of navigating anywhere — there's no
+    // separate Services page anymore to navigate to.
+    setExpanded(expanded === cat.id ? null : cat.id);
+  };
+
   // Slideshow state
   const [annIdx, setAnnIdx] = useState(0);
   const [fading, setFading] = useState(false);
@@ -7399,9 +7425,31 @@ function HomeView({ lang, tr, isRtl, onBookNow, goServices, serviceCategories, a
         </button>
       )}
 
-      <ServicesView lang={lang} tr={tr} isRtl={isRtl} user={user} expanded={expanded} setExpanded={setExpanded}
-        serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart}
-        theme={theme} goParts={goParts} goRenewal={goRenewal} goCare={goCare} goPeriodic={goPeriodic} goDiagnosis={goDiagnosis} embedded/>
+      {cats.length > 0 && (
+        <div>
+          <p className="text-xs font-bold tracking-widest uppercase mb-3" style={{ color:C.muted }}>{tr.ourServices}</p>
+          <div className="grid grid-cols-3 gap-2.5 md:hidden grid-flow-dense">
+            {cats.map(s=>(
+              <ServiceCard key={s.key} service={s} lang={lang} span={s.span} onClick={()=>goToCat(s)} active={expanded===s.id}/>
+            ))}
+          </div>
+          <div className="hidden md:grid md:grid-cols-3 gap-4">
+            {cats.map(s=>(
+              <ServiceCard key={s.key} service={s} lang={lang} span={1} onClick={()=>goToCat(s)} active={expanded===s.id}/>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Whichever generic category is tapped expands its sub-service list
+          right here, below the grid — reuses ServicesView's own
+          row+accordion body, just filtered down to that single category so
+          its name/icon isn't shown twice. */}
+      {expanded && serviceCategories.some(c => c.id === expanded) && (
+        <ServicesView lang={lang} tr={tr} isRtl={isRtl} user={user} expanded={expanded} setExpanded={setExpanded}
+          serviceCategories={serviceCategories.filter(c => c.id === expanded)} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart}
+          theme={theme} goParts={goParts} goRenewal={goRenewal} goCare={goCare} goPeriodic={goPeriodic} goDiagnosis={goDiagnosis} embedded/>
+      )}
     </div>
   );
 }
@@ -9262,12 +9310,12 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
 }
 
 // ── SERVICE CARD ──────────────────────────────────────────────────────
-function ServiceCard({ service, lang, span, onClick }) {
+function ServiceCard({ service, lang, span, onClick, active }) {
   const Icon = service.icon;
   return (
     <button onClick={onClick}
       className={`group relative rounded-2xl text-start h-36 md:h-48 transition-all duration-300 hover:z-10 focus:z-10 ${span===2?'col-span-2':'col-span-1'}`}
-      style={{ backgroundColor:service.bg, boxShadow:'0 4px 20px rgba(0,0,0,0.35)' }}>
+      style={{ backgroundColor:service.bg, boxShadow: active ? `0 0 0 2px ${C.gold}, 0 4px 20px rgba(0,0,0,0.35)` : '0 4px 20px rgba(0,0,0,0.35)' }}>
       {/* Only this layer clips to the card's rounded corners — the logo
           below sits outside it on purpose, so it's free to grow past the
           card's edge on hover/press instead of being cut off. */}
