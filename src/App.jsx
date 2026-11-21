@@ -2985,7 +2985,12 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, profile, onClose, on
                       <span className="font-black text-sm flex-shrink-0" style={{ color:C.gold }}>{(Number(it.quoted_sell_price)*Number(it.quantity||1)).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
                     )}
                   </div>
-                  {!isApproved ? (
+                  {/* Only once staff have actually priced this item AND the
+                      request as a whole is ready for a decision (same gate
+                      needsApproval uses) — otherwise a still-unpriced
+                      request showed these as if there were already
+                      something to decide on. */}
+                  {(!isApproved && ['priced','awaiting_payment'].includes(po.status) && Number(it.quoted_sell_price) > 0) ? (
                     <div className="flex gap-2">
                       <button onClick={()=>setItemDecision(it.id,'approved')}
                         className="flex-1 py-2.5 rounded-lg text-sm font-bold transition-all active:scale-95 border-2"
@@ -3002,11 +3007,11 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, profile, onClose, on
                         {isRtl?'✗ غير موافق':'✗ Not Approved'}
                       </button>
                     </div>
-                  ) : (
+                  ) : isApproved ? (
                     <span className="inline-block px-2 py-0.5 rounded-full text-xs font-bold" style={{ background:'rgba(34,197,94,0.15)', color:'#16a34a' }}>
                       {isRtl?'✓ موافَق عليها':'✓ Approved'}
                     </span>
-                  )}
+                  ) : null}
                   {it.part_number && (
                     <p className="text-xs font-mono" style={{ color:C.muted }}>{isRtl?'رقم القطعة':'Part No.'}: {it.part_number}</p>
                   )}
@@ -7852,6 +7857,9 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                   // Same idea as PPF's finish×car-size matrix but with no
                   // finish axis — just one price per car size (e.g. Polish).
                   const isCarSize = colorType === 'car_size';
+                  // Polish has no use for a design-reference photo — Karim
+                  // asked to drop that step for it specifically.
+                  const isPolish = sub.name?.ar === 'تلميع (بولش)' || sub.name?.en === 'Polish';
                   // PPF needs a finish + (if that finish is one of the two
                   // colored ones) a color before it can be confirmed — the
                   // leather/fabric colors stay optional, matching how they
@@ -7990,7 +7998,7 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                           </div>
                         </div>
                       )}
-                      {!isPpf && !isCarSize && (
+                      {!isPpf && !isCarSize && !isPolish && (
                       <div>
                         <p className="text-[11px] font-bold mb-1.5" style={{ color:cc.sub }}>
                           {isRtl ? 'صور للتصميم المطلوب (اختياري)' : 'Design reference photos (optional)'}
