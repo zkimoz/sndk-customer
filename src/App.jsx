@@ -788,8 +788,6 @@ const CARD_BG_CYCLE = [
   { bg:'#FFCB74', ic:'rgba(17,17,17,0.12)', fg:'#111111', txt:'#111111', sub:'rgba(17,17,17,0.55)', div:'rgba(17,17,17,0.10)' },
   { bg:'#722F37', ic:'rgba(255,203,116,0.15)', fg:'#FFCB74', txt:'#ffffff', sub:'rgba(255,255,255,0.60)', div:'rgba(255,255,255,0.08)' },
 ];
-// right card big / left card small, flipping every row (mobile 3-col grid)
-const SPAN_CYCLE = [1, 2, 2, 1];
 // Services not live yet — still shown on the home/services grid (so
 // customers know they're coming) but flagged with a "Coming Soon" overlay
 // instead of silently looking bookable like the ones that actually work.
@@ -896,15 +894,6 @@ const RENEWAL_INSURANCE_PRICES = { 4: 401, 6: 601, 8: 801 };
 // customer having booked it through RenewalFlowView above, which is the
 // only other place an appointment's renewal_request normally comes from.
 const isRenewalServiceName = (sn) => sn?.en === 'Car Registration Renewal' || sn?.ar === 'تجديد استمارة السيارة';
-const enrichCat = (cat, idx) => {
-  const style = CAT_STYLE[cat.name?.ar] || CAT_STYLE[cat.name?.en]
-    || DEFAULT_CAT_STYLES[idx % DEFAULT_CAT_STYLES.length];
-  const color = CARD_BG_CYCLE[idx % 2];
-  const span = SPAN_CYCLE[idx % SPAN_CYCLE.length];
-  const comingSoon = COMING_SOON_CAT_NAMES.has(cat.name?.ar) || COMING_SOON_CAT_NAMES.has(cat.name?.en);
-  return { ...style, ...color, span, fg:'#ffffff', id:cat.id, ar:cat.name?.ar||'', en:cat.name?.en||'', key:String(cat.id), comingSoon };
-};
-
 // ── Helpers ────────────────────────────────────────────────────────────
 const getBrand   = k => CAR_BRANDS.find(b => b.key === k);
 const getCat     = (bk,ck) => getBrand(bk)?.cats.find(c => c.key === ck);
@@ -1573,7 +1562,10 @@ export default function App() {
   };
 
   const goHome     = () => { setPage('home'); setStep(1); resetForm(); setMenuOpen(false); };
-  const goServices = () => { setPage('services'); setExpandedService(null); setMenuOpen(false); };
+  // No standalone "services" page anymore — everything it showed now lives
+  // inline on Home itself (see ServicesView's embedded render in HomeView),
+  // so this just takes you there with a clean slate (nothing expanded).
+  const goServices = () => { setPage('home'); setExpandedService(null); setMenuOpen(false); };
   const goCare     = () => { setPage('care'); setMenuOpen(false); };
   const goPeriodic  = () => { setPage('periodic'); setMenuOpen(false); };
   const goDiagnosis = () => { setPage('diagnosis'); setMenuOpen(false); };
@@ -1621,7 +1613,6 @@ export default function App() {
           <nav className="flex-1 px-3 py-5 space-y-1">
             {[
               { icon:Home,          label:tr.navHome,    active:page==='home',     action:goHome },
-              { icon:Sparkles,      label:tr.navServices,active:page==='services', action:goServices },
               { icon:ClipboardList, label:tr.navOrders,  active:page==='orders',   action:goOrders },
               { icon:User,          label:tr.navProfile,  active:page==='profile',  action:goProfile },
               { icon:Phone,         label:tr.navContact,  active:page==='contact', action:goContact },
@@ -1784,10 +1775,7 @@ export default function App() {
           <main className="flex-1 overflow-y-auto pb-24 md:pb-8">
             {page==='home'    && (COMPLIANCE_MODE && !user
               ? <ComplianceLandingView isRtl={isRtl} setAuthModal={setAuthModal}/>
-              : <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements} goOrders={goOrders} goParts={goParts} goRenewal={goRenewal} goCare={goCare} goPeriodic={goPeriodic} goDiagnosis={goDiagnosis} pendingQuotCount={pendingQuotCount}/>)}
-            {page==='services'&& (COMPLIANCE_MODE && !user
-              ? <ComplianceServicesView isRtl={isRtl}/>
-              : <ServicesView lang={lang} tr={tr} isRtl={isRtl} user={user} expanded={expandedService} setExpanded={setExpandedService} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} theme={theme} goParts={goParts} goRenewal={goRenewal} goCare={goCare} goPeriodic={goPeriodic} goDiagnosis={goDiagnosis}/>)}
+              : <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements} goOrders={goOrders} goParts={goParts} goRenewal={goRenewal} goCare={goCare} goPeriodic={goPeriodic} goDiagnosis={goDiagnosis} pendingQuotCount={pendingQuotCount} expanded={expandedService} setExpanded={setExpandedService} theme={theme}/>)}
             {page==='care'    && <CarCareView lang={lang} isRtl={isRtl} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} goHome={goHome}/>}
             {page==='periodic'  && <CarCareView lang={lang} isRtl={isRtl} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} goHome={goHome} catNames={PERIODIC_CAT_NAMES} showUnsureCard/>}
             {page==='diagnosis' && <CarCareView lang={lang} isRtl={isRtl} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} goHome={goHome} catNames={DIAGNOSIS_CAT_NAMES} showUnsureCard/>}
@@ -1808,7 +1796,6 @@ export default function App() {
           <nav className="bottom-nav-glass md:hidden fixed bottom-0 inset-x-0 z-40 flex items-center justify-around px-2 py-2"
             style={{ background:`${C.panel}B3`, backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)', borderTop:`1px solid ${C.border}`, boxShadow:'inset 0 1px 0 rgba(255,255,255,0.08)' }}>
             <MobNavItem icon={Home}         label={tr.navHome}    active={page==='home'}    onClick={goHome}/>
-            <MobNavItem icon={Sparkles}    label={tr.navServices} active={page==='services'} onClick={goServices}/>
             <button onClick={()=>handleBookNow()}
               className="fab-glass relative -top-5 w-14 h-14 rounded-full flex items-center justify-center transition-all active:scale-95"
               style={{ background:C.gold, boxShadow:`0 0 24px ${C.gold}90` }}>
@@ -1931,7 +1918,6 @@ export default function App() {
               )}
               {[
                 { icon:Home,          label:tr.navHome,    action:goHome },
-                { icon:Sparkles,      label:tr.navServices, action:goServices },
                 { icon:ClipboardList, label:tr.navOrders,  action:goOrders },
                 { icon:User,          label:tr.navProfile,  action:goProfile },
                 { icon:Phone,         label:tr.navContact,  action:goContact },
@@ -7282,21 +7268,7 @@ function ComplianceServicesView({ isRtl }) {
   );
 }
 
-function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, serviceCategories, homeAnnouncements, user, goOrders, goParts, goRenewal, goCare, goPeriodic, goDiagnosis, pendingQuotCount }) {
-  const cats = serviceCategories.map(enrichCat);
-  const goToCat = (cat) => {
-    // Only routes into the real parts flow once staff have turned off
-    // "Coming Soon" for this category — until then it behaves exactly like
-    // the other not-yet-live tiles (still visually shows the overlay).
-    if (!cat.comingSoon && (PARTS_CAT_NAMES.has(cat.ar) || PARTS_CAT_NAMES.has(cat.en))) { goParts?.(); return; }
-    if (RENEWAL_CAT_NAMES.has(cat.ar) || RENEWAL_CAT_NAMES.has(cat.en)) { goRenewal?.(); return; }
-    if (CARE_CAT_NAMES.has(cat.ar) || CARE_CAT_NAMES.has(cat.en)) { goCare?.(); return; }
-    if (PERIODIC_CAT_NAMES.has(cat.ar) || PERIODIC_CAT_NAMES.has(cat.en)) { goPeriodic?.(); return; }
-    if (DIAGNOSIS_CAT_NAMES.has(cat.ar) || DIAGNOSIS_CAT_NAMES.has(cat.en)) { goDiagnosis?.(); return; }
-    setFormData(p => ({ ...p, serviceKey: cat.id, serviceName: cat.ar }));
-    goServices?.();
-  };
-
+function HomeView({ lang, tr, isRtl, onBookNow, goServices, serviceCategories, allSubServices, cart, addToCart, removeFromCart, expanded, setExpanded, theme, homeAnnouncements, user, goOrders, goParts, goRenewal, goCare, goPeriodic, goDiagnosis, pendingQuotCount }) {
   // Slideshow state
   const [annIdx, setAnnIdx] = useState(0);
   const [fading, setFading] = useState(false);
@@ -7427,27 +7399,15 @@ function HomeView({ lang, tr, setFormData, isRtl, onBookNow, goServices, service
         </button>
       )}
 
-      {cats.length > 0 && (
-        <div>
-          <p className="text-xs font-bold tracking-widest uppercase mb-3" style={{ color:C.muted }}>{tr.ourServices}</p>
-          <div className="grid grid-cols-3 gap-2.5 md:hidden grid-flow-dense">
-            {cats.map(s=>(
-              <ServiceCard key={s.key} service={s} lang={lang} span={s.span} onClick={()=>goToCat(s)}/>
-            ))}
-          </div>
-          <div className="hidden md:grid md:grid-cols-3 gap-4">
-            {cats.map(s=>(
-              <ServiceCard key={s.key} service={s} lang={lang} span={1} onClick={()=>goToCat(s)}/>
-            ))}
-          </div>
-        </div>
-      )}
+      <ServicesView lang={lang} tr={tr} isRtl={isRtl} user={user} expanded={expanded} setExpanded={setExpanded}
+        serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart}
+        theme={theme} goParts={goParts} goRenewal={goRenewal} goCare={goCare} goPeriodic={goPeriodic} goDiagnosis={goDiagnosis} embedded/>
     </div>
   );
 }
 
 // ── SERVICES VIEW ──────────────────────────────────────────────────────
-function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCategories, allSubServices, cart, addToCart, removeFromCart, theme, goParts, goRenewal, goCare, goPeriodic, goDiagnosis }) {
+function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCategories, allSubServices, cart, addToCart, removeFromCart, theme, goParts, goRenewal, goCare, goPeriodic, goDiagnosis, embedded }) {
   const btnAccent = theme === 'light' ? '#8A1538' : C.gold;
   const loading = serviceCategories.length === 0;
   const [unsureOpenFor, setUnsureOpenFor] = useState(null); // category id whose "describe your fault" box is open
@@ -7463,12 +7423,16 @@ function ServicesView({ lang, tr, isRtl, user, expanded, setExpanded, serviceCat
 
   return (
     <div className="relative">
-      <div className="p-4 md:p-8 max-w-3xl md:mx-auto space-y-4" style={{ paddingBottom: '24px' }}>
-        <div className="mb-2">
-          <h1 className={`text-2xl font-black ${C.selectCls}`}>{tr.allServices}</h1>
-          {!user && <p className="text-sm mt-1" style={{ color:C.muted }}>{tr.browseFreely}</p>}
-          <div className="w-10 h-0.5 rounded-full mt-2" style={{ background:`${C.gold}70` }}/>
-        </div>
+      <div className={embedded ? 'space-y-4' : 'p-4 md:p-8 max-w-3xl md:mx-auto space-y-4'} style={embedded ? undefined : { paddingBottom: '24px' }}>
+        {embedded ? (
+          <p className="text-xs font-bold tracking-widest uppercase" style={{ color:C.muted }}>{tr.ourServices}</p>
+        ) : (
+          <div className="mb-2">
+            <h1 className={`text-2xl font-black ${C.selectCls}`}>{tr.allServices}</h1>
+            {!user && <p className="text-sm mt-1" style={{ color:C.muted }}>{tr.browseFreely}</p>}
+            <div className="w-10 h-0.5 rounded-full mt-2" style={{ background:`${C.gold}70` }}/>
+          </div>
+        )}
 
         {loading ? (
           <div className="flex justify-center py-12" style={{ color:C.gold }}>
