@@ -10,8 +10,8 @@ const CUSTOMER_FROM_EMAIL = Deno.env.get("CUSTOMER_FROM_EMAIL") || "SNDK <norepl
 // Always-notified department inboxes, in addition to any staff member who has
 // opted in individually via notify_email in الموظفين.
 const DEPARTMENT_EMAILS = ["info@sndkqa.com", "workshop@sndkqa.com", "customerservice@sndkqa.com"];
-const STAFF_EVENTS = new Set(["quotation_approved", "new_booking", "payment_received", "payment_method_chosen", "part_request_created", "part_order_payment_method_chosen", "part_order_payment_received"]);
-const CUSTOMER_EVENTS = new Set(["status_changed", "quotation_sent", "invoice_ready", "job_closed", "resignature_requested", "payment_receipt", "part_request_priced", "part_request_delivered"]);
+const STAFF_EVENTS = new Set(["quotation_approved", "new_booking", "payment_received", "payment_method_chosen", "part_request_created", "part_order_payment_method_chosen", "part_order_payment_received", "wallet_topup_received"]);
+const CUSTOMER_EVENTS = new Set(["status_changed", "quotation_sent", "invoice_ready", "job_closed", "resignature_requested", "payment_receipt", "part_request_priced", "part_request_delivered", "part_order_receipt_ready", "part_order_invoice_ready", "part_request_approval_reminder"]);
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -144,6 +144,27 @@ serve(async (req) => {
           [bi("العميل", "Customer"), name],
           [bi("رقم الطلب", "Request Number"), requestNumber],
         ], bi("شكراً لثقتكم بسندك!", "Thank you for trusting SNDK!"));
+      } else if (event === "part_order_receipt_ready") {
+        subject = bi(`🧾 إيصال دفعتك جاهز — ${requestNumber || ""}`, `Your payment receipt is ready — ${requestNumber || ""}`);
+        html = wrap(bi("إيصال الدفع جاهز", "Payment Receipt Ready"), [
+          [bi("العميل", "Customer"), name],
+          [bi("رقم الطلب", "Request Number"), requestNumber],
+          [bi("المبلغ المدفوع", "Amount Paid"), amountQAR != null ? `${amountQAR} ر.ق / QAR` : ""],
+        ]);
+      } else if (event === "part_order_invoice_ready") {
+        subject = bi(`🧾 فاتورة طلب قطعة الغيار جاهزة — ${requestNumber || ""}`, `Your spare-part invoice is ready — ${requestNumber || ""}`);
+        html = wrap(bi("الفاتورة الضريبية جاهزة", "Tax Invoice Ready"), [
+          [bi("العميل", "Customer"), name],
+          [bi("رقم الطلب", "Request Number"), requestNumber],
+          [bi("المبلغ", "Amount"), amountQAR != null ? `${amountQAR} ر.ق / QAR` : ""],
+        ]);
+      } else if (event === "part_request_approval_reminder") {
+        subject = bi(`⏰ بانتظار موافقتك على طلب قطعة الغيار — ${requestNumber || ""}`, `Your spare-part request is still awaiting approval — ${requestNumber || ""}`);
+        html = wrap(bi("تذكير — طلب قطعة غيار بانتظار موافقتك", "Reminder — Spare Part Request Awaiting Your Approval"), [
+          [bi("العميل", "Customer"), name],
+          [bi("رقم الطلب", "Request Number"), requestNumber],
+          [bi("الإجراء المطلوب", "Action Needed"), bi("يرجى فتح تطبيق سندك لمراجعة السعر والموافقة عليه", "Please open the SNDK app to review and approve the price")],
+        ]);
       }
     } else if (STAFF_EVENTS.has(event)) {
       const { data: staffList } = await supabase
@@ -209,6 +230,13 @@ serve(async (req) => {
         html = wrap(bi("العميل دفع مبلغ عبر بوابة إلكترونية لطلب قطعة غيار", "Customer paid via online gateway for a part request"), [
           [bi("العميل", "Customer"), customerName],
           [bi("رقم الطلب", "Request Number"), requestNumber],
+          [bi("المبلغ", "Amount"), amountQAR != null ? `${amountQAR} ر.ق / QAR` : ""],
+          [bi("طريقة الدفع", "Payment Method"), bi(methodAr || "", methodEn || "")],
+        ]);
+      } else if (event === "wallet_topup_received") {
+        subject = bi(`💳 شحن محفظة جديد — ${customerName || ""}`, `New wallet top-up — ${customerName || ""}`);
+        html = wrap(bi("عميل شحن محفظته عبر بوابة إلكترونية", "Customer topped up their wallet via online gateway"), [
+          [bi("العميل", "Customer"), customerName],
           [bi("المبلغ", "Amount"), amountQAR != null ? `${amountQAR} ر.ق / QAR` : ""],
           [bi("طريقة الدفع", "Payment Method"), bi(methodAr || "", methodEn || "")],
         ]);
