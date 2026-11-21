@@ -1180,12 +1180,18 @@ export default function App() {
   // suffix (chosen colors, or a PPF finish/color/origin combo — whatever
   // the customize step built it as) and extra.photoUrls is any uploaded
   // design-photo URLs.
-  const addToCart    = (catId, subId, subName, catName, price, extra) =>
+  const addToCart    = (catId, subId, subName, catName, price, extra) => {
     setCart(p => p.find(x => x.id === subId) ? p : [...p, { id: subId, name: subName, catId, catName,
       ...(price > 0 ? { price } : {}),
       ...(extra?.extraLabel ? { extraLabel: extra.extraLabel } : {}),
       ...(extra?.photoUrls?.length ? { photoUrls: extra.photoUrls } : {}),
     }]);
+    // Opens the cart drawer right away so the customer sees the item
+    // actually landed in the cart, instead of having to notice/tap the
+    // cart icon themselves — it already has "add another service" and
+    // "confirm" actions built in (see cartOpen's render below).
+    setCartOpen(true);
+  };
   const removeFromCart = (subId) => setCart(p => p.filter(x => x.id !== subId));
   const clearCart = () => setCart([]);
   const [formData, setFormData] = useState({
