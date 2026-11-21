@@ -5147,8 +5147,10 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
   }, [highlightJobNumber, appts]);
   useEffect(() => {
     if (!highlightJobNumber) return;
-    const match = appts.find(a => publishedJobCard(a.job_cards?.[0] || {})?.job_number === highlightJobNumber);
-    if (match) setExpandedOrderId(match.id);
+    for (const a of appts) {
+      const match = (a.job_cards || []).find(j => publishedJobCard(j)?.job_number === highlightJobNumber);
+      if (match) { setExpandedOrderId(match.id); break; }
+    }
   }, [highlightJobNumber, appts]);
   // Must stay above the `if (!user) return` below — a session dropping while
   // this view is mounted (auth listener firing setUser(null) without
@@ -5187,6 +5189,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
   // needs a date/time, then flips the (already-existing) job card straight
   // to Confirmed instead of staff having to do it manually.
   const [bookingAppt, setBookingAppt] = useState(null);
+  const [bookingJcId, setBookingJcId] = useState(null);
   const [bookDate, setBookDate] = useState('');
   const [bookTimeKey, setBookTimeKey] = useState('');
   const [bookTimeSlots, setBookTimeSlots] = useState([]);
@@ -5519,7 +5522,10 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
 
     if (isApproved) {
       const linkedAppt = appts.find(a => a.id === order.appointment_id);
-      const jobNumber = linkedAppt?.job_cards?.[0]?.job_number;
+      const linkedJc = order.job_card_id
+        ? linkedAppt?.job_cards?.find(j => j.id === order.job_card_id)
+        : linkedAppt?.job_cards?.[0];
+      const jobNumber = linkedJc?.job_number;
       // 'clever-endpoint' is the notify-staff Edge Function's actual deployed slug
       // (auto-assigned by the Supabase dashboard's "Via Editor" flow, doesn't match its display name).
       // Fire-and-forget — approving the quotation must never hang or fail because a
@@ -5634,7 +5640,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
       setConfirmingBooking(false);
       return;
     }
-    const jc = bookingAppt.job_cards?.[0];
+    const jc = (bookingJcId && bookingAppt.job_cards?.find(j => j.id === bookingJcId)) || bookingAppt.job_cards?.[0];
     if (jc && jc.job_status === 'waiting') {
       const nextHistory = [...(Array.isArray(jc.status_history) ? jc.status_history : []), { status:'confirmed', at: nowIso }];
       const snapshot = { ...(jc.customer_snapshot || {}), job_status:'confirmed', status_history: nextHistory, published_at: nowIso };
@@ -5648,7 +5654,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
         alert(isRtl ? 'تم حجز الموعد، لكن تعذّر تحديث حالة أمر الشغل تلقائيًا — سيتولى فريقنا تأكيدها' : 'Your appointment is booked, but the job card status could not update automatically — our team will confirm it shortly');
       }
     }
-    setBookingAppt(null); setBookDate(''); setBookTimeKey('');
+    setBookingAppt(null); setBookingJcId(null); setBookDate(''); setBookTimeKey('');
     setConfirmingBooking(false);
     await loadData();
   };
@@ -5664,6 +5670,14 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
 
   const apptMap       = Object.fromEntries(appts.map(a => [a.id, a]));
   const orderByApptId = Object.fromEntries(orders.map(o => [o.appointment_id, o]));
+  // Once an appointment can carry two independent job_cards rows (a
+  // parts-only one plus a separately-opened car job, both created this way
+  // on purpose), the quotation tied to each one has its own job_card_id —
+  // falling back to the appointment-wide lookup above only when there's
+  // truly just one job card on file, so we never guess which of two orders
+  // belongs to which card.
+  const orderByJobCardId = Object.fromEntries(orders.filter(o => o.job_card_id).map(o => [o.job_card_id, o]));
+  const relOrdForRow = (a, jcRaw) => orderByJobCardId[jcRaw.id] ?? ((a.job_cards?.length || 0) <= 1 ? orderByApptId[a.id] : undefined);
 
   // Hoisted so the "الحالية"/"الملغية" tabs can stack all three kinds of
   // request (appointments awaiting reception, ones with an active job card,
@@ -5671,7 +5685,11 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
   // and so a single shared empty-state can tell when literally nothing
   // in any of the three is left to show.
   const noJcAppts        = appts.filter(a => !a.job_cards?.length && a.status !== 'cancelled');
-  const jcAppts          = appts.filter(a => a.job_cards?.length > 0 && !a.job_cards[0].closed_at && a.status !== 'cancelled' && !rejectedAllOverride(orderByApptId[a.id]));
+  // One row per job_cards row, not per appointment — an appointment with a
+  // parts-only job card AND a separately-opened car job card must render as
+  // two distinct cards, not just whichever one happened to be job_cards[0].
+  const jcRows           = appts.flatMap(a => (a.job_cards || []).map(jcRaw => ({ a, jcRaw })))
+    .filter(({ a, jcRaw }) => !jcRaw.closed_at && a.status !== 'cancelled' && !rejectedAllOverride(relOrdForRow(a, jcRaw)));
   const cancelledAppts   = appts.filter(a => a.status === 'cancelled');
   const partOrderById = Object.fromEntries(partOrders.map(po => [po.id, po]));
   // A parts-only job card already shows its own source part_order's
@@ -5679,12 +5697,12 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
   // this, the exact same request showed twice: once as this job card and
   // once as its own standalone "Spare Parts Request" card.
   const linkedPartOrderIds = new Set(
-    jcAppts.filter(a => a.job_cards[0].is_parts_only && a.job_cards[0].source_part_order_id)
-      .map(a => a.job_cards[0].source_part_order_id)
+    jcRows.filter(({ jcRaw }) => jcRaw.is_parts_only && jcRaw.source_part_order_id)
+      .map(({ jcRaw }) => jcRaw.source_part_order_id)
   );
   const activePartOrders = partOrders.filter(po => !['cancelled','declined'].includes(po.status) && !linkedPartOrderIds.has(po.id));
   const cancelledPartOrders = partOrders.filter(po => ['cancelled','declined'].includes(po.status) && !linkedPartOrderIds.has(po.id));
-  const activeIsEmpty    = noJcAppts.length === 0 && jcAppts.length === 0 && activePartOrders.length === 0;
+  const activeIsEmpty    = noJcAppts.length === 0 && jcRows.length === 0 && activePartOrders.length === 0;
   const cancelledIsEmpty = cancelledAppts.length === 0 && cancelledPartOrders.length === 0;
   // Same catName-based category chip mobile shows — read off service_type
   // the same way parseServices already does for the service-name chips.
@@ -5847,14 +5865,14 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
           })()}
 
           {/* ── الحالية (تابع): المواعيد اللي ليها أمر شغل ── */}
-          {tab==='active' && jcAppts.length > 0 && (() => {
+          {tab==='active' && jcRows.length > 0 && (() => {
             return (
               <div className="space-y-3">
-                {jcAppts.map((a, ai) => {
+                {jcRows.map(({ a, jcRaw }, ai) => {
                   const cc     = CARD_BG_CYCLE[1]; // always maroon
-                  const jc     = publishedJobCard(a.job_cards[0]);
+                  const jc     = publishedJobCard(jcRaw);
                   const car    = a.cars;
-                  const relOrd = orderByApptId[a.id];
+                  const relOrd = relOrdForRow(a, jcRaw);
                   // Merges this job card's header with its source spare-parts
                   // request (title, request number, price, paid status) —
                   // see linkedPartOrderIds above for why the request no
@@ -5885,18 +5903,18 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                   const jcColor = rejectedOverride ? REJECTED_ALL_COLOR : partsOverride ? PARTS_STATUS_COLOR.unavailable : (JC_STATUS_COLOR[jc.job_status] || '#94a3b8');
                   const jcLabel = rejectedOverride ? (isRtl ? REJECTED_ALL_LABEL.ar : REJECTED_ALL_LABEL.en) : partsOverride ? (isRtl ? PARTS_STATUS_LABEL.unavailable.ar : PARTS_STATUS_LABEL.unavailable.en) : (tr[jc.is_parts_only ? `jc_parts_${jc.job_status}` : `jc_${jc.job_status}`] || jc.job_status);
                   const isHighlighted = highlightJobNumber && jc.job_number === highlightJobNumber;
-                  const isExpanded = expandedOrderId === a.id;
+                  const isExpanded = expandedOrderId === jcRaw.id;
                   // Same per-service check the pending-count badge/Confirm
                   // button use — customer_approved/rejected alone can't tell
                   // a fully-decided order from one a staff follow-up
                   // quotation just added new, still-undecided services to.
                   const needsDecision = !!relOrd?.sent_to_customer && hasUndecidedService(relOrd);
                   return (
-                    <div key={a.id} ref={isHighlighted ? highlightRef : null} className="rounded-2xl overflow-hidden"
+                    <div key={jcRaw.id} ref={isHighlighted ? highlightRef : null} className="rounded-2xl overflow-hidden"
                       style={{ background:cc.bg, border: isHighlighted ? `2px solid ${C.gold}` : `1px solid ${cc.fg}30`, boxShadow: isHighlighted ? `0 0 0 4px ${C.gold}30` : undefined }}>
 
                       {needsDecision && (
-                        <button type="button" onClick={() => setExpandedOrderId(isExpanded ? null : a.id)}
+                        <button type="button" onClick={() => setExpandedOrderId(isExpanded ? null : jcRaw.id)}
                           className="mx-4 mt-3 mb-1.5 flex items-center gap-1.5 px-2.5 py-1 rounded-full w-fit"
                           style={{ background:'#ef4444' }}>
                           <AlertCircle size={13} style={{ color:'#fff' }}/>
@@ -5921,7 +5939,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                           real <button> of its own now (in the chevron's old spot), and
                           a button can't nest inside a button. Clicking anywhere else on
                           the row still toggles too. */}
-                      <div onClick={() => setExpandedOrderId(isExpanded ? null : a.id)}
+                      <div onClick={() => setExpandedOrderId(isExpanded ? null : jcRaw.id)}
                         className="w-full text-inherit px-4 py-3 flex items-center justify-between gap-3 transition-all cursor-pointer"
                         style={{ borderBottom: isExpanded ? `1px solid ${cc.div}` : 'none', textAlign: isRtl ? 'right' : 'left' }}>
                         <div className="flex-1 min-w-0">
@@ -5983,7 +6001,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                           {/* Explicit "View Details" affordance, same idea as the mobile
                               app's own button — right in the chevron's old spot instead of
                               a full-width bar, so it stays a compact part of this column. */}
-                          <button type="button" onClick={e => { e.stopPropagation(); setExpandedOrderId(isExpanded ? null : a.id); }}
+                          <button type="button" onClick={e => { e.stopPropagation(); setExpandedOrderId(isExpanded ? null : jcRaw.id); }}
                             className="flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-full transition-all active:scale-95 hover:brightness-110"
                             style={{ background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.25)', color:'#fff' }}>
                             {isExpanded ? (isRtl ? 'إخفاء' : 'Hide') : (isRtl ? 'عرض التفاصيل' : 'Details')}
@@ -6136,7 +6154,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                           <span className="text-sm font-bold" style={{ color:C.gold }}>
                             {isRtl ? 'تمت الموافقة على عرض السعر — احجز موعد استلام السيارة الآن' : "You've approved the quotation — book a car drop-off time now"}
                           </span>
-                          <button onClick={() => { setBookingAppt(a); setBookDate(''); setBookTimeKey(''); }}
+                          <button onClick={() => { setBookingAppt(a); setBookingJcId(jcRaw.id); setBookDate(''); setBookTimeKey(''); }}
                             className="px-4 py-2 rounded-xl font-black text-sm flex-shrink-0" style={{ background:C.gold, color:C.btnTxt }}>
                             {isRtl ? 'احجز موعد' : 'Book Appointment'}
                           </button>
@@ -6862,7 +6880,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                 {cancelledAppts.map((a, ai) => {
                   const cc  = CARD_BG_CYCLE[ai % 2];
                   const car = a.cars;
-                  const jc  = a.job_cards?.[0];
+                  const jcNumbers = (a.job_cards || []).map(j => j.job_number).filter(Boolean).join(' · ');
                   const cancelledByLabel = a.cancelled_by === 'staff'
                     ? (isRtl ? 'أُلغي بواسطة سندك' : 'Cancelled by SNDK')
                     : (isRtl ? 'أُلغي بواسطتك' : 'Cancelled by you');
@@ -6897,8 +6915,8 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                               {[carTypeLabel(car, carBrandsRef, lang), carCategoryLabel(car, carCatsRef, lang), car.production_year].filter(Boolean).join(' · ')}
                             </p>
                           )}
-                          {jc?.job_number && (
-                            <p className="text-[11px] mt-0.5 font-mono" style={{ color:cc.sub }}>{jc.job_number}</p>
+                          {jcNumbers && (
+                            <p className="text-[11px] mt-0.5 font-mono" style={{ color:cc.sub }}>{jcNumbers}</p>
                           )}
                         </div>
                         <span className="px-2.5 py-1 rounded-full text-sm font-bold flex-shrink-0"
