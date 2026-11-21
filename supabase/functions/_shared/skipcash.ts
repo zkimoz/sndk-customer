@@ -153,6 +153,53 @@ export async function recordPartOrderPaymentIfNew(opts: {
   return { recorded: true };
 }
 
+// Staff-only notification for a wallet top-up — mirrors
+// notifySkipCashPartOrderPaymentReceived (no job number/request number to
+// report here, just who topped up and how much).
+function notifySkipCashWalletTopupReceived(profileId: string, amountQAR: number) {
+  adminClient.from("profiles").select("full_name").eq("id", profileId).maybeSingle().then(({ data }) => {
+    adminClient.functions.invoke("clever-endpoint", {
+      body: {
+        event: "wallet_topup_received",
+        customerName: data?.full_name,
+        amountQAR,
+        methodAr: "سكيب كاش",
+        methodEn: "SkipCash",
+      },
+    }).catch(() => {});
+  });
+}
+
+// Idempotent on wallet_transactions.gateway_ref — same reasoning as
+// recordPaymentIfNew/recordPartOrderPaymentIfNew below: a losing INSERT
+// fails with 23505 instead of duplicating a row. Unlike those, there's no
+// existing row to update — a wallet top-up always creates a brand new,
+// already-"confirmed" transaction (no staff confirmation step at all,
+// unlike the manual/bank-transfer top-up request this replaces).
+export async function recordWalletTopupIfNew(opts: {
+  skipcashId: string; profileId: string; amountQAR: number;
+}): Promise<{ alreadyRecorded?: true; recorded?: true; error?: string }> {
+  const { data: existing } = await adminClient.from("wallet_transactions").select("id").eq("gateway_ref", opts.skipcashId).maybeSingle();
+  if (existing) return { alreadyRecorded: true };
+
+  const { error: insErr } = await adminClient.from("wallet_transactions").insert({
+    profile_id: opts.profileId,
+    amount: opts.amountQAR,
+    type: "topup",
+    status: "confirmed",
+    method: "skipcash",
+    gateway_ref: opts.skipcashId,
+    confirmed_at: new Date().toISOString(),
+  });
+  if (insErr) {
+    if (insErr.code === "23505") return { alreadyRecorded: true };
+    return { error: insErr.message };
+  }
+
+  notifySkipCashWalletTopupReceived(opts.profileId, opts.amountQAR);
+  return { recorded: true };
+}
+
 // Idempotent on payments.gateway_ref — SkipCash retries a webhook delivery
 // it didn't get a prompt 200 for (and a slow response can make its own HTTP
 // client retry a request we're already mid-processing), so two deliveries

@@ -1432,6 +1432,50 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authChecked]);
 
+  // Same pattern again, for a wallet top-up's SkipCash checkout (see
+  // ProfileView's paySkipcashTopup) — its own query param/sessionStorage
+  // key/function, so it can never collide with the other two.
+  // wallet_transactions only ever gets its confirmed row written by
+  // skipcash-wallet-webhook server-to-server; this is read-only.
+  useEffect(() => {
+    if (!authChecked) return;
+    const params = new URLSearchParams(window.location.search);
+    const walletSkipcashOrder = params.get('wallet_skipcash_order');
+    if (!walletSkipcashOrder) return;
+    let skipcashId = null;
+    try { skipcashId = sessionStorage.getItem('skipcash_wallet_pending_id') || null; sessionStorage.removeItem('skipcash_wallet_pending_id'); } catch { /* fine, falls back below */ }
+    window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+    setPage('profile');
+    setMenuOpen(false);
+
+    const fallbackMsg = isRtl
+      ? 'شكرًا! سيتم تأكيد الدفع وتحديث رصيد محفظتك خلال لحظات.'
+      : 'Thank you! Your payment will be confirmed and your wallet balance updated shortly.';
+    if (!skipcashId) { alert(fallbackMsg); return; }
+
+    (async () => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const { data } = await supabase.functions.invoke('skipcash-wallet-payment', {
+          body: { action: 'status', skipcashId },
+        });
+        const statusId = data?.statusId;
+        if (statusId === 2) {
+          alert(isRtl ? '✅ تم الدفع بنجاح' : '✅ Payment successful');
+          return;
+        }
+        if ([3, 4, 5].includes(statusId)) {
+          alert(isRtl
+            ? '⚠️ لم يكتمل الدفع (تم إلغاؤه أو رفضه) — حاول مرة أخرى'
+            : '⚠️ Payment was not completed (cancelled or declined) — please try again');
+          return;
+        }
+        if (attempt < 2) await new Promise(r => setTimeout(r, 1500));
+      }
+      alert(fallbackMsg);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authChecked]);
+
   const loadReferenceData = () => {
     // Load dynamic car brands, categories, and brand-category links
     supabase.from('car_brands').select('id,name_ar,name_en').or('is_active.eq.true,is_active.is.null').order('sort_order').order('id')
@@ -8313,18 +8357,27 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
   const pendingTopups  = walletTxns.filter(w => w.status === 'pending' && w.type === 'topup');
   const pendingOverpaymentTotal = walletTxns.filter(w => w.status === 'pending' && w.type === 'overpayment_credit').reduce((s,w)=>s+Number(w.amount||0),0);
 
-  const requestTopup = async () => {
+  // Straight to SkipCash's hosted card checkout instead of a staff-confirmed
+  // pending request — wallet_transactions only ever gets its (already
+  // "confirmed") row inserted server-side by skipcash-wallet-webhook once
+  // SkipCash actually charges the card, same as every other payment here.
+  const paySkipcashTopup = async () => {
     const amt = Number(topupAmt);
-    if (!amt || amt <= 0) return;
+    if (!amt || amt <= 0 || requestingTopup) return;
     setRequestingTopup(true);
-    const { error } = await supabase.from('wallet_transactions').insert({
-      profile_id: user.id, amount: amt, type: 'topup', status: 'pending',
+    const returnUrlObj = new URL(window.location.href);
+    returnUrlObj.searchParams.set('wallet_skipcash_order', '1');
+    const returnUrl = returnUrlObj.toString();
+    const { data, error } = await supabase.functions.invoke('skipcash-wallet-payment', {
+      body: { action: 'create', amount: amt, returnUrl },
     });
-    setRequestingTopup(false);
-    if (error) { alert(isRtl ? 'خطأ في إرسال طلب الشحن: ' + error.message : 'Error sending top-up request: ' + error.message); return; }
-    setTopupAmt('');
-    setShowTopup(false);
-    loadWallet();
+    if (error || !data?.payUrl) {
+      setRequestingTopup(false);
+      alert((isRtl ? 'خطأ: ' : 'Error: ') + (data?.error || error?.message || ''));
+      return;
+    }
+    try { sessionStorage.setItem('skipcash_wallet_pending_id', data.skipcashId || ''); } catch { /* private browsing, etc. — degrades to the neutral fallback message */ }
+    window.location.href = data.payUrl;
   };
 
   const loadCarHistory = async (carId) => {
@@ -8619,11 +8672,11 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
               placeholder={isRtl?'المبلغ':'Amount'} dir="ltr"
               className={`flex-1 px-3 py-2.5 rounded-xl text-sm ${C.selectCls} outline-none`}
               style={{ background:C.input, border:`1px solid ${C.border}` }}/>
-            <button onClick={requestTopup} disabled={requestingTopup || !Number(topupAmt)}
+            <button onClick={paySkipcashTopup} disabled={requestingTopup || !Number(topupAmt)}
               className="px-4 py-2.5 rounded-xl text-sm font-black disabled:opacity-40 flex items-center gap-1.5 flex-shrink-0"
               style={{ background:'#16a34a', color:'#fff' }}>
               {requestingTopup ? <Loader2 size={14} className="animate-spin"/> : <Check size={14}/>}
-              {isRtl?'إرسال الطلب':'Send Request'}
+              {isRtl?'ادفع بالبطاقة':'Pay by card'}
             </button>
           </div>
         )}
