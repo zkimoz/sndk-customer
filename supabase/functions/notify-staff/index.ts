@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendPushToUser } from "../_shared/push.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")!;
 const FROM_EMAIL = Deno.env.get("NOTIFY_FROM_EMAIL") || "SNDK <onboarding@resend.dev>";
@@ -12,6 +13,23 @@ const CUSTOMER_FROM_EMAIL = Deno.env.get("CUSTOMER_FROM_EMAIL") || "SNDK <norepl
 const DEPARTMENT_EMAILS = ["info@sndkqa.com", "workshop@sndkqa.com", "customerservice@sndkqa.com"];
 const STAFF_EVENTS = new Set(["quotation_approved", "new_booking", "payment_received", "payment_method_chosen", "part_request_created", "part_order_payment_method_chosen", "part_order_payment_received", "wallet_topup_received"]);
 const CUSTOMER_EVENTS = new Set(["status_changed", "quotation_sent", "invoice_ready", "job_closed", "resignature_requested", "payment_receipt", "part_request_priced", "part_request_delivered", "part_order_receipt_ready", "part_order_invoice_ready", "part_request_approval_reminder"]);
+
+// Short, Arabic-only push body per customer event — the subject line
+// already built above (bi(ar, en)) supplies the push title (its Arabic
+// half), so this is the only new copy this needs per event.
+const PUSH_BODY_AR: Record<string, string> = {
+  status_changed: "تحديث على حالة سيارتك",
+  quotation_sent: "عرض السعر جاهز للمراجعة والموافقة",
+  invoice_ready: "الفاتورة الضريبية جاهزة",
+  job_closed: "سيارتك جاهزة للاستلام",
+  resignature_requested: "مطلوب توقيع جديد على عرض السعر",
+  payment_receipt: "تم استلام دفعتك بنجاح",
+  part_request_priced: "تم تسعير طلب قطعة الغيار",
+  part_request_delivered: "تم تسليم طلب قطعة الغيار",
+  part_order_receipt_ready: "إيصال الدفع جاهز",
+  part_order_invoice_ready: "الفاتورة الضريبية لطلب قطعة الغيار جاهزة",
+  part_request_approval_reminder: "طلب قطعة الغيار لسه بانتظار موافقتك",
+};
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -165,6 +183,18 @@ serve(async (req) => {
           [bi("رقم الطلب", "Request Number"), requestNumber],
           [bi("الإجراء المطلوب", "Action Needed"), bi("يرجى فتح تطبيق سندك لمراجعة السعر والموافقة عليه", "Please open the SNDK app to review and approve the price")],
         ]);
+      }
+
+      // A real push (web + mobile) alongside every one of these emails —
+      // used to only happen for 2 of the 11 customer events (status_changed
+      // at job-card creation, quotation_sent), both triggered by a separate
+      // direct send-push call from sndk-admin. Centralizing it here instead
+      // covers all of them at once, and never again silently misses a newer
+      // event the way the email side itself just did. Never awaited/thrown —
+      // a push failure must never affect whether the email above sends.
+      if (customerId && PUSH_BODY_AR[event]) {
+        const pushTitle = subject.split(" / ")[0] || "سندك";
+        sendPushToUser(supabase, customerId, pushTitle, PUSH_BODY_AR[event]).catch(() => {});
       }
     } else if (STAFF_EVENTS.has(event)) {
       const { data: staffList } = await supabase
