@@ -8473,6 +8473,61 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
 // same timeline/videos/quotation/payment info as طلباتي, minus the now-irrelevant
 // interactive approve/pay controls, plus the same PDF buttons.
 function HistoryOrderDetail({ jobCard, order, car, appt, profile, isRtl, tr, openVideoId, setOpenVideoId, carBrands, carCategories }) {
+  // A parts-only job card has no appointments/orders/order_items at all — its
+  // real data (items, payments, approval signature) lives on the linked
+  // part_orders row instead (see loadCarHistory's synthetic rows). Rendering
+  // it through the car-service logic below fed openQuotationPDF/
+  // printCustomerInvoice an empty order_items:[] with no signature, which is
+  // exactly why the customer saw a blank Job Card/Invoice PDF with no
+  // signature and no rejected items.
+  if (jobCard.is_parts_only && appt?.linkedPartOrder) {
+    const po = appt.linkedPartOrder;
+    const items = po.part_order_items || [];
+    const decisions = po.item_decisions || {};
+    const isApproved = !!po.customer_approved_at;
+    const approvedItems = isApproved ? items.filter(i => decisions[i.id] === 'approved') : items;
+    const rejectedItems = isApproved ? items.filter(i => decisions[i.id] === 'rejected') : [];
+    const lineTotal = it => Number(it.quoted_sell_price||0) * Number(it.quantity||1);
+    const grandTotal = approvedItems.reduce((s,it)=>s+lineTotal(it),0);
+    const totalPaid = (po.part_order_payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
+    const remaining = grandTotal - totalPaid;
+    const rejectedNames = rejectedItems.map(it => (isRtl ? it.part_snapshot?.name?.ar : it.part_snapshot?.name?.en) || it.part_snapshot?.name?.ar || it.part_snapshot?.name?.en || '—');
+    return (
+      <div className="px-4 pb-4 space-y-3" style={{ borderTop:`1px solid ${C.border}` }}>
+        <div className="pt-3">
+          <JobStatusTimeline jobCard={jobCard} isRtl={isRtl} tr={tr} textColor={C.text} mutedColor={C.muted} fg={C.gold}
+            openVideoId={openVideoId} setOpenVideoId={setOpenVideoId}/>
+        </div>
+        {grandTotal > 0 && (
+          <div className="rounded-xl p-3 space-y-1.5" style={{ background:`${C.gold}08`, border:`1px solid ${C.gold}20` }}>
+            <div className="flex items-center justify-between text-xs">
+              <span style={{ color:C.muted }}>{isRtl?'قطع الغيار':'Parts'}</span>
+              <span className="font-bold" style={{ color:C.text }}>{grandTotal.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span style={{ color:C.muted }}>{isRtl?'المدفوع':'Paid'}</span>
+              <span className="font-bold" style={{ color:'#22c55e' }}>{totalPaid.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span style={{ color:C.muted }}>{isRtl?'المتبقي':'Remaining'}</span>
+              <span className="font-bold" style={{ color: remaining>0.001?'#ef4444':'#22c55e' }}>{Math.max(remaining,0).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+            </div>
+          </div>
+        )}
+        {rejectedNames.length > 0 && (
+          <div className="rounded-xl p-3 text-xs font-bold" style={{ background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)', color:'#ef4444' }}>
+            {isRtl ? `تم رفض: ${rejectedNames.join('، ')}` : `Declined: ${rejectedNames.join(', ')}`}
+          </div>
+        )}
+        <button onClick={() => openPartsQuotePDF(po, profile)}
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl font-bold text-xs"
+          style={{ background:'rgba(0,0,0,0.08)', border:`1px solid ${C.border}`, color:C.text }}>
+          <FileImage size={13}/>{isRtl?'PDF فاتورة قطع الغيار':'Parts Invoice PDF'}
+        </button>
+      </div>
+    );
+  }
+
   let receptionVideos = [];
   try { receptionVideos = JSON.parse(jobCard.reception_videos || '[]'); } catch {}
   if (!receptionVideos.length && jobCard.reception_video_url) receptionVideos = [jobCard.reception_video_url];
@@ -8744,7 +8799,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
       // "active" with no real destination once it's done.
       supabase
         .from('job_cards')
-        .select('id, job_number, job_status, status_history, invoice_ready, closed_at, customer_snapshot, is_parts_only, source_part_order_id, part_orders:source_part_order_id(id, request_number, status, created_at, customer_approved_at, item_decisions, part_order_items(*), part_order_payments(*))')
+        .select('id, job_number, job_status, status_history, invoice_ready, closed_at, customer_snapshot, is_parts_only, source_part_order_id, part_orders:source_part_order_id(*, part_order_items(*), part_order_payments(*))')
         .eq('car_id', carId)
         .eq('is_parts_only', true),
     ]);
@@ -8769,6 +8824,12 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
           customer_rejected: false,
           order_items: [],
         }],
+        // The real part_orders row (items, payments, approval signature) — a
+        // parts-only job card has no orders/order_items at all, so the PDF
+        // for it (HistoryOrderDetail below) reads straight from this instead
+        // of from the synthetic `orders[0]` above, which only carries the
+        // display totals this summary list itself needs.
+        linkedPartOrder: po,
       };
     });
     setHistory(p => ({ ...p, [carId]: [...(data || []), ...syntheticPartAppts] }));
