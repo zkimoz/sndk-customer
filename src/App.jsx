@@ -5868,7 +5868,12 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
     jcRows.filter(({ jcRaw }) => jcRaw.is_parts_only && jcRaw.source_part_order_id)
       .map(({ jcRaw }) => jcRaw.source_part_order_id)
   );
-  const activePartOrders = partOrders.filter(po => !['cancelled','declined'].includes(po.status) && !linkedPartOrderIds.has(po.id));
+  // 'delivered' is genuinely done, not just "not cancelled" — it used to
+  // fall through to "active" by elimination and sit there forever with
+  // nothing left to do. It isn't "cancelled" either; it moves to the car's
+  // own maintenance history instead (ProfileView's loadCarHistory), same
+  // destination a closed car-service job card already uses.
+  const activePartOrders = partOrders.filter(po => !['cancelled','declined','delivered'].includes(po.status) && !linkedPartOrderIds.has(po.id));
   const cancelledPartOrders = partOrders.filter(po => ['cancelled','declined'].includes(po.status) && !linkedPartOrderIds.has(po.id));
   const activeIsEmpty    = noJcAppts.length === 0 && jcRows.length === 0 && activePartOrders.length === 0;
   const cancelledIsEmpty = cancelledAppts.length === 0 && cancelledPartOrders.length === 0;
@@ -8724,12 +8729,49 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
 
   const loadCarHistory = async (carId) => {
     if (history[carId]) return;
-    const { data } = await supabase
-      .from('appointments')
-      .select('*, orders(*, order_items(*), payments(*)), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, general_notes, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot, pickup_tracking_active, return_tracking_active, is_parts_only)')
-      .eq('car_id', carId)
-      .order('appointment_date', { ascending: false });
-    setHistory(p => ({ ...p, [carId]: data || [] }));
+    const [{ data }, { data: partsJobCards }] = await Promise.all([
+      supabase
+        .from('appointments')
+        .select('*, orders(*, order_items(*), payments(*)), job_cards(id, job_number, job_status, status_history, invoice_ready, closed_at, customer_complaints, work_done, general_notes, mileage_in, mileage_out, reception_video_url, reception_videos, workshop_notes_videos, computer_scan_urls, customer_snapshot, pickup_tracking_active, return_tracking_active, is_parts_only)')
+        .eq('car_id', carId)
+        .order('appointment_date', { ascending: false }),
+      // Parts-only job cards are auto-opened directly from a part_order —
+      // they never go through `appointments` at all, so the query above can
+      // never see them. Fetched separately here and folded into the same
+      // history list as synthetic single-job-card "appointments", so a
+      // closed spare-parts request shows up in car history exactly like a
+      // closed car job does, instead of being stuck looking permanently
+      // "active" with no real destination once it's done.
+      supabase
+        .from('job_cards')
+        .select('id, job_number, job_status, status_history, invoice_ready, closed_at, customer_snapshot, is_parts_only, source_part_order_id, part_orders:source_part_order_id(id, request_number, status, created_at, customer_approved_at, item_decisions, part_order_items(*), part_order_payments(*))')
+        .eq('car_id', carId)
+        .eq('is_parts_only', true),
+    ]);
+    const syntheticPartAppts = (partsJobCards || []).filter(jc => jc.part_orders).map(jc => {
+      const po = jc.part_orders;
+      const items = po.part_order_items || [];
+      const billable = po.customer_approved_at ? items.filter(i => (po.item_decisions||{})[i.id] === 'approved') : items;
+      const total = billable.reduce((s,i) => s + Number(i.quoted_sell_price||0) * Number(i.quantity||1), 0);
+      return {
+        id: `po-${jc.id}`,
+        car_id: carId,
+        appointment_date: (po.created_at || '').slice(0, 10),
+        service_type: items.length > 1
+          ? (isRtl ? `${items.length} قطع غيار` : `${items.length} spare parts`)
+          : (items[0]?.part_snapshot?.name?.[lang] || items[0]?.part_snapshot?.name?.ar || po.request_number),
+        job_cards: [jc],
+        orders: [{
+          status: po.status,
+          total_parts_price: total,
+          total_labor_price: 0,
+          customer_approved: !!po.customer_approved_at,
+          customer_rejected: false,
+          order_items: [],
+        }],
+      };
+    });
+    setHistory(p => ({ ...p, [carId]: [...(data || []), ...syntheticPartAppts] }));
   };
 
   const toggleCar = (carId) => {
