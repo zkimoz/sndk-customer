@@ -7817,7 +7817,7 @@ function PublicReviewsSection({ isRtl }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.from('reviews').select('rating, comment, reviewer_display_name, staff_reply, created_at')
+    supabase.from('reviews').select('rating, comment, reviewer_display_name, staff_reply, created_at, car_label')
       .eq('is_public', true).order('created_at', { ascending: false }).limit(6)
       .then(({ data }) => { setReviews(data || []); setLoading(false); });
   }, []);
@@ -7838,8 +7838,11 @@ function PublicReviewsSection({ isRtl }) {
         {reviews.map((r, i) => (
           <div key={i} className="rounded-2xl p-4" style={{ background:C.panel, border:`1px solid ${C.border}` }}>
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-sm font-bold" style={{ color:C.text }}>{r.reviewer_display_name}</span>
-              <div className="flex">
+              <div className="min-w-0">
+                <span className="text-sm font-bold" style={{ color:C.text }}>{r.reviewer_display_name}</span>
+                {r.car_label && <span className="text-xs block" style={{ color:C.muted }}>{r.car_label}</span>}
+              </div>
+              <div className="flex flex-shrink-0">
                 {[1,2,3,4,5].map(n => <Star key={n} size={12} style={{ color:n<=r.rating?C.gold:C.border }} fill={n<=r.rating?C.gold:'none'}/>)}
               </div>
             </div>
