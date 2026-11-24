@@ -9658,7 +9658,13 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                       {carHistory && carHistory.length > 0 && (() => {
                         const currentYear = new Date().getFullYear();
                         const yearTotal = carHistory.reduce((sum, a) => {
-                          const carPayments = (a.orders || []).flatMap(o => o.payments || []);
+                          // A parts-only row has no orders/payments of its own — its real
+                          // payments live on the linked part_orders row instead (see
+                          // loadCarHistory's synthetic rows), so they'd otherwise never
+                          // count toward this car's yearly total at all.
+                          const carPayments = a.linkedPartOrder
+                            ? (a.linkedPartOrder.part_order_payments || [])
+                            : (a.orders || []).flatMap(o => o.payments || []);
                           return sum + carPayments
                             .filter(p => new Date(p.created_at).getFullYear() === currentYear)
                             .reduce((s, p) => s + Number(p.amount || 0), 0);
