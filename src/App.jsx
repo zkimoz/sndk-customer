@@ -9281,7 +9281,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
       {(() => { const pc = CARD_BG_CYCLE[1]; return (
       <div className="rounded-2xl overflow-hidden p-5 space-y-3" style={{ background:pc.bg, border:`1px solid ${pc.fg}30` }}>
         <div>
-          <p className="font-bold text-sm" style={{ color:pc.txt }}>{isRtl?'ادعُ صديقًا':'Invite a Friend'}</p>
+          <p className="font-bold text-sm" style={{ color:pc.txt }}>{isRtl?'برنامج المكافئات':'Rewards Program'}</p>
           <p className="text-xs mt-0.5" style={{ color:pc.sub }}>
             {isRtl
               ? `شارك كودك — يحصل كل منكما على ${referralBonusPct}% رصيد في المحفظة بعد أول خدمة لصديقك`
