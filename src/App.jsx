@@ -1187,14 +1187,13 @@ export default function App() {
   const [pendingQuotCount, setPendingQuotCount] = useState(0);
   const [pendingReviewCount, setPendingReviewCount] = useState(0);
   const [pendingReviewJobCardId, setPendingReviewJobCardId] = useState(null);
-  // A staff-shared review link (?review=<job_card_id>, sent via WhatsApp from
-  // the staff Reviews screen) — raw, unvalidated id captured as soon as the
-  // URL is seen; the next effect below (once a user is signed in) checks it's
-  // really this customer's own closed job card and not already reviewed
-  // before ever rendering the modal, since this id arrives from a link
-  // outside the app and can't be trusted on its own.
-  const [reviewDeepLinkRaw, setReviewDeepLinkRaw] = useState(null);
-  const [reviewDeepLinkVerifiedId, setReviewDeepLinkVerifiedId] = useState(null);
+  // A staff-shared review link (?review=<review_share_token>, sent via
+  // WhatsApp from the staff Reviews screen) — deliberately the one link in
+  // this app a customer can act on with no login at all (see
+  // PublicReviewView): the token itself is the only thing that gates it,
+  // resolved entirely through the public_review_status/submit_public_review
+  // RPCs, never through job_cards'/reviews' normal RLS.
+  const [publicReviewToken, setPublicReviewToken] = useState(null);
   // A staff-shared signing link (?jc=JC-2026-0011) — jumps straight to that
   // job card's quotation in Orders once auth resolves (login-gated rather
   // than a public token link, so it reuses the app's existing RLS/auth
@@ -1392,45 +1391,18 @@ export default function App() {
     setMenuOpen(false);
   }, []);
 
-  // Staff-shared review link (?review=<job_card_id>) — same login-gated
-  // shape as ?jc= above, captured raw here; the effect right after this one
-  // verifies it (own job card, closed, not already reviewed) once a user is
-  // actually signed in, before the review modal ever renders.
+  // Staff-shared review link (?review=<review_share_token>) — opens
+  // immediately, no auth wait, no login required at all (see
+  // publicShareToken above for the same reasoning): a page of its own
+  // (PublicReviewView) handles everything through the token alone.
   useEffect(() => {
-    if (!authChecked) return;
-    const reviewId = new URLSearchParams(window.location.search).get('review');
-    if (!reviewId) return;
+    const reviewToken = new URLSearchParams(window.location.search).get('review');
+    if (!reviewToken) return;
     window.history.replaceState(null, '', window.location.pathname + window.location.hash);
-    setReviewDeepLinkRaw(reviewId);
-    setPage('home');
+    setPublicReviewToken(reviewToken);
+    setPage('public-review');
     setMenuOpen(false);
-    if (!user) setAuthModal('signin');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authChecked]);
-
-  useEffect(() => {
-    if (!user || !reviewDeepLinkRaw) return;
-    let cancelled = false;
-    (async () => {
-      const jcId = reviewDeepLinkRaw;
-      const { data: jc } = await supabase.from('job_cards').select('id, is_closed').eq('id', jcId).eq('profile_id', user.id).maybeSingle();
-      if (cancelled) return;
-      if (!jc?.is_closed) {
-        setReviewDeepLinkRaw(null);
-        alert(isRtl ? 'رابط التقييم غير صالح' : 'This review link is invalid');
-        return;
-      }
-      const { data: existing } = await supabase.from('reviews').select('id').eq('job_card_id', jcId).maybeSingle();
-      if (cancelled) return;
-      if (existing) {
-        setReviewDeepLinkRaw(null);
-        alert(isRtl ? 'لقد قيّمت هذه الخدمة من قبل، شكرًا لك' : "You've already rated this service, thank you");
-        return;
-      }
-      setReviewDeepLinkVerifiedId(jcId);
-    })();
-    return () => { cancelled = true; };
-  }, [user, reviewDeepLinkRaw]);
+  }, []);
 
   // Returning from a SkipCash hosted-checkout redirect — "the browser came
   // back" doesn't by itself mean the card was actually charged (a decline
@@ -1918,6 +1890,7 @@ export default function App() {
             {page==='faq' && <FaqPageView isRtl={isRtl}/>}
             {page==='part-quote' && <PublicPartOrderView isRtl={isRtl} user={user} token={publicShareToken}
               onApproveClick={(requestNumber)=>{ setHighlightRequestNumber(requestNumber); setPage('orders'); if (!user) setAuthModal('signin'); }}/>}
+            {page==='public-review' && <PublicReviewView isRtl={isRtl} token={publicReviewToken}/>}
             {page==='parts'   && <PartsFlowView lang={lang} isRtl={isRtl} user={user} profile={profile} goHome={goHome} carBrands={carBrands} carCategories={carCategories}/>}
             {page==='booking' && step===2 && <DetailsStep {...shared} prevStep={()=>setPage('home')}/>}
             {page==='booking' && step===3 && <ScheduleStep {...shared} prevStep={()=>setStep(2)}/>}
@@ -2088,11 +2061,6 @@ export default function App() {
       {authModal && (
         <AuthModal mode={authModal} setMode={setAuthModal} tr={tr} isRtl={isRtl}
           reason={authReason} onSuccess={handleAuthSuccess}/>
-      )}
-      {reviewDeepLinkVerifiedId && (
-        <ReviewSubmitModal isRtl={isRtl} jobCardId={reviewDeepLinkVerifiedId} profile={profile}
-          onClose={() => { setReviewDeepLinkVerifiedId(null); setReviewDeepLinkRaw(null); }}
-          onSubmitted={() => { setReviewDeepLinkVerifiedId(null); setReviewDeepLinkRaw(null); loadPendingReviewCount(user.id); }}/>
       )}
       {showNewPassword && (
         <NewPasswordModal tr={tr} isRtl={isRtl} onClose={() => setShowNewPassword(false)}/>
@@ -7481,6 +7449,114 @@ function maskReviewerName(fullName, isRtl) {
   const first = parts[0];
   const lastInitial = parts.length > 1 ? parts[parts.length - 1][0] : '';
   return lastInitial ? `${first} ${lastInitial}.` : first;
+}
+
+// A public, login-free review page for a staff-shared link
+// (?review=<review_share_token>) — unlike every other staff-shared link in
+// this app (?jc=, the referral code, etc.), this one is deliberately usable
+// with no account at all: the token is the only thing that gates it, and
+// the whole flow goes through get_public_review_status/submit_public_review
+// (security-definer RPCs, resolved purely by token) instead of the normal
+// job_cards/reviews RLS, which is always keyed on auth.uid(). Staff get this
+// link from the Reviews screen in sndk-admin, generated once per job card.
+function PublicReviewView({ isRtl, token }) {
+  const [state, setState] = useState('loading'); // loading | invalid | already | form | submitted
+  const [rating, setRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!token) { setState('invalid'); return; }
+    supabase.rpc('get_public_review_status', { p_token: token }).then(({ data, error }) => {
+      const row = Array.isArray(data) ? data[0] : data;
+      if (error || !row?.valid) { setState('invalid'); return; }
+      setState(row.already_reviewed ? 'already' : 'form');
+    }).catch(() => setState('invalid'));
+  }, [token]);
+
+  const submit = async () => {
+    if (!rating || saving) return;
+    setSaving(true);
+    setError('');
+    const { error } = await supabase.rpc('submit_public_review', {
+      p_token: token, p_rating: rating, p_comment: comment.trim() || null,
+    });
+    setSaving(false);
+    if (error) {
+      setError(error.message?.includes('already_reviewed')
+        ? (isRtl ? 'تم تقييم هذه الخدمة من قبل' : 'This service has already been reviewed')
+        : (isRtl ? 'حدث خطأ، حاول مرة أخرى' : 'Something went wrong, please try again'));
+      return;
+    }
+    setState('submitted');
+  };
+
+  if (state === 'loading') {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 size={28} className="animate-spin" style={{ color: C.gold }}/>
+      </div>
+    );
+  }
+
+  if (state === 'invalid') {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-2 px-4 text-center">
+        <img src="/logo-static.png" alt="SNDK" className="h-12 mb-2"/>
+        <p className="text-lg font-bold" style={{ color: C.text }}>{isRtl ? 'هذا الرابط غير صالح' : 'This link is invalid'}</p>
+        <p className="text-sm" style={{ color: C.muted }}>{isRtl ? 'تواصل مع فريق سندك لو تحتاج رابط تقييم جديد' : 'Contact SNDK if you need a new review link'}</p>
+      </div>
+    );
+  }
+
+  if (state === 'already' || state === 'submitted') {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3 px-4 text-center">
+        <img src="/logo-static.png" alt="SNDK" className="h-12 mb-1"/>
+        <div className="flex gap-1">
+          {[1,2,3,4,5].map(n => <Star key={n} size={26} style={{ color: C.gold }} fill={C.gold}/>)}
+        </div>
+        <p className="text-lg font-bold" style={{ color: C.text }}>
+          {isRtl ? 'شكرًا لتقييمك! 🙏' : 'Thank you for your review! 🙏'}
+        </p>
+        <p className="text-sm" style={{ color: C.muted }}>
+          {isRtl ? 'رأيك يهمنا ويساعدنا نقدّم خدمة أفضل' : 'Your feedback matters and helps us serve you better'}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-sm mx-auto p-4 md:p-6 min-h-[60vh] flex flex-col justify-center space-y-5">
+      <div className="text-center">
+        <img src="/logo-static.png" alt="SNDK" className="h-12 mx-auto mb-3"/>
+        <h1 className="text-xl font-black" style={{ color: C.text }}>{isRtl ? 'قيّم تجربتك' : 'Rate Your Experience'}</h1>
+        <p className="text-sm mt-1" style={{ color: C.muted }}>
+          {isRtl ? 'اكتب ملاحظاتك لكي نستفيد من رأيك، فهو مهم لنا' : 'Share your feedback — it really matters to us'}
+        </p>
+      </div>
+      <div className="flex items-center justify-center gap-2 py-2">
+        {[1,2,3,4,5].map(n => (
+          <button key={n} onMouseEnter={()=>setHoverRating(n)} onMouseLeave={()=>setHoverRating(0)} onClick={()=>setRating(n)}>
+            <Star size={38} style={{ color:(hoverRating||rating)>=n ? C.gold : C.border }} fill={(hoverRating||rating)>=n ? C.gold : 'none'}/>
+          </button>
+        ))}
+      </div>
+      <textarea rows={4} value={comment} onChange={e=>setComment(e.target.value)}
+        placeholder={isRtl ? 'شاركنا رأيك (اختياري)' : 'Share your thoughts (optional)'}
+        className="w-full px-3 py-2.5 rounded-xl text-sm resize-none outline-none"
+        style={{ background:C.input, border:`1px solid ${C.border}`, color:C.text }}/>
+      {error && <p className="text-sm text-center" style={{ color:'#ef4444' }}>{error}</p>}
+      <button onClick={submit} disabled={!rating || saving}
+        className="w-full py-3 rounded-xl text-sm font-black flex items-center justify-center gap-2 disabled:opacity-40 transition-all"
+        style={{ background:C.gold, color:C.btnTxt }}>
+        {saving && <Loader2 size={14} className="animate-spin"/>}
+        {isRtl ? 'إرسال التقييم' : 'Submit Review'}
+      </button>
+    </div>
+  );
 }
 
 function ReviewSubmitModal({ isRtl, jobCardId, profile, onClose, onSubmitted }) {

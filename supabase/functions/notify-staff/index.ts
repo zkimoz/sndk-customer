@@ -86,7 +86,7 @@ serve(async (req) => {
     const {
       event, jobNumber, customerName, serviceLabel, carLabel, appointmentDate, appointmentTime,
       customerId, statusLabelAr, statusLabelEn, invoicePdfBase64, invoiceFilename,
-      amountQAR, methodAr, methodEn, receiptUrl, requestNumber, jobCardId,
+      amountQAR, methodAr, methodEn, receiptUrl, requestNumber, reviewToken,
     } = await req.json();
 
     let recipients: string[] = [];
@@ -199,7 +199,12 @@ serve(async (req) => {
           [bi("الإجراء المطلوب", "Action Needed"), bi("يرجى فتح تطبيق سندك لمراجعة السعر والموافقة عليه", "Please open the SNDK app to review and approve the price")],
         ]);
       } else if (event === "review_reminder") {
-        const reviewUrl = jobCardId ? `https://sndkqa.com/?review=${jobCardId}` : "https://sndkqa.com";
+        // review_reminder is the one link in the whole app meant to work with
+        // no login at all (see submit_public_review) — points at the
+        // redirect page (api/review/[id].js), not straight at ?review=, so a
+        // forwarded/previewed copy of this email still gets the review-
+        // specific og:title/og:description instead of the site's generic one.
+        const reviewUrl = reviewToken ? `https://www.sndkqa.com/api/review/${reviewToken}` : "https://www.sndkqa.com";
         subject = bi(`⭐ قيّم خدمتك الأخيرة معنا — ${jobNumber || ""}`, `Rate your recent service with us — ${jobNumber || ""}`);
         html = wrap(bi("رأيك يهمنا", "We'd love your feedback"), [
           [bi("العميل", "Customer"), name],
