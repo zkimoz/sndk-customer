@@ -5891,7 +5891,12 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
     const badgeC = CARD_BG_CYCLE[(pi + 1) % 2];
     const st = PART_ORDER_ST[po.status] || PART_ORDER_ST.pending;
     const items = po.part_order_items || [];
-    const totalQuoted = items.reduce((s,i)=>s+Number(i.quoted_sell_price||0)*Number(i.quantity||1), 0);
+    // Once the customer has decided, a rejected item was never actually
+    // billed — summing every item here regardless (as this used to) showed
+    // a total bigger than what was really agreed to and charged, same
+    // mismatch the approval/PDF views below already guard against.
+    const billableItems = po.customer_approved_at ? items.filter(i => (po.item_decisions||{})[i.id] === 'approved') : items;
+    const totalQuoted = billableItems.reduce((s,i)=>s+Number(i.quoted_sell_price||0)*Number(i.quantity||1), 0);
     const title = items.length > 1
       ? (isRtl ? `${items.length} قطع غيار` : `${items.length} spare parts`)
       : (items[0]?.part_snapshot?.name?.[lang] || items[0]?.part_snapshot?.name?.ar || '—');
