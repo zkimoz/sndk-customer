@@ -1187,6 +1187,14 @@ export default function App() {
   const [pendingQuotCount, setPendingQuotCount] = useState(0);
   const [pendingReviewCount, setPendingReviewCount] = useState(0);
   const [pendingReviewJobCardId, setPendingReviewJobCardId] = useState(null);
+  // A staff-shared review link (?review=<job_card_id>, sent via WhatsApp from
+  // the staff Reviews screen) — raw, unvalidated id captured as soon as the
+  // URL is seen; the next effect below (once a user is signed in) checks it's
+  // really this customer's own closed job card and not already reviewed
+  // before ever rendering the modal, since this id arrives from a link
+  // outside the app and can't be trusted on its own.
+  const [reviewDeepLinkRaw, setReviewDeepLinkRaw] = useState(null);
+  const [reviewDeepLinkVerifiedId, setReviewDeepLinkVerifiedId] = useState(null);
   // A staff-shared signing link (?jc=JC-2026-0011) — jumps straight to that
   // job card's quotation in Orders once auth resolves (login-gated rather
   // than a public token link, so it reuses the app's existing RLS/auth
@@ -1383,6 +1391,46 @@ export default function App() {
     setPage('part-quote');
     setMenuOpen(false);
   }, []);
+
+  // Staff-shared review link (?review=<job_card_id>) — same login-gated
+  // shape as ?jc= above, captured raw here; the effect right after this one
+  // verifies it (own job card, closed, not already reviewed) once a user is
+  // actually signed in, before the review modal ever renders.
+  useEffect(() => {
+    if (!authChecked) return;
+    const reviewId = new URLSearchParams(window.location.search).get('review');
+    if (!reviewId) return;
+    window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+    setReviewDeepLinkRaw(reviewId);
+    setPage('home');
+    setMenuOpen(false);
+    if (!user) setAuthModal('signin');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authChecked]);
+
+  useEffect(() => {
+    if (!user || !reviewDeepLinkRaw) return;
+    let cancelled = false;
+    (async () => {
+      const jcId = reviewDeepLinkRaw;
+      const { data: jc } = await supabase.from('job_cards').select('id, is_closed').eq('id', jcId).eq('profile_id', user.id).maybeSingle();
+      if (cancelled) return;
+      if (!jc?.is_closed) {
+        setReviewDeepLinkRaw(null);
+        alert(isRtl ? 'رابط التقييم غير صالح' : 'This review link is invalid');
+        return;
+      }
+      const { data: existing } = await supabase.from('reviews').select('id').eq('job_card_id', jcId).maybeSingle();
+      if (cancelled) return;
+      if (existing) {
+        setReviewDeepLinkRaw(null);
+        alert(isRtl ? 'لقد قيّمت هذه الخدمة من قبل، شكرًا لك' : "You've already rated this service, thank you");
+        return;
+      }
+      setReviewDeepLinkVerifiedId(jcId);
+    })();
+    return () => { cancelled = true; };
+  }, [user, reviewDeepLinkRaw]);
 
   // Returning from a SkipCash hosted-checkout redirect — "the browser came
   // back" doesn't by itself mean the card was actually charged (a decline
@@ -2040,6 +2088,11 @@ export default function App() {
       {authModal && (
         <AuthModal mode={authModal} setMode={setAuthModal} tr={tr} isRtl={isRtl}
           reason={authReason} onSuccess={handleAuthSuccess}/>
+      )}
+      {reviewDeepLinkVerifiedId && (
+        <ReviewSubmitModal isRtl={isRtl} jobCardId={reviewDeepLinkVerifiedId} profile={profile}
+          onClose={() => { setReviewDeepLinkVerifiedId(null); setReviewDeepLinkRaw(null); }}
+          onSubmitted={() => { setReviewDeepLinkVerifiedId(null); setReviewDeepLinkRaw(null); loadPendingReviewCount(user.id); }}/>
       )}
       {showNewPassword && (
         <NewPasswordModal tr={tr} isRtl={isRtl} onClose={() => setShowNewPassword(false)}/>

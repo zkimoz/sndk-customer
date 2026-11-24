@@ -13,7 +13,7 @@ const CUSTOMER_FROM_EMAIL = Deno.env.get("CUSTOMER_FROM_EMAIL") || "SNDK <norepl
 // opted in individually via notify_email in الموظفين.
 const DEPARTMENT_EMAILS = ["info@sndkqa.com", "workshop@sndkqa.com", "customerservice@sndkqa.com"];
 const STAFF_EVENTS = new Set(["quotation_approved", "new_booking", "payment_received", "payment_method_chosen", "part_request_created", "part_order_payment_method_chosen", "part_order_payment_received", "wallet_topup_received"]);
-const CUSTOMER_EVENTS = new Set(["status_changed", "quotation_sent", "invoice_ready", "job_closed", "resignature_requested", "payment_receipt", "part_request_priced", "part_request_delivered", "part_order_receipt_ready", "part_order_invoice_ready", "part_request_approval_reminder"]);
+const CUSTOMER_EVENTS = new Set(["status_changed", "quotation_sent", "invoice_ready", "job_closed", "resignature_requested", "payment_receipt", "part_request_priced", "part_request_delivered", "part_order_receipt_ready", "part_order_invoice_ready", "part_request_approval_reminder", "review_reminder"]);
 
 // Short, Arabic-only push body per customer event — the subject line
 // already built above (bi(ar, en)) supplies the push title (its Arabic
@@ -30,6 +30,7 @@ const PUSH_BODY_AR: Record<string, string> = {
   part_order_receipt_ready: "إيصال الدفع جاهز",
   part_order_invoice_ready: "الفاتورة الضريبية لطلب قطعة الغيار جاهزة",
   part_request_approval_reminder: "طلب قطعة الغيار لسه بانتظار موافقتك",
+  review_reminder: "قيّم خدمتك الأخيرة معنا ⭐",
 };
 
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -85,7 +86,7 @@ serve(async (req) => {
     const {
       event, jobNumber, customerName, serviceLabel, carLabel, appointmentDate, appointmentTime,
       customerId, statusLabelAr, statusLabelEn, invoicePdfBase64, invoiceFilename,
-      amountQAR, methodAr, methodEn, receiptUrl, requestNumber,
+      amountQAR, methodAr, methodEn, receiptUrl, requestNumber, jobCardId,
     } = await req.json();
 
     let recipients: string[] = [];
@@ -197,6 +198,13 @@ serve(async (req) => {
           [bi("رقم الطلب", "Request Number"), requestNumber],
           [bi("الإجراء المطلوب", "Action Needed"), bi("يرجى فتح تطبيق سندك لمراجعة السعر والموافقة عليه", "Please open the SNDK app to review and approve the price")],
         ]);
+      } else if (event === "review_reminder") {
+        const reviewUrl = jobCardId ? `https://sndkqa.com/?review=${jobCardId}` : "https://sndkqa.com";
+        subject = bi(`⭐ قيّم خدمتك الأخيرة معنا — ${jobNumber || ""}`, `Rate your recent service with us — ${jobNumber || ""}`);
+        html = wrap(bi("رأيك يهمنا", "We'd love your feedback"), [
+          [bi("العميل", "Customer"), name],
+          [bi("رقم أمر الشغل", "Job Number"), jobNumber],
+        ], `<a href="${reviewUrl}" target="_blank" style="color:#8A1538;font-weight:700">${bi("قيّم خدمتك الآن", "Rate your service now")}</a>`);
       }
 
       // A real push (web + mobile) alongside every one of these emails —
