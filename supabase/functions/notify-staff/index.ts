@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendPushToUser } from "../_shared/push.ts";
+import { isServiceRoleCaller } from "../_shared/auth.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")!;
 const FROM_EMAIL = Deno.env.get("NOTIFY_FROM_EMAIL") || "SNDK <onboarding@resend.dev>";
@@ -31,9 +32,10 @@ const PUSH_BODY_AR: Record<string, string> = {
   part_request_approval_reminder: "طلب قطعة الغيار لسه بانتظار موافقتك",
 };
 
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  SUPABASE_SERVICE_ROLE_KEY,
 );
 
 // Every email is bilingual (Modern Standard Arabic + English) with both
@@ -91,9 +93,21 @@ serve(async (req) => {
     let html = "";
 
     if (CUSTOMER_EVENTS.has(event)) {
+      // Only sndk-admin ever legitimately targets a customerId (every real
+      // customer-app call site below only fires STAFF_EVENTS, with no
+      // customerId in the body at all) — without this, any logged-in
+      // customer could call this function directly with an arbitrary
+      // customerId and get an officially-branded "payment received"/"job
+      // closed"/etc. email + push sent to any other customer.
+      if (!(await isServiceRoleCaller(req))) {
+        return new Response(JSON.stringify({ error: "forbidden" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+        });
+      }
       const { data: cust } = await supabase
         .from("profiles")
-        .select("email, full_name")
+        .select("email, full_name, push_notifications_enabled")
         .eq("id", customerId)
         .maybeSingle();
       if (cust?.email) recipients = [cust.email];
@@ -192,7 +206,7 @@ serve(async (req) => {
       // covers all of them at once, and never again silently misses a newer
       // event the way the email side itself just did. Never awaited/thrown —
       // a push failure must never affect whether the email above sends.
-      if (customerId && PUSH_BODY_AR[event]) {
+      if (customerId && PUSH_BODY_AR[event] && cust?.push_notifications_enabled !== false) {
         const pushTitle = subject.split(" / ")[0] || "سندك";
         sendPushToUser(supabase, customerId, pushTitle, PUSH_BODY_AR[event]).catch(() => {});
       }

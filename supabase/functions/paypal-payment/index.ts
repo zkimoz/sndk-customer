@@ -278,14 +278,22 @@ serve(async (req) => {
       const amountQAR = Math.round(capturedUSD * QAR_PER_USD * 1000) / 1000;
       const isTowing = types.includes("towing");
 
+      // Idempotent on payments.gateway_ref (same unique index/23505 pattern
+      // skipcash-webhook already relies on) — a retried client call after a
+      // dropped response, or two concurrent tabs, could otherwise capture
+      // this PayPal order twice and record two payments rows for one charge.
       const { error: insErr } = await adminClient.from("payments").insert({
         order_id: orderId,
         amount: amountQAR,
         method: "paypal",
         recorded_by: null,
         purpose: isTowing ? "towing" : "service",
+        gateway_ref: capture.id,
       });
-      if (insErr) return jsonResponse({ error: `Payment captured but failed to record: ${insErr.message}` }, 500);
+      if (insErr) {
+        if (insErr.code === "23505") return jsonResponse({ success: true, amountQAR });
+        return jsonResponse({ error: `Payment captured but failed to record: ${insErr.message}` }, 500);
+      }
 
       // PayPal reports the exact fee it kept on this specific capture — use
       // that instead of estimating, so logged expenses always match what

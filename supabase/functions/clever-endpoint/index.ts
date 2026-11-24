@@ -1,0 +1,329 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendPushToUser } from "../_shared/push.ts";
+import { isServiceRoleCaller } from "../_shared/auth.ts";
+
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")!;
+const FROM_EMAIL = Deno.env.get("NOTIFY_FROM_EMAIL") || "SNDK <onboarding@resend.dev>";
+// Customer-facing update emails are sent from a separate no-reply address so
+// replies don't land in the internal department inboxes.
+const CUSTOMER_FROM_EMAIL = Deno.env.get("CUSTOMER_FROM_EMAIL") || "SNDK <noreply@sndkqa.com>";
+
+// Always-notified department inboxes, in addition to any staff member who has
+// opted in individually via notify_email in الموظفين.
+const DEPARTMENT_EMAILS = ["info@sndkqa.com", "workshop@sndkqa.com", "customerservice@sndkqa.com"];
+const STAFF_EVENTS = new Set(["quotation_approved", "new_booking", "payment_received", "payment_method_chosen", "part_request_created", "part_order_payment_method_chosen", "part_order_payment_received", "wallet_topup_received"]);
+const CUSTOMER_EVENTS = new Set(["status_changed", "quotation_sent", "invoice_ready", "job_closed", "resignature_requested", "payment_receipt", "part_request_priced", "part_request_delivered", "part_order_receipt_ready", "part_order_invoice_ready", "part_request_approval_reminder"]);
+
+// Short, Arabic-only push body per customer event — the subject line
+// already built above (bi(ar, en)) supplies the push title (its Arabic
+// half), so this is the only new copy this needs per event.
+const PUSH_BODY_AR: Record<string, string> = {
+  status_changed: "تحديث على حالة سيارتك",
+  quotation_sent: "عرض السعر جاهز للمراجعة والموافقة",
+  invoice_ready: "الفاتورة الضريبية جاهزة",
+  job_closed: "سيارتك جاهزة للاستلام",
+  resignature_requested: "مطلوب توقيع جديد على عرض السعر",
+  payment_receipt: "تم استلام دفعتك بنجاح",
+  part_request_priced: "تم تسعير طلب قطعة الغيار",
+  part_request_delivered: "تم تسليم طلب قطعة الغيار",
+  part_order_receipt_ready: "إيصال الدفع جاهز",
+  part_order_invoice_ready: "الفاتورة الضريبية لطلب قطعة الغيار جاهزة",
+  part_request_approval_reminder: "طلب قطعة الغيار لسه بانتظار موافقتك",
+};
+
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const supabase = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  SUPABASE_SERVICE_ROLE_KEY,
+);
+
+// Every email is bilingual (Modern Standard Arabic + English) with both
+// languages rendered at the same font size — labels and titles are passed
+// pre-combined as "العربية / English" strings by the caller.
+const wrap = (title: string, rows: [string, string][], note?: string) => `
+<div dir="rtl" style="font-family:Arial,sans-serif;background:#f8fafc;padding:24px">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0">
+    <div style="background:#8A1538;padding:18px 22px">
+      <h2 style="margin:0;color:#fff;font-size:16px;font-weight:700">${title}</h2>
+    </div>
+    <div style="padding:20px 22px">
+      ${rows.map(([label, value]) => `
+        <div style="padding:8px 0;border-bottom:1px solid #f1f5f9">
+          <span style="font-size:12px;color:#94a3b8;font-weight:700">${label}</span>
+          <div style="font-size:14px;color:#1e293b;font-weight:600;margin-top:2px">${value || "—"}</div>
+        </div>`).join("")}
+      ${note ? `<div style="margin-top:14px;padding:14px 16px;background:#fdf3e7;border-radius:8px;font-size:14px;line-height:1.9;color:#1e293b">${note}</div>` : ""}
+    </div>
+    <div style="padding:12px 22px;background:#fafbfc;text-align:center;font-size:10px;color:#94a3b8">سندك — قطر · SNDK Qatar</div>
+  </div>
+</div>`;
+
+const bi = (ar: string, en: string) => `${ar} / ${en}`;
+
+// supabase-js's functions.invoke() sends 'apikey' and 'x-client-info' headers by
+// default — omitting them here made the browser's CORS preflight reject the
+// request outright before it ever reached this function (curl/Node fetch calls
+// don't enforce CORS, which is why direct testing always looked fine).
+// The admin app's service-role client (supabaseAdmin) additionally sends a
+// custom 'X-Admin-Client' header on every request it makes — including these
+// notify calls — which must be allow-listed too, or the same silent
+// preflight rejection happens specifically for admin-triggered emails.
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-admin-client",
+};
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      headers: CORS_HEADERS,
+    });
+  }
+
+  try {
+    const {
+      event, jobNumber, customerName, serviceLabel, carLabel, appointmentDate, appointmentTime,
+      customerId, statusLabelAr, statusLabelEn, invoicePdfBase64, invoiceFilename,
+      amountQAR, methodAr, methodEn, receiptUrl, requestNumber,
+    } = await req.json();
+
+    let recipients: string[] = [];
+    let subject = "";
+    let html = "";
+
+    if (CUSTOMER_EVENTS.has(event)) {
+      // Only sndk-admin ever legitimately targets a customerId (every real
+      // customer-app call site below only fires STAFF_EVENTS, with no
+      // customerId in the body at all) — without this, any logged-in
+      // customer could call this function directly with an arbitrary
+      // customerId and get an officially-branded "payment received"/"job
+      // closed"/etc. email + push sent to any other customer.
+      if (!(await isServiceRoleCaller(req))) {
+        return new Response(JSON.stringify({ error: "forbidden" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+        });
+      }
+      const { data: cust } = await supabase
+        .from("profiles")
+        .select("email, full_name, push_notifications_enabled")
+        .eq("id", customerId)
+        .maybeSingle();
+      if (cust?.email) recipients = [cust.email];
+      const name = cust?.full_name || customerName || "عميلنا العزيز / Dear Customer";
+
+      if (event === "status_changed") {
+        subject = bi(`🔧 تحديث على أمر شغلك — ${jobNumber || ""}`, `Update on your job card — ${jobNumber || ""}`);
+        html = wrap(bi("تحديث على حالة سيارتك", "Update on your car's status"), [
+          [bi("العميل", "Customer"), name],
+          [bi("رقم أمر الشغل", "Job Number"), jobNumber],
+          [bi("الحالة الجديدة", "New Status"), bi(statusLabelAr || "", statusLabelEn || "")],
+        ]);
+      } else if (event === "quotation_sent") {
+        subject = bi(`📋 عرض سعر جاهز لموافقتك — ${jobNumber || ""}`, `Quotation ready for your approval — ${jobNumber || ""}`);
+        html = wrap(bi("عرض السعر جاهز للمراجعة", "Your quotation is ready"), [
+          [bi("العميل", "Customer"), name],
+          [bi("رقم أمر الشغل", "Job Number"), jobNumber],
+          [bi("الإجراء المطلوب", "Action Needed"), bi("يرجى فتح تطبيق سندك للموافقة على عرض السعر", "Please open the SNDK app to review and approve")],
+        ]);
+      } else if (event === "invoice_ready") {
+        subject = bi(`🧾 فاتورتك جاهزة — ${jobNumber || ""}`, `Your invoice is ready — ${jobNumber || ""}`);
+        html = wrap(bi("الفاتورة جاهزة", "Invoice Ready"), [
+          [bi("العميل", "Customer"), name],
+          [bi("رقم أمر الشغل", "Job Number"), jobNumber],
+        ]);
+      } else if (event === "job_closed") {
+        subject = bi(`✅ سيارتك جاهزة للاستلام — ${jobNumber || ""}`, `Your car is ready for pickup — ${jobNumber || ""}`);
+        const thankYouNote = `
+          شكراً لاختيارك سندك! يسعدنا دائماً أن نكون في خدمتك، وسنظل بجانبك في أي وقت تحتاج فيه إلى رعاية سيارتك.
+          <br><br>
+          Thank you for choosing SNDK! We are always glad to serve you, and we will remain at your service anytime your car needs care.
+          ${invoicePdfBase64 ? `<br><br><strong>🧾 الفاتورة الضريبية مرفقة بهذا البريد.<br>The tax invoice is attached to this email.</strong>` : ""}
+        `;
+        html = wrap(bi("تم إغلاق أمر الشغل — السيارة جاهزة", "Job Card Closed — Car Ready"), [
+          [bi("العميل", "Customer"), name],
+          [bi("رقم أمر الشغل", "Job Number"), jobNumber],
+        ], thankYouNote);
+      } else if (event === "resignature_requested") {
+        subject = bi(`✍️ مطلوب توقيعك مرة أخرى — ${jobNumber || ""}`, `We need your signature again — ${jobNumber || ""}`);
+        html = wrap(bi("مطلوب توقيع جديد على عرض السعر", "New Signature Required"), [
+          [bi("العميل", "Customer"), name],
+          [bi("رقم أمر الشغل", "Job Number"), jobNumber],
+        ]);
+      } else if (event === "payment_receipt") {
+        // This email body IS the receipt — no PDF, the Edge Function has no
+        // PDF capability (jsPDF/html2canvas only exist client-side).
+        subject = bi(`✅ تم استلام دفعتك — ${jobNumber || ""}`, `Payment received — ${jobNumber || ""}`);
+        html = wrap(bi("تم استلام دفعتك بنجاح", "Your payment was received"), [
+          [bi("العميل", "Customer"), name],
+          [bi("رقم أمر الشغل", "Job Number"), jobNumber],
+          [bi("المبلغ المدفوع", "Amount Paid"), amountQAR != null ? `${amountQAR} ر.ق / QAR` : ""],
+          [bi("طريقة الدفع", "Payment Method"), bi(methodAr || "", methodEn || "")],
+          [bi("التاريخ", "Date"), new Date().toLocaleString("en-GB", { timeZone: "Asia/Qatar" })],
+        ], bi("شكراً لثقتكم بنا — هذا البريد بمثابة إيصال إلكتروني بالدفعة.", "Thank you for your trust — this email serves as your electronic payment receipt."));
+      } else if (event === "part_request_priced") {
+        subject = bi(`💰 تم تسعير طلب القطعة — ${requestNumber || ""}`, `Your part request has been priced — ${requestNumber || ""}`);
+        html = wrap(bi("تم تسعير طلب قطعة الغيار", "Your Spare Part Request Has Been Priced"), [
+          [bi("العميل", "Customer"), name],
+          [bi("رقم الطلب", "Request Number"), requestNumber],
+          [bi("السعر", "Price"), amountQAR != null ? `${amountQAR} ر.ق / QAR` : ""],
+          [bi("الإجراء المطلوب", "Action Needed"), bi("يرجى فتح تطبيق سندك لمراجعة السعر والدفع", "Please open the SNDK app to review the price and pay")],
+        ]);
+      } else if (event === "part_request_delivered") {
+        subject = bi(`✅ تم تسليم قطعة الغيار — ${requestNumber || ""}`, `Your spare part has been delivered — ${requestNumber || ""}`);
+        html = wrap(bi("تم تسليم طلب قطعة الغيار", "Your Spare Part Request Has Been Delivered"), [
+          [bi("العميل", "Customer"), name],
+          [bi("رقم الطلب", "Request Number"), requestNumber],
+        ], bi("شكراً لثقتكم بسندك!", "Thank you for trusting SNDK!"));
+      } else if (event === "part_order_receipt_ready") {
+        subject = bi(`🧾 إيصال دفعتك جاهز — ${requestNumber || ""}`, `Your payment receipt is ready — ${requestNumber || ""}`);
+        html = wrap(bi("إيصال الدفع جاهز", "Payment Receipt Ready"), [
+          [bi("العميل", "Customer"), name],
+          [bi("رقم الطلب", "Request Number"), requestNumber],
+          [bi("المبلغ المدفوع", "Amount Paid"), amountQAR != null ? `${amountQAR} ر.ق / QAR` : ""],
+        ]);
+      } else if (event === "part_order_invoice_ready") {
+        subject = bi(`🧾 فاتورة طلب قطعة الغيار جاهزة — ${requestNumber || ""}`, `Your spare-part invoice is ready — ${requestNumber || ""}`);
+        html = wrap(bi("الفاتورة الضريبية جاهزة", "Tax Invoice Ready"), [
+          [bi("العميل", "Customer"), name],
+          [bi("رقم الطلب", "Request Number"), requestNumber],
+          [bi("المبلغ", "Amount"), amountQAR != null ? `${amountQAR} ر.ق / QAR` : ""],
+        ]);
+      } else if (event === "part_request_approval_reminder") {
+        subject = bi(`⏰ بانتظار موافقتك على طلب قطعة الغيار — ${requestNumber || ""}`, `Your spare-part request is still awaiting approval — ${requestNumber || ""}`);
+        html = wrap(bi("تذكير — طلب قطعة غيار بانتظار موافقتك", "Reminder — Spare Part Request Awaiting Your Approval"), [
+          [bi("العميل", "Customer"), name],
+          [bi("رقم الطلب", "Request Number"), requestNumber],
+          [bi("الإجراء المطلوب", "Action Needed"), bi("يرجى فتح تطبيق سندك لمراجعة السعر والموافقة عليه", "Please open the SNDK app to review and approve the price")],
+        ]);
+      }
+
+      // A real push (web + mobile) alongside every one of these emails —
+      // used to only happen for 2 of the 11 customer events (status_changed
+      // at job-card creation, quotation_sent), both triggered by a separate
+      // direct send-push call from sndk-admin. Centralizing it here instead
+      // covers all of them at once, and never again silently misses a newer
+      // event the way the email side itself just did. Never awaited/thrown —
+      // a push failure must never affect whether the email above sends.
+      if (customerId && PUSH_BODY_AR[event] && cust?.push_notifications_enabled !== false) {
+        const pushTitle = subject.split(" / ")[0] || "سندك";
+        sendPushToUser(supabase, customerId, pushTitle, PUSH_BODY_AR[event]).catch(() => {});
+      }
+    } else if (STAFF_EVENTS.has(event)) {
+      const { data: staffList } = await supabase
+        .from("profiles")
+        .select("email")
+        .eq("notify_email", true)
+        .not("email", "is", null);
+      recipients = [...new Set([...DEPARTMENT_EMAILS, ...(staffList || []).map((s: { email: string }) => s.email)])];
+
+      if (event === "quotation_approved") {
+        subject = bi(`✅ العميل ${customerName || ""} وافق على عرض السعر — ${jobNumber || ""}`, `Customer approved the quotation — ${jobNumber || ""}`);
+        html = wrap(bi("تمت موافقة العميل على عرض السعر", "Customer Approved the Quotation"), [
+          [bi("العميل", "Customer"), customerName],
+          [bi("رقم أمر الشغل", "Job Number"), jobNumber],
+        ]);
+      } else if (event === "new_booking") {
+        subject = bi(`📅 حجز موعد جديد — ${customerName || ""}`, `New appointment booking — ${customerName || ""}`);
+        html = wrap(bi("حجز موعد جديد", "New Appointment Booking"), [
+          [bi("العميل", "Customer"), customerName],
+          [bi("نوع السيارة", "Car Type"), carLabel],
+          [bi("الخدمة", "Service"), serviceLabel],
+          [bi("التاريخ", "Date"), appointmentDate],
+          [bi("الوقت", "Time"), appointmentTime],
+        ]);
+      } else if (event === "payment_received") {
+        subject = bi(`💰 دفعة جديدة — ${jobNumber || ""}`, `New payment received — ${jobNumber || ""}`);
+        html = wrap(bi("العميل دفع مبلغ عبر بوابة إلكترونية", "Customer paid via online gateway"), [
+          [bi("العميل", "Customer"), customerName],
+          [bi("رقم أمر الشغل", "Job Number"), jobNumber],
+          [bi("المبلغ", "Amount"), amountQAR != null ? `${amountQAR} ر.ق / QAR` : ""],
+          [bi("طريقة الدفع", "Payment Method"), bi(methodAr || "", methodEn || "")],
+        ]);
+      } else if (event === "payment_method_chosen") {
+        subject = bi(`🧾 العميل اختار طريقة دفع — ${jobNumber || ""}`, `Customer chose a payment method — ${jobNumber || ""}`);
+        const receiptNote = receiptUrl
+          ? `<a href="${receiptUrl}" target="_blank" style="color:#8A1538;font-weight:700">${bi("عرض إيصال التحويل", "View transfer receipt")}</a>`
+          : undefined;
+        html = wrap(bi("العميل اختار طريقة دفع — بانتظار التحصيل", "Customer chose a payment method — awaiting collection"), [
+          [bi("العميل", "Customer"), customerName],
+          [bi("رقم أمر الشغل", "Job Number"), jobNumber],
+          [bi("المبلغ المتوقع", "Amount Expected"), amountQAR != null ? `${amountQAR} ر.ق / QAR` : ""],
+          [bi("طريقة الدفع المختارة", "Method Chosen"), bi(methodAr || "", methodEn || "")],
+        ], receiptNote);
+      } else if (event === "part_request_created") {
+        subject = bi(`🔩 طلب قطعة غيار جديد — ${requestNumber || ""}`, `New spare part request — ${requestNumber || ""}`);
+        html = wrap(bi("طلب قطعة غيار جديد", "New Spare Part Request"), [
+          [bi("العميل", "Customer"), customerName],
+          [bi("رقم الطلب", "Request Number"), requestNumber],
+        ]);
+      } else if (event === "part_order_payment_method_chosen") {
+        subject = bi(`🧾 العميل اختار طريقة دفع لطلب قطعة — ${requestNumber || ""}`, `Customer chose a payment method for a part request — ${requestNumber || ""}`);
+        const receiptNote = receiptUrl
+          ? `<a href="${receiptUrl}" target="_blank" style="color:#8A1538;font-weight:700">${bi("عرض إيصال التحويل", "View transfer receipt")}</a>`
+          : undefined;
+        html = wrap(bi("العميل اختار طريقة دفع لطلب قطعة غيار — بانتظار التحصيل", "Customer chose a payment method for a part request — awaiting collection"), [
+          [bi("العميل", "Customer"), customerName],
+          [bi("رقم الطلب", "Request Number"), requestNumber],
+          [bi("المبلغ المتوقع", "Amount Expected"), amountQAR != null ? `${amountQAR} ر.ق / QAR` : ""],
+          [bi("طريقة الدفع المختارة", "Method Chosen"), bi(methodAr || "", methodEn || "")],
+        ], receiptNote);
+      } else if (event === "part_order_payment_received") {
+        subject = bi(`💰 دفعة جديدة لطلب قطعة غيار — ${requestNumber || ""}`, `New part request payment received — ${requestNumber || ""}`);
+        html = wrap(bi("العميل دفع مبلغ عبر بوابة إلكترونية لطلب قطعة غيار", "Customer paid via online gateway for a part request"), [
+          [bi("العميل", "Customer"), customerName],
+          [bi("رقم الطلب", "Request Number"), requestNumber],
+          [bi("المبلغ", "Amount"), amountQAR != null ? `${amountQAR} ر.ق / QAR` : ""],
+          [bi("طريقة الدفع", "Payment Method"), bi(methodAr || "", methodEn || "")],
+        ]);
+      } else if (event === "wallet_topup_received") {
+        subject = bi(`💳 شحن محفظة جديد — ${customerName || ""}`, `New wallet top-up — ${customerName || ""}`);
+        html = wrap(bi("عميل شحن محفظته عبر بوابة إلكترونية", "Customer topped up their wallet via online gateway"), [
+          [bi("العميل", "Customer"), customerName],
+          [bi("المبلغ", "Amount"), amountQAR != null ? `${amountQAR} ر.ق / QAR` : ""],
+          [bi("طريقة الدفع", "Payment Method"), bi(methodAr || "", methodEn || "")],
+        ]);
+      }
+    } else {
+      return new Response(JSON.stringify({ error: "unknown event" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+      });
+    }
+
+    if (!recipients.length) {
+      return new Response(JSON.stringify({ sent: 0 }), {
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+      });
+    }
+
+    // Sent one at a time (not Promise.all) — Resend's free tier caps at 2 requests/sec,
+    // and firing every recipient concurrently was tripping that limit. Also reports each
+    // email's actual response rather than just whether the network call completed.
+    const fromAddress = CUSTOMER_EVENTS.has(event) ? CUSTOMER_FROM_EMAIL : FROM_EMAIL;
+    const attachments = invoicePdfBase64
+      ? [{ filename: invoiceFilename || "invoice.pdf", content: invoicePdfBase64 }]
+      : undefined;
+    const results: { email: string; ok: boolean; status: number; body: string }[] = [];
+    for (const email of recipients) {
+      const resp = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ from: fromAddress, to: email, subject, html, ...(attachments ? { attachments } : {}) }),
+      });
+      const body = await resp.text();
+      results.push({ email, ok: resp.ok, status: resp.status, body });
+      await new Promise((r) => setTimeout(r, 550));
+    }
+    const sent = results.filter((r) => r.ok).length;
+    return new Response(JSON.stringify({ sent, results }), {
+      headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+    });
+  } catch (e) {
+    return new Response(JSON.stringify({ error: String(e) }), {
+      status: 500,
+      headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+    });
+  }
+});

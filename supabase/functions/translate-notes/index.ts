@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { isServiceRoleCaller } from "../_shared/auth.ts";
 
 // Auto-translates a staff-typed quotation note (free text, Arabic or
 // English) to the other language, so both apps can show the right
@@ -31,6 +32,16 @@ async function detectLanguage(text: string): Promise<string> {
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: CORS_HEADERS });
+  }
+
+  // Only sndk-admin (staff) calls this — without this check, any logged-in
+  // customer could invoke it directly and proxy free-form text through the
+  // company's paid Google Translate key.
+  if (!(await isServiceRoleCaller(req))) {
+    return new Response(JSON.stringify({ error: "forbidden" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+    });
   }
 
   try {

@@ -7,7 +7,7 @@ import {
   Menu, X, ChevronLeft, ChevronRight, ChevronDown, User, Calendar,
   Wrench, ArrowRight, Lock, LogOut, MapPin, Mail,
   ClipboardList, Package, ShoppingCart, Trash2, Upload, FileImage, Pencil, Check,
-  Sun, Moon, Eye, EyeOff, PlayCircle, Wallet, AlertCircle, Download, HelpCircle, CreditCard,
+  Sun, Moon, Eye, EyeOff, PlayCircle, Wallet, AlertCircle, Download, HelpCircle, CreditCard, Star,
 } from 'lucide-react';
 
 // Re-runs `onChange` (usually a view's own `load`) whenever any row in the
@@ -777,11 +777,24 @@ async function registerPushSubscription(userId) {
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
     });
-    await supabase.from('push_subscriptions').upsert(
-      { user_id: userId, subscription: sub.toJSON(), updated_at: new Date().toISOString() },
-      { onConflict: 'user_id' }
-    );
+    // Goes through an RPC, not a plain upsert — on a shared browser this
+    // exact subscription may already belong to a DIFFERENT signed-out
+    // account's row (same device, same push endpoint), and RLS's own-row
+    // check would otherwise block reassigning it to whoever's logged in now.
+    await supabase.rpc('upsert_push_subscription', { p_subscription: sub.toJSON() });
   } catch (e) { /* silent — push not supported or denied */ }
+}
+// Mirrors mobile's unregisterPushToken — on a shared device, a signed-out
+// account must stop receiving push immediately rather than staying the
+// device's "owner" until someone else happens to sign in and re-subscribes.
+async function unregisterPushSubscription() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration('/sw.js');
+    const sub = await reg?.pushManager.getSubscription();
+    if (!sub) return;
+    await supabase.from('push_subscriptions').delete().eq('endpoint', sub.toJSON().endpoint);
+  } catch (e) { /* silent */ }
 }
 
 const CARD_BG_CYCLE = [
@@ -926,6 +939,24 @@ const sanitizeForPath = s => (s || '').trim().replace(/[^\w.-]+/g, '-').replace(
 // signature) interpolated into them unescaped is a stored-XSS vector that
 // can run in a staff member's browser too when they open the same document.
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+
+// car-registration and transfer-receipts are private buckets (car
+// registration photos, bank-transfer receipt screenshots) — every stored
+// URL on file is still the old getPublicUrl() string (upload code never
+// changed), so this parses the object path back out of that string and
+// trades it for a short-lived signed URL at the moment something is
+// actually about to be shown, instead of storing/caching a link that
+// would just go stale. Any URL not matching this exact shape (e.g. a
+// still-public bucket like invoices) is returned unchanged.
+async function resolveSignedUrl(url, bucket) {
+  if (!url) return url;
+  const marker = `/storage/v1/object/public/${bucket}/`;
+  const idx = url.indexOf(marker);
+  if (idx === -1) return url;
+  const path = decodeURIComponent(url.slice(idx + marker.length));
+  const { data } = await supabase.storage.from(bucket).createSignedUrl(path, 3600);
+  return data?.signedUrl || url;
+}
 
 const sortByEn = arr => [...arr].sort((a, b) =>
   (a.name_en || a.name_ar || '').localeCompare(b.name_en || b.name_ar || '', 'en', { sensitivity: 'base' })
@@ -1154,6 +1185,8 @@ export default function App() {
   const [cartOpen, setCartOpen] = useState(false);
   const [homeAnnouncements, setHomeAnnouncements] = useState([]);
   const [pendingQuotCount, setPendingQuotCount] = useState(0);
+  const [pendingReviewCount, setPendingReviewCount] = useState(0);
+  const [pendingReviewJobCardId, setPendingReviewJobCardId] = useState(null);
   // A staff-shared signing link (?jc=JC-2026-0011) — jumps straight to that
   // job card's quotation in Orders once auth resolves (login-gated rather
   // than a public token link, so it reuses the app's existing RLS/auth
@@ -1224,7 +1257,24 @@ export default function App() {
         setLang(data.language_preference);
         localStorage.setItem('sndk_lang', data.language_preference);
       }
+      // A referral code entered at signup can't be resolved right away (no
+      // session exists yet pre-email-confirmation) — it's carried on the
+      // new profile row instead (pending_referral_code, set by the
+      // handle_new_user DB trigger) and only turned into a real referrals
+      // row the first time the customer actually has an active session.
+      // Best-effort: never blocks profile loading either way.
+      if (data.pending_referral_code) {
+        processPendingReferral(userId, data.pending_referral_code).catch(() => {});
+      }
     }
+  };
+
+  const processPendingReferral = async (userId, code) => {
+    const { data: referrerId } = await supabase.rpc('resolve_referral_code', { p_code: code });
+    if (referrerId && referrerId !== userId) {
+      await supabase.from('referrals').insert({ referrer_id: referrerId, referred_id: userId, code_used: code });
+    }
+    await supabase.from('profiles').update({ pending_referral_code: null }).eq('id', userId);
   };
 
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -1475,6 +1525,25 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authChecked]);
 
+  // One at a time — picks the oldest closed job card this customer hasn't
+  // reviewed yet, so the Home banner always has a single, well-defined
+  // target to open the rating form for.
+  const loadPendingReviewCount = async (userId) => {
+    const { data } = await supabase.from('appointments')
+      .select('job_cards(id, is_closed, closed_at)')
+      .eq('profile_id', userId);
+    const closed = (data || [])
+      .flatMap(a => a.job_cards || [])
+      .filter(jc => jc.is_closed)
+      .sort((a, b) => new Date(a.closed_at || 0) - new Date(b.closed_at || 0));
+    if (!closed.length) { setPendingReviewCount(0); setPendingReviewJobCardId(null); return; }
+    const { data: existing } = await supabase.from('reviews').select('job_card_id').in('job_card_id', closed.map(c => c.id));
+    const reviewedIds = new Set((existing || []).map(r => r.job_card_id));
+    const pending = closed.filter(c => !reviewedIds.has(c.id));
+    setPendingReviewCount(pending.length);
+    setPendingReviewJobCardId(pending[0]?.id || null);
+  };
+
   const loadReferenceData = () => {
     // Load dynamic car brands, categories, and brand-category links
     supabase.from('car_brands').select('id,name_ar,name_en').or('is_active.eq.true,is_active.is.null').order('sort_order').order('id')
@@ -1500,14 +1569,14 @@ export default function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-      if (session?.user) { fetchProfile(session.user.id); registerPushSubscription(session.user.id); }
+      if (session?.user) { fetchProfile(session.user.id); registerPushSubscription(session.user.id); loadPendingReviewCount(session.user.id); }
       setAuthChecked(true);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') { setShowNewPassword(true); return; }
       setUser(session?.user ?? null);
-      if (session?.user) { fetchProfile(session.user.id); if (event === 'SIGNED_IN') registerPushSubscription(session.user.id); }
-      else { setProfile(null); }
+      if (session?.user) { fetchProfile(session.user.id); if (event === 'SIGNED_IN') { registerPushSubscription(session.user.id); loadPendingReviewCount(session.user.id); } }
+      else { setProfile(null); setPendingReviewCount(0); setPendingReviewJobCardId(null); }
     });
     loadReferenceData();
     return () => subscription.unsubscribe();
@@ -1515,8 +1584,11 @@ export default function App() {
   useLiveTables(['car_brands', 'car_categories', 'brand_categories', 'service_categories', 'services', 'announcements', 'time_slots'], loadReferenceData);
 
   const handleSignOut = async () => {
+    // Before signOut() invalidates the session — the delete's RLS check
+    // needs auth.uid() to still match this row's user_id.
+    await unregisterPushSubscription();
     await supabase.auth.signOut();
-    setUser(null); setProfile(null); resetForm(); setMenuOpen(false);
+    setUser(null); setProfile(null); resetForm(); clearCart(); setMenuOpen(false);
     setPage('home');
   };
 
@@ -1580,6 +1652,7 @@ export default function App() {
   const goPeriodic  = () => { setPage('periodic'); setMenuOpen(false); };
   const goDiagnosis = () => { setPage('diagnosis'); setMenuOpen(false); };
   const goContact  = () => { setPage('contact'); setMenuOpen(false); };
+  const goFaq      = () => { setPage('faq'); setMenuOpen(false); };
   const goParts    = () => {
     if (!user) { setAuthModal('signin'); return; }
     setPage('parts'); setMenuOpen(false);
@@ -1626,6 +1699,7 @@ export default function App() {
               { icon:ClipboardList, label:tr.navOrders,  active:page==='orders',   action:goOrders },
               { icon:User,          label:tr.navProfile,  active:page==='profile',  action:goProfile },
               { icon:Phone,         label:tr.navContact,  active:page==='contact', action:goContact },
+              { icon:HelpCircle,    label:isRtl?'الأسئلة الشائعة':'FAQ', active:page==='faq', action:goFaq },
             ].map((item,i) => (
               <button key={i} onClick={item.action}
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all"
@@ -1785,7 +1859,7 @@ export default function App() {
           <main className="flex-1 overflow-y-auto pb-24 md:pb-8">
             {page==='home'    && (COMPLIANCE_MODE && !user
               ? <ComplianceLandingView isRtl={isRtl} setAuthModal={setAuthModal}/>
-              : <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements} goOrders={goOrders} goParts={goParts} goRenewal={goRenewal} goCare={goCare} goPeriodic={goPeriodic} goDiagnosis={goDiagnosis} pendingQuotCount={pendingQuotCount} expanded={expandedService} setExpanded={setExpandedService} theme={theme}/>)}
+              : <HomeView {...shared} onBookNow={handleBookNow} goServices={goServices} homeAnnouncements={homeAnnouncements} goOrders={goOrders} goParts={goParts} goRenewal={goRenewal} goCare={goCare} goPeriodic={goPeriodic} goDiagnosis={goDiagnosis} pendingQuotCount={pendingQuotCount} pendingReviewCount={pendingReviewCount} pendingReviewJobCardId={pendingReviewJobCardId} onReviewSubmitted={()=>loadPendingReviewCount(user.id)} expanded={expandedService} setExpanded={setExpandedService} theme={theme}/>)}
             {page==='care'    && <CarCareView lang={lang} isRtl={isRtl} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} goHome={goHome}/>}
             {page==='periodic'  && <CarCareView lang={lang} isRtl={isRtl} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} goHome={goHome} catNames={PERIODIC_CAT_NAMES} showUnsureCard/>}
             {page==='diagnosis' && <CarCareView lang={lang} isRtl={isRtl} serviceCategories={serviceCategories} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} goHome={goHome} catNames={DIAGNOSIS_CAT_NAMES} showUnsureCard/>}
@@ -1793,6 +1867,7 @@ export default function App() {
             {page==='profile' && user && <ProfileView lang={lang} tr={tr} isRtl={isRtl} profile={profile} user={user} onBook={(car)=>bookFromProfile(car)} goServices={goServices} goOrders={goOrders} onProfileUpdated={()=>fetchProfile(user.id)} carBrands={carBrands} carCategories={carCategories} brandCategories={brandCategories}/>}
             {page==='orders'  && <MyOrdersView lang={lang} tr={tr} isRtl={isRtl} user={user} profile={profile} onCountChange={setPendingQuotCount} theme={theme} highlightJobNumber={deepLinkJobNumber} highlightRequestNumber={highlightRequestNumber}/>}
             {page==='contact' && <ContactView isRtl={isRtl} user={user}/>}
+            {page==='faq' && <FaqPageView isRtl={isRtl}/>}
             {page==='part-quote' && <PublicPartOrderView isRtl={isRtl} user={user} token={publicShareToken}
               onApproveClick={(requestNumber)=>{ setHighlightRequestNumber(requestNumber); setPage('orders'); if (!user) setAuthModal('signin'); }}/>}
             {page==='parts'   && <PartsFlowView lang={lang} isRtl={isRtl} user={user} profile={profile} goHome={goHome} carBrands={carBrands} carCategories={carCategories}/>}
@@ -1931,6 +2006,7 @@ export default function App() {
                 { icon:ClipboardList, label:tr.navOrders,  action:goOrders },
                 { icon:User,          label:tr.navProfile,  action:goProfile },
                 { icon:Phone,         label:tr.navContact,  action:goContact },
+                { icon:HelpCircle,    label:isRtl?'الأسئلة الشائعة':'FAQ', action:goFaq },
               ].map((item,i)=>(
                 <button key={i} onClick={item.action} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all" style={{ color:C.muted }}>
                   <item.icon size={17}/>{item.label}
@@ -3431,8 +3507,8 @@ function openQuotationPDF(order, linked, profile, jobCard, carBrands = []) {
   let qRowIdx = 0;
   const buildQItemRow = (item) => {
     qRowIdx++;
-    const nameAr = item.item_name?.ar || item.item_name?.en || '—';
-    const nameEn = item.item_name?.en || '';
+    const nameAr = escapeHtml(item.item_name?.ar || item.item_name?.en || '—');
+    const nameEn = escapeHtml(item.item_name?.en || '');
     const discountPct = Number(item.discount_pct||0);
     return `<tr>
       <td style="color:#999;font-size:11px">${qRowIdx}</td>
@@ -3440,7 +3516,7 @@ function openQuotationPDF(order, linked, profile, jobCard, carBrands = []) {
         <span class="badge ${item.item_type==='labor'?'badge-labor':'badge-part'}">${item.item_name?.insurance?'تأمين / Insurance':item.item_type==='labor'?'عمالة / Labor':'قطعة / Part'}</span><br>
         <span style="font-weight:600">${nameAr}</span>
         ${nameEn && nameEn !== nameAr ? `<span style="font-size:11px;color:#666;margin-right:5px">(${nameEn})</span>` : ''}
-        ${item.part_number ? `<span style="font-size:10px;color:#aaa;display:block;font-family:monospace">${item.part_number}</span>` : ''}
+        ${item.part_number ? `<span style="font-size:10px;color:#aaa;display:block;font-family:monospace">${escapeHtml(item.part_number)}</span>` : ''}
       </td>
       <td style="text-align:center;font-weight:600">${item.quantity}</td>
       <td dir="ltr" style="font-size:12px;font-weight:600">${Number(item.sell_price).toFixed(3)}${discountPct>0?`<br><span style="color:#dc2626;font-size:10px">-${discountPct.toFixed(0)}%</span>`:''}</td>
@@ -3451,7 +3527,7 @@ function openQuotationPDF(order, linked, profile, jobCard, carBrands = []) {
     const groupItems = approvedItems.filter(it => groupKeyOf(it) === g.key);
     const subtotal = groupItems.reduce((s,it)=>s+lineTotal(it),0);
     return `
-      <tr><td colspan="5" style="background:#fdf3e7;padding:9px 10px;font-weight:800;color:#8A1538;font-size:12px">${g.ar}${g.en&&g.en!==g.ar?` / ${g.en}`:''}</td></tr>
+      <tr><td colspan="5" style="background:#fdf3e7;padding:9px 10px;font-weight:800;color:#8A1538;font-size:12px">${escapeHtml(g.ar)}${g.en&&g.en!==g.ar?` / ${escapeHtml(g.en)}`:''}</td></tr>
       ${g.notes_ar ? `<tr><td colspan="5" style="padding:2px 10px 9px;font-size:10px;color:#92400e;font-style:italic;background:#fdf3e7">"${escapeHtml(g.notes_ar)}"${g.notes_en?` / "${escapeHtml(g.notes_en)}"`:''}</td></tr>` : ''}
       ${groupItems.map(buildQItemRow).join('')}
       <tr><td colspan="4" style="text-align:left;padding:6px 10px;font-weight:700;color:#475569;font-size:11px">إجمالي الخدمة / Service Total</td><td style="padding:6px 10px;font-weight:800;color:#8A1538;font-size:12px" dir="ltr">${subtotal.toFixed(3)} QAR</td></tr>
@@ -3618,8 +3694,8 @@ ${rejectedItems.length > 0 ? `
     </tr></thead>
     <tbody>
       ${rejectedItems.map((item, i) => {
-        const nameAr = item.item_name?.ar || item.item_name?.en || '—';
-        const nameEn = item.item_name?.en || '';
+        const nameAr = escapeHtml(item.item_name?.ar || item.item_name?.en || '—');
+        const nameEn = escapeHtml(item.item_name?.en || '');
         return `<tr>
           <td style="color:#999;font-size:11px">${i+1}</td>
           <td>
@@ -3635,7 +3711,7 @@ ${rejectedItems.length > 0 ? `
     </tbody>
   </table>
   <div style="margin-top:10px;padding:12px 14px;background:#fef2f2;border:1.5px solid #fecaca;border-radius:8px;font-size:11px;color:#991b1b;font-weight:700;line-height:1.7">
-    ${rejectedNames.map(n=>`⚠️ تم رفض خدمة "${n.ar}" من قبل العميل، ويتحمل العميل كامل المسؤولية عن ذلك<br><span style="font-weight:600;color:#b91c1c">Service "${n.en}" was rejected by the customer — the customer bears full responsibility</span>`).join('<hr style="border:none;border-top:1px dashed #fecaca;margin:8px 0">')}
+    ${rejectedNames.map(n=>`⚠️ تم رفض خدمة "${escapeHtml(n.ar)}" من قبل العميل، ويتحمل العميل كامل المسؤولية عن ذلك<br><span style="font-weight:600;color:#b91c1c">Service "${escapeHtml(n.en)}" was rejected by the customer — the customer bears full responsibility</span>`).join('<hr style="border:none;border-top:1px dashed #fecaca;margin:8px 0">')}
   </div>
 </div>` : ''}
 
@@ -3916,8 +3992,8 @@ function printCustomerInvoice(jobCard, appt, order, profile, brandsData = [], ca
   let invRowIdx = 0;
   const buildItemRow = (item) => {
     invRowIdx++;
-    const nameAr   = item.item_name?.ar || '—';
-    const nameEn   = item.item_name?.en || '';
+    const nameAr   = escapeHtml(item.item_name?.ar || '—');
+    const nameEn   = escapeHtml(item.item_name?.en || '');
     const isPart   = item.item_type === 'part';
     const unitPrice   = Number(item.sell_price||0);
     const qty         = Number(item.quantity||1);
@@ -3957,7 +4033,7 @@ function printCustomerInvoice(jobCard, appt, order, profile, brandsData = [], ca
     const groupItems = items.filter(it => groupKeyOf(it) === g.key);
     const subtotal = groupItems.reduce((s,it)=>s+invLineTotal(it),0);
     return `
-      <tr><td colspan="6" style="background:#fdf3e7;padding:9px 14px;font-weight:800;color:#8A1538;font-size:12px">${g.ar}${g.en&&g.en!==g.ar?` / ${g.en}`:''}</td></tr>
+      <tr><td colspan="6" style="background:#fdf3e7;padding:9px 14px;font-weight:800;color:#8A1538;font-size:12px">${escapeHtml(g.ar)}${g.en&&g.en!==g.ar?` / ${escapeHtml(g.en)}`:''}</td></tr>
       ${groupItems.map(buildItemRow).join('')}
       <tr><td colspan="5" style="text-align:left;padding:6px 14px;font-weight:700;color:#475569;font-size:11px">إجمالي الخدمة / Service Total</td><td style="padding:6px 14px;font-weight:800;color:#8A1538;font-size:12px" dir="ltr">${subtotal.toFixed(3)} QAR</td></tr>
     `;
@@ -4663,6 +4739,52 @@ function ContactView({ isRtl, user }) {
   );
 }
 
+// Reachable without an account, same as ContactView — a first-time visitor
+// should be able to self-serve basic questions before ever signing up.
+function FaqPageView({ isRtl }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [openId, setOpenId] = useState(null);
+
+  useEffect(() => {
+    supabase.from('faq_items').select('*').order('sort_order', { ascending: true })
+      .then(({ data }) => { setItems(data || []); setLoading(false); });
+  }, []);
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-20"><Loader2 size={22} className="animate-spin" style={{ color:C.gold }}/></div>;
+  }
+
+  return (
+    <div className="max-w-lg mx-auto p-4 md:p-6 space-y-5">
+      <h1 className="text-2xl font-black text-center" style={{ color:C.text }}>{isRtl ? 'الأسئلة الشائعة' : 'FAQ'}</h1>
+      {items.length === 0 ? (
+        <p className="text-center text-sm" style={{ color:C.muted }}>{isRtl ? 'لا توجد أسئلة متاحة حاليًا' : 'No questions available right now'}</p>
+      ) : (
+        <div className="space-y-2">
+          {items.map(item => {
+            const isOpen = openId === item.id;
+            const q = isRtl ? item.question_ar : (item.question_en || item.question_ar);
+            const a = isRtl ? item.answer_ar : (item.answer_en || item.answer_ar);
+            return (
+              <div key={item.id} className="rounded-2xl overflow-hidden" style={{ background:C.panel, border:`1px solid ${C.border}` }}>
+                <button onClick={() => setOpenId(isOpen ? null : item.id)}
+                  className="w-full flex items-center justify-between gap-3 px-4 py-3.5 text-start">
+                  <span className="text-sm font-bold" style={{ color:C.text }}>{q}</span>
+                  <ChevronDown size={16} style={{ color:C.gold, transform:isOpen?'rotate(180deg)':'', transition:'transform 0.2s', flexShrink:0 }}/>
+                </button>
+                {isOpen && (
+                  <p className="px-4 pb-4 text-sm leading-relaxed" style={{ color:C.muted }}>{a}</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // A completely separate flow/system from job cards & orders — customer picks
 // a car, browses part_categories → parts_catalog, then requests a quote or
 // the part itself against a part_orders row. Self-contained (owns its own
@@ -5009,7 +5131,7 @@ function PartsFlowView({ lang, isRtl, user, profile, goHome, carBrands, carCateg
           {headerBar(isRtl ? 'لا أقدر على تحديد القطع المطلوبة' : "Can't identify the part", ()=>setStep('categories'))}
           <p className="text-sm mb-4" style={{ color:C.muted }}>
             {isRtl
-              ? 'وصّفلنا القطعة اللي محتاجها، وأي صورة أو ملف يساعدنا نتعرف عليها — فريقنا هيتواصل معاك بعرض السعر'
+              ? 'صِف لنا القطعة التي تحتاجها، وأرفق أي صورة أو ملف يساعدنا على تحديدها — سيتواصل معك فريقنا بعرض السعر'
               : "Describe the part you need, and attach any photo or file that helps us identify it — our team will get back to you with a quote"}
           </p>
           {selectedCar && (
@@ -6566,9 +6688,18 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                               {(relOrd.payments || []).filter(p => p.receipt_url).map(p => (
                                 <div key={p.id} className="flex items-center justify-between text-sm">
                                   <span style={{ color:cc.txt }}>{Number(p.amount||0).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
-                                  <a href={p.receipt_url} target="_blank" rel="noreferrer" className="text-xs font-bold underline" style={{ color:cc.fg }}>
+                                  <button type="button"
+                                    onClick={async () => {
+                                      // Opened synchronously, before the await below, so Safari's
+                                      // popup blocker (which only allows window.open in direct
+                                      // response to the click, not after an async gap) doesn't eat it.
+                                      const win = window.open('', '_blank');
+                                      const url = await resolveSignedUrl(p.receipt_url, 'transfer-receipts');
+                                      if (win) win.location.href = url;
+                                    }}
+                                    className="text-xs font-bold underline" style={{ color:cc.fg }}>
                                     {isRtl?'عرض الإيصال':'View Receipt'}
-                                  </a>
+                                  </button>
                                 </div>
                               ))}
                             </div>
@@ -7278,7 +7409,71 @@ function ComplianceServicesView({ isRtl }) {
   );
 }
 
-function HomeView({ lang, tr, isRtl, onBookNow, goServices, serviceCategories, allSubServices, cart, addToCart, removeFromCart, expanded, setExpanded, theme, homeAnnouncements, user, goOrders, goParts, goRenewal, goCare, goPeriodic, goDiagnosis, pendingQuotCount }) {
+// "أحمد م." style — never the reviewer's full name, computed client-side so
+// the reviews table never needs to expose another customer's profile row
+// (profiles' own RLS only ever allows reading your own row).
+function maskReviewerName(fullName, isRtl) {
+  const parts = (fullName || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return isRtl ? 'عميل سندك' : 'SNDK Customer';
+  const first = parts[0];
+  const lastInitial = parts.length > 1 ? parts[parts.length - 1][0] : '';
+  return lastInitial ? `${first} ${lastInitial}.` : first;
+}
+
+function ReviewSubmitModal({ isRtl, jobCardId, profile, onClose, onSubmitted }) {
+  const [rating, setRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (!rating || saving) return;
+    setSaving(true);
+    const { error } = await supabase.from('reviews').insert({
+      job_card_id: jobCardId,
+      profile_id: profile?.id,
+      rating,
+      comment: comment.trim() || null,
+      reviewer_display_name: maskReviewerName(profile?.full_name, isRtl),
+    });
+    setSaving(false);
+    if (error) { alert((isRtl?'حدث خطأ: ':'Something went wrong: ') + error.message); return; }
+    onSubmitted?.();
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="rounded-2xl w-full max-w-sm p-5 space-y-4" onClick={e=>e.stopPropagation()}
+        style={{ background:C.panel, border:`1px solid ${C.border}` }}>
+        <div className="flex items-center justify-between">
+          <h3 className="font-black text-base" style={{ color:C.text }}>{isRtl?'قيّم تجربتك':'Rate Your Experience'}</h3>
+          <button onClick={onClose} className="p-1" style={{ color:C.muted }}><X size={18}/></button>
+        </div>
+        <div className="flex items-center justify-center gap-1.5 py-2">
+          {[1,2,3,4,5].map(n => (
+            <button key={n} onMouseEnter={()=>setHoverRating(n)} onMouseLeave={()=>setHoverRating(0)} onClick={()=>setRating(n)}>
+              <Star size={32} style={{ color:(hoverRating||rating)>=n ? C.gold : C.border }} fill={(hoverRating||rating)>=n ? C.gold : 'none'}/>
+            </button>
+          ))}
+        </div>
+        <textarea rows={3} value={comment} onChange={e=>setComment(e.target.value)}
+          placeholder={isRtl ? 'شاركنا رأيك (اختياري)' : 'Share your thoughts (optional)'}
+          className="w-full px-3 py-2.5 rounded-xl text-sm resize-none outline-none"
+          style={{ background:C.input, border:`1px solid ${C.border}`, color:C.text }}/>
+        <button onClick={submit} disabled={!rating || saving}
+          className="w-full py-3 rounded-xl text-sm font-black flex items-center justify-center gap-2 disabled:opacity-40 transition-all"
+          style={{ background:C.gold, color:C.btnTxt }}>
+          {saving && <Loader2 size={14} className="animate-spin"/>}
+          {isRtl ? 'إرسال التقييم' : 'Submit Review'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function HomeView({ lang, tr, isRtl, onBookNow, goServices, serviceCategories, allSubServices, cart, addToCart, removeFromCart, expanded, setExpanded, theme, homeAnnouncements, user, profile, goOrders, goParts, goRenewal, goCare, goPeriodic, goDiagnosis, pendingQuotCount, pendingReviewCount, pendingReviewJobCardId, onReviewSubmitted }) {
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const cats = serviceCategories.map(enrichCat);
   const goToCat = (cat) => {
     // Only routes into the real parts flow once staff have turned off
@@ -7425,6 +7620,26 @@ function HomeView({ lang, tr, isRtl, onBookNow, goServices, serviceCategories, a
         </button>
       )}
 
+      {/* Rate-your-service banner */}
+      {user && pendingReviewCount > 0 && (
+        <button onClick={()=>setReviewModalOpen(true)}
+          className="w-full rounded-2xl px-5 py-4 flex items-center gap-3 transition-all active:scale-[0.98] text-start"
+          style={{ background:`${C.gold}18`, border:`1.5px solid ${C.gold}50` }}>
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background:`${C.gold}30` }}>
+            <Star size={20} style={{ color:C.gold }}/>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-black text-sm" style={{ color:C.text }}>{isRtl ? 'كيف كانت تجربتك معنا؟' : 'How was your experience?'}</p>
+            <p className="text-xs mt-0.5" style={{ color:C.muted }}>{isRtl ? 'قيّم آخر خدمة حصلت عليها' : 'Rate your most recent service'}</p>
+          </div>
+          {isRtl ? <ChevronLeft size={18} style={{ color:C.gold, flexShrink:0 }}/> : <ChevronRight size={18} style={{ color:C.gold, flexShrink:0 }}/>}
+        </button>
+      )}
+      {reviewModalOpen && pendingReviewJobCardId && (
+        <ReviewSubmitModal isRtl={isRtl} jobCardId={pendingReviewJobCardId} profile={profile}
+          onClose={()=>setReviewModalOpen(false)} onSubmitted={onReviewSubmitted}/>
+      )}
+
       {cats.length > 0 && (
         <div>
           <p className="text-xs font-bold tracking-widest uppercase mb-3" style={{ color:C.muted }}>{tr.ourServices}</p>
@@ -7450,6 +7665,54 @@ function HomeView({ lang, tr, isRtl, onBookNow, goServices, serviceCategories, a
           serviceCategories={serviceCategories.filter(c => c.id === expanded)} allSubServices={allSubServices} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart}
           theme={theme} goParts={goParts} goRenewal={goRenewal} goCare={goCare} goPeriodic={goPeriodic} goDiagnosis={goDiagnosis} embedded/>
       )}
+
+      <PublicReviewsSection isRtl={isRtl}/>
+    </div>
+  );
+}
+
+// Public trust-building section — reachable even logged-out, same intent as
+// ContactView's own logged-out-reachable About blurb.
+function PublicReviewsSection({ isRtl }) {
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.from('reviews').select('rating, comment, reviewer_display_name, staff_reply, created_at')
+      .eq('is_public', true).order('created_at', { ascending: false }).limit(6)
+      .then(({ data }) => { setReviews(data || []); setLoading(false); });
+  }, []);
+
+  if (loading || reviews.length === 0) return null;
+  const avg = (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-bold tracking-widest uppercase" style={{ color:C.muted }}>{isRtl ? 'آراء عملائنا' : 'What Our Customers Say'}</p>
+        <div className="flex items-center gap-1">
+          <Star size={14} style={{ color:C.gold }} fill={C.gold}/>
+          <span className="text-sm font-black" style={{ color:C.text }}>{avg}</span>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {reviews.map((r, i) => (
+          <div key={i} className="rounded-2xl p-4" style={{ background:C.panel, border:`1px solid ${C.border}` }}>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-sm font-bold" style={{ color:C.text }}>{r.reviewer_display_name}</span>
+              <div className="flex">
+                {[1,2,3,4,5].map(n => <Star key={n} size={12} style={{ color:n<=r.rating?C.gold:C.border }} fill={n<=r.rating?C.gold:'none'}/>)}
+              </div>
+            </div>
+            {r.comment && <p className="text-sm" style={{ color:C.muted }}>{r.comment}</p>}
+            {r.staff_reply && (
+              <p className="text-xs mt-2 pt-2" style={{ color:C.gold, borderTop:`1px solid ${C.border}` }}>
+                {isRtl ? 'رد سندك: ' : "SNDK's reply: "}{r.staff_reply}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -7854,9 +8117,9 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                   <div className="w-full aspect-square rounded-2xl flex items-center justify-center overflow-hidden" style={{ background:ucc.ic }}>
                     <img src="/not-sure.png" alt="" className="w-full h-full object-contain p-2"/>
                   </div>
-                  <p className="font-black text-xl" style={{ color:ucc.txt }}>{isRtl ? 'مش متأكد من الخدمة المطلوبة؟' : 'Not sure which service you need?'}</p>
+                  <p className="font-black text-xl" style={{ color:ucc.txt }}>{isRtl ? 'غير متأكد من الخدمة المطلوبة؟' : 'Not sure which service you need?'}</p>
                   <p className="text-sm" style={{ color:ucc.sub }}>
-                    {isRtl ? 'اوصفلنا المشكلة بالتفصيل، وممكن ترفق صور، وهنتواصل معاك بعرض سعر مناسب.' : "Describe the issue in detail, attach photos if you'd like, and we'll get back to you with a quote."}
+                    {isRtl ? 'صِف لنا المشكلة بالتفصيل، ويمكنك إرفاق صور، وسنتواصل معك بعرض سعر مناسب.' : "Describe the issue in detail, attach photos if you'd like, and we'll get back to you with a quote."}
                   </p>
                 </div>
                 <textarea value={unsureText} onChange={e => setUnsureText(e.target.value)} rows={4}
@@ -7889,7 +8152,7 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                 </div>
                 <button type="button" disabled={!canSend}
                   onClick={() => {
-                    addToCart(cat.id, unsureId, isRtl ? `مش متأكد — ${unsureText.trim()}` : `Not sure — ${unsureText.trim()}`, catName, undefined, { photoUrls: unsurePhotos.map(p=>p.url) });
+                    addToCart(cat.id, unsureId, isRtl ? `غير متأكد — ${unsureText.trim()}` : `Not sure — ${unsureText.trim()}`, catName, undefined, { photoUrls: unsurePhotos.map(p=>p.url) });
                     setExpandedId(null); resetCustomize();
                   }}
                   className="w-full py-2.5 rounded-xl text-sm font-black disabled:opacity-40"
@@ -7946,8 +8209,6 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                   // already worked before PPF existed.
                   const ppfNeedsColor = ppfFinish?.key === 'color' || ppfFinish?.key === 'matte_color';
                   const ppfPalette = ppfFinish?.key === 'color' ? PPF_COLORS : ppfFinish?.key === 'matte_color' ? PPF_MATTE_COLORS : null;
-                  const canConfirm = (!isPpf || (ppfFinish && (!ppfNeedsColor || ppfColor || ppfCustomColorText.trim()) && ppfCarSize))
-                    && (!isCarSize || ppfCarSize);
                   // A PPF option's price depends on the finish×car-size cell
                   // staff priced in سندك-admin — only known once both are
                   // picked, unlike every other option's single flat price.
@@ -7955,6 +8216,17 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                   // A car_size option's price depends only on the car-size
                   // cell — reuses the same ppfCarSize pick, no finish step.
                   const sizePrice = isCarSize && ppfCarSize ? Number(opt.size_prices?.[ppfCarSize.key] || 0) : 0;
+                  // A missing matrix cell (staff never priced this exact
+                  // finish×size, or size, combination) must block Confirm —
+                  // otherwise it silently falls back to 0 via "|| 0" above,
+                  // which both looks free to the customer AND (since booking
+                  // only auto-quotes cart.filter(price > 0)) never reaches
+                  // staff as a quotation line at all.
+                  const priceMissing = (isPpf && ppfFinish && ppfCarSize && ppfPrice <= 0)
+                    || (isCarSize && ppfCarSize && sizePrice <= 0);
+                  const canConfirm = (!isPpf || (ppfFinish && (!ppfNeedsColor || ppfColor || ppfCustomColorText.trim()) && ppfCarSize))
+                    && (!isCarSize || ppfCarSize)
+                    && !priceMissing;
                   // Before/outside the customize step, a PPF/car_size option
                   // has no single price to show — once it's in the cart,
                   // show the price that was actually locked in for that pick.
@@ -8031,7 +8303,7 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                                 })}
                               </div>
                               <input value={ppfCustomColorText} onChange={e => { setPpfCustomColorText(e.target.value); if (e.target.value.trim()) setPpfColor(null); }}
-                                placeholder={isRtl ? 'اللون مش موجود؟ اكتبيه هنا' : "Color not listed? Type it here"}
+                                placeholder={isRtl ? 'اللون غير موجود؟ اكتبه هنا' : "Color not listed? Type it here"}
                                 className="w-full mt-2 px-3 py-2 rounded-lg text-xs outline-none"
                                 style={{ background:'rgba(255,255,255,0.08)', border:`1px solid ${cc.fg}30`, color:cc.txt }}/>
                             </div>
@@ -8105,16 +8377,28 @@ function CarCareView({ lang, isRtl, serviceCategories, allSubServices, cart, add
                       </div>
                       )}
                       {isPpf && ppfFinish && ppfCarSize && (
+                        priceMissing ? (
+                          <p className="text-[11px] font-bold px-1" style={{ color:'#ef4444' }}>
+                            {isRtl ? 'هذا الخيار غير متاح لمقاس السيارة هذا حاليًا — يرجى التواصل معنا' : 'This option isn\'t priced for this car size yet — please contact us'}
+                          </p>
+                        ) : (
                         <div className="flex items-center justify-between px-1">
                           <span className="text-[11px] font-bold" style={{ color:cc.sub }}>{isRtl ? 'السعر' : 'Price'}</span>
                           <span className="font-black text-sm" style={{ color:cc.fg }}>{ppfPrice.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
                         </div>
+                        )
                       )}
                       {isCarSize && ppfCarSize && (
+                        priceMissing ? (
+                          <p className="text-[11px] font-bold px-1" style={{ color:'#ef4444' }}>
+                            {isRtl ? 'هذا الخيار غير متاح لمقاس السيارة هذا حاليًا — يرجى التواصل معنا' : 'This option isn\'t priced for this car size yet — please contact us'}
+                          </p>
+                        ) : (
                         <div className="flex items-center justify-between px-1">
                           <span className="text-[11px] font-bold" style={{ color:cc.sub }}>{isRtl ? 'السعر' : 'Price'}</span>
                           <span className="font-black text-sm" style={{ color:cc.fg }}>{sizePrice.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
                         </div>
+                        )
                       )}
                       <div className="flex items-center gap-2">
                         <button type="button" onClick={resetCustomize}
@@ -8287,6 +8571,35 @@ function HistoryOrderDetail({ jobCard, order, car, appt, profile, isRtl, tr, ope
 function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onProfileUpdated, carBrands, carCategories, brandCategories }) {
   const [cars, setCars]               = useState([]);
   const [history, setHistory]         = useState({});
+  const [referralCode, setReferralCode] = useState(profile?.referral_code || null);
+  const [referralLoading, setReferralLoading] = useState(false);
+  const [referralBonusPct, setReferralBonusPct] = useState(10);
+  useEffect(() => {
+    supabase.from('referral_settings').select('bonus_percentage').eq('id', true).maybeSingle()
+      .then(({ data }) => { if (data) setReferralBonusPct(Number(data.bonus_percentage)); });
+  }, []);
+  useEffect(() => { ensureReferralCode(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const ensureReferralCode = async () => {
+    if (referralCode) return referralCode;
+    setReferralLoading(true);
+    const { data } = await supabase.rpc('get_or_create_referral_code');
+    setReferralLoading(false);
+    if (data) setReferralCode(data);
+    return data;
+  };
+  const shareReferralCode = async () => {
+    const code = await ensureReferralCode();
+    if (!code) return;
+    const message = isRtl
+      ? `جرّب سندك لصيانة سيارتك! استخدم كود الدعوة ${code} حتى يحصل كل منّا على رصيد ${referralBonusPct}% في محفظته بعد أول خدمة. حمّل التطبيق: https://sndkqa.com`
+      : `Try SNDK for your car service! Use referral code ${code} so we each get ${referralBonusPct}% wallet credit after your first service. Get the app: https://sndkqa.com`;
+    if (navigator.share) {
+      navigator.share({ text: message }).catch(() => {});
+    } else {
+      navigator.clipboard?.writeText(message);
+      alert(isRtl ? 'تم نسخ الدعوة — شاركها مع صديقك' : 'Invite copied — share it with your friend');
+    }
+  };
   const [expandedCar, setExpandedCar] = useState(null);
   const [loadingCars, setLoadingCars] = useState(true);
   const [carsWithHistory, setCarsWithHistory] = useState(new Set());
@@ -8295,6 +8608,18 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
   // leaves no obvious way back to the app, since there's no browser chrome
   // to navigate with. An in-app viewer never leaves the page at all.
   const [viewingRegistration, setViewingRegistration] = useState(null);
+  // car-registration is a private bucket — every setViewingRegistration(...)
+  // call site below still passes the plain stored URL unchanged; resolving
+  // it to a short-lived signed URL here, once, means none of those call
+  // sites had to become async themselves.
+  const [viewingRegistrationSigned, setViewingRegistrationSigned] = useState(null);
+  useEffect(() => {
+    if (!viewingRegistration) { setViewingRegistrationSigned(null); return; }
+    let cancelled = false;
+    setViewingRegistrationSigned(null);
+    resolveSignedUrl(viewingRegistration, 'car-registration').then(url => { if (!cancelled) setViewingRegistrationSigned(url); });
+    return () => { cancelled = true; };
+  }, [viewingRegistration]);
 
   // Edit profile state
   const [editing, setEditing]         = useState(false);
@@ -8804,6 +9129,50 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
       </div>
       ); })()}
 
+      {/* Notification settings */}
+      {(() => { const pc = CARD_BG_CYCLE[0]; return (
+      <div className="rounded-2xl overflow-hidden px-5 py-4 flex items-center justify-between" style={{ background:pc.bg, border:`1px solid ${pc.fg}30` }}>
+        <div>
+          <p className="font-bold text-sm" style={{ color:pc.txt }}>{isRtl?'إشعارات الطلب':'Order Notifications'}</p>
+          <p className="text-xs mt-0.5" style={{ color:pc.sub }}>{isRtl?'إشعارات فورية بتحديثات حجزك وأوامر شغلك':'Instant alerts for your bookings and job card updates'}</p>
+        </div>
+        <button onClick={async () => {
+            const next = !(profile?.push_notifications_enabled ?? true);
+            await supabase.from('profiles').update({ push_notifications_enabled: next }).eq('id', user.id);
+            onProfileUpdated?.();
+          }}
+          className="relative w-12 h-7 rounded-full flex-shrink-0 transition-all"
+          style={{ background:(profile?.push_notifications_enabled ?? true) ? C.gold : 'rgba(0,0,0,0.15)' }}>
+          <span className="absolute top-1 w-5 h-5 rounded-full transition-all"
+            style={{ background:'#fff', [isRtl?'right':'left']:(profile?.push_notifications_enabled ?? true) ? 'calc(100% - 24px)' : '4px' }}/>
+        </button>
+      </div>
+      ); })()}
+
+      {/* Referral program */}
+      {(() => { const pc = CARD_BG_CYCLE[1]; return (
+      <div className="rounded-2xl overflow-hidden p-5 space-y-3" style={{ background:pc.bg, border:`1px solid ${pc.fg}30` }}>
+        <div>
+          <p className="font-bold text-sm" style={{ color:pc.txt }}>{isRtl?'ادعُ صديقًا':'Invite a Friend'}</p>
+          <p className="text-xs mt-0.5" style={{ color:pc.sub }}>
+            {isRtl
+              ? `شارك كودك — يحصل كل منكما على ${referralBonusPct}% رصيد في المحفظة بعد أول خدمة لصديقك`
+              : `Share your code — you both get ${referralBonusPct}% wallet credit after your friend's first service`}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex-1 px-4 py-2.5 rounded-xl font-mono font-black text-center text-sm" style={{ background:'rgba(0,0,0,0.12)', color:pc.fg }} dir="ltr">
+            {referralLoading ? <Loader2 size={14} className="animate-spin inline"/> : (referralCode || '••••••••')}
+          </div>
+          <button onClick={shareReferralCode}
+            className="px-4 py-2.5 rounded-xl text-sm font-black flex-shrink-0 transition-all active:scale-95"
+            style={{ background:C.gold, color:C.btnTxt }}>
+            {isRtl?'مشاركة':'Share'}
+          </button>
+        </div>
+      </div>
+      ); })()}
+
       {/* Add Car CTA */}
       <button onClick={()=>setShowAddCar(p=>!p)}
         className="w-full py-4 rounded-2xl font-black text-base transition-all active:scale-[0.98] flex items-center justify-center gap-2"
@@ -8925,8 +9294,21 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
               // loading (distinct from an empty filtered result), so the
               // spinner below keeps working exactly as before.
               const rawCarHistory = history[car.id];
+              // An appointment can carry more than one job_cards row (a
+              // parts-only one plus a separately-opened car job) — picking
+              // job_cards[0]/orders[0] blindly could pair one job card's
+              // closed_at with a completely different, still-open job card's
+              // order. Each order's own job_card_id (same match already
+              // established for MyOrdersView's relOrdForRow) says which job
+              // card it actually belongs to; only truly done once every job
+              // card on the appointment is closed or fully rejected.
               const carHistory = rawCarHistory
-                ? rawCarHistory.filter(appt => appt.job_cards?.[0]?.closed_at || rejectedAllOverride(appt.orders?.[0]))
+                ? rawCarHistory.filter(appt => {
+                    const jcs = appt.job_cards || [];
+                    if (jcs.length === 0) return rejectedAllOverride(appt.orders?.[0]);
+                    const orderFor = jc => (jcs.length > 1 ? appt.orders?.find(o => o.job_card_id === jc.id) : appt.orders?.[0]);
+                    return jcs.every(jc => jc.closed_at || rejectedAllOverride(orderFor(jc)));
+                  })
                 : rawCarHistory;
               return (
                 <div key={car.id} className="rounded-2xl overflow-hidden transition-all" style={{ background:cc.bg, border:`1px solid ${isOpen?`${cc.fg}50`:`${cc.fg}25`}` }}>
@@ -9159,7 +9541,11 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                         <div className="divide-y" style={{ borderColor:C.border }}>
                           {carHistory.map(appt => {
                             const svcs = parseServices(appt.service_type);
-                            const order = appt.orders?.[0];
+                            const jobCardRaw = appt.job_cards?.[0];
+                            // Match this specific job card's own order via
+                            // job_card_id rather than grabbing orders[0]
+                            // blindly — see the carHistory filter above.
+                            const order = ((appt.job_cards?.length > 1) ? appt.orders?.find(o => o.job_card_id === jobCardRaw?.id) : appt.orders?.[0]) ?? appt.orders?.[0];
                             // Walk-in appointments (created by staff at reception, not booked
                             // through the app) store the literal placeholder "استقبال مباشر" as
                             // service_type since there's no formal service list yet — once staff
@@ -9179,7 +9565,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                             const svcLabel = svcs ? svcs.map(s => s.name || '').join(' · ')
                               : approvedServiceNames.length ? approvedServiceNames.join(' · ')
                               : (appt.service_type || '—');
-                            const jobCard = publishedJobCard(appt.job_cards?.[0]);
+                            const jobCard = publishedJobCard(jobCardRaw);
                             const ORD_LABEL = {
                               draft:     isRtl ? 'مسودة عرض السعر'  : 'Draft Quote',
                               pending:   isRtl ? 'بانتظار الموافقة' : 'Awaiting Approval',
@@ -9301,7 +9687,11 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
             </button>
           </div>
           <div className="flex-1 min-h-0" onClick={e=>e.stopPropagation()}>
-            <iframe src={viewingRegistration} title="registration" className="w-full h-full border-0" style={{ background:'#fff' }}/>
+            {viewingRegistrationSigned ? (
+              <iframe src={viewingRegistrationSigned} title="registration" className="w-full h-full border-0" style={{ background:'#fff' }}/>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center"><Loader2 size={28} className="animate-spin text-white"/></div>
+            )}
           </div>
         </div>
       )}
@@ -9315,7 +9705,7 @@ function ServiceCard({ service, lang, span, onClick, active }) {
   return (
     <button onClick={onClick}
       className={`group relative rounded-2xl text-start h-36 md:h-48 transition-all duration-300 hover:z-10 focus:z-10 ${span===2?'col-span-2':'col-span-1'}`}
-      style={{ backgroundColor:service.bg, boxShadow: active ? `0 0 0 2px ${C.gold}, 0 4px 20px rgba(0,0,0,0.35)` : '0 4px 20px rgba(0,0,0,0.35)' }}>
+      style={{ backgroundColor:service.bg, boxShadow: active ? `0 0 0 2px ${service.bg==='#FFCB74' ? '#111' : C.gold}, 0 4px 20px rgba(0,0,0,0.35)` : '0 4px 20px rgba(0,0,0,0.35)' }}>
       {/* Only this layer clips to the card's rounded corners — the logo
           below sits outside it on purpose, so it's free to grow past the
           card's edge on hover/press instead of being cut off. */}
@@ -9387,19 +9777,29 @@ async function findRejectedServiceFollowup(carId) {
     .order('appointment_date', { ascending: false });
   const groupKeyOf = it => it.service_name?.group_id || it.service_name?.ar || it.service_name?.en || null;
   for (const appt of (data || [])) {
-    const jc = appt.job_cards?.[0];
-    const order = appt.orders?.[0];
-    if (!jc?.is_closed || !order || order.rejection_followup_asked) continue;
-    const decisions = order.service_decisions || {};
-    const items = order.order_items || [];
-    const rejected = items.find(it => {
-      const k = groupKeyOf(it);
-      return k && decisions[k] === 'rejected';
-    });
-    if (rejected) {
-      const key = groupKeyOf(rejected);
-      const groupItems = items.filter(it => groupKeyOf(it) === key);
-      return { orderId: order.id, sourceJobNumber: jc.job_number, service: rejected.service_name, items: groupItems };
+    const jcs = appt.job_cards || [];
+    const apptOrders = appt.orders || [];
+    // An appointment can carry more than one job_cards row (a parts-only
+    // one plus a separately-opened car job) — job_cards[0]/orders[0] could
+    // pair one job card's is_closed/job_number with a completely different
+    // job card's order. Each order's own job_card_id (same match already
+    // established for MyOrdersView's relOrdForRow) says which job card it
+    // actually belongs to, so every job card on the appointment gets
+    // checked against its real order, not just whichever came back first.
+    for (const jc of jcs) {
+      const order = jcs.length > 1 ? apptOrders.find(o => o.job_card_id === jc.id) : apptOrders[0];
+      if (!jc?.is_closed || !order || order.rejection_followup_asked) continue;
+      const decisions = order.service_decisions || {};
+      const items = order.order_items || [];
+      const rejected = items.find(it => {
+        const k = groupKeyOf(it);
+        return k && decisions[k] === 'rejected';
+      });
+      if (rejected) {
+        const key = groupKeyOf(rejected);
+        const groupItems = items.filter(it => groupKeyOf(it) === key);
+        return { orderId: order.id, sourceJobNumber: jc.job_number, service: rejected.service_name, items: groupItems };
+      }
     }
   }
   return null;
@@ -10087,12 +10487,25 @@ function RenewalFlowView({ lang, tr, isRtl, user, profile, carBrands, carCategor
         price_approval: { amount: RENEWAL_FEE, ...priceSig },
       };
       const serviceType = JSON.stringify([{ id: renewalSvc?.id || 'car-registration-renewal', name: renewalName, catName: renewalCatName }]);
-      const { error: apptErr } = await supabase.from('appointments').insert([{
-        profile_id: user.id, car_id: carId,
-        appointment_date: formData.date, appointment_time: formData.timeKey,
-        is_quote_request: false, service_type: serviceType,
-        customer_notes: formData.notes, status: 'pending', renewal_request,
-      }]);
+      // Goes through the same atomic book_appointment RPC as the main
+      // booking flow — a plain insert here raced the slot's capacity check
+      // (which this renewal flow never even did client-side) with every
+      // other booking path.
+      const slot = timeSlots.find(s => s.slot_key === formData.timeKey);
+      const { data: newRenewalAppt, error: apptErr } = await supabase.rpc('book_appointment', {
+        p_car_id: carId,
+        p_date: formData.date,
+        p_time: formData.timeKey,
+        p_capacity: slot?.capacity ?? 0,
+        p_is_quote_request: false,
+        p_service_type: serviceType,
+        p_customer_notes: formData.notes,
+        p_renewal_request: renewal_request,
+      }).single();
+      if (apptErr?.message?.includes('slot_full')) {
+        alert(isRtl ? 'هذا الموعد امتلأ للتو — من فضلك اختر موعداً آخر' : 'This time slot just filled up — please pick another time');
+        return;
+      }
       if (apptErr) throw apptErr;
       supabase.functions.invoke('clever-endpoint', {
         body: {
@@ -10441,7 +10854,7 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
     // has to be able to reach the customer — so it's enforced right here,
     // at the point it actually becomes relevant, instead of at signup.
     if (!profile?.phone_number?.trim()) {
-      alert(isRtl ? 'محتاجين رقم جوالك الأول عشان نقدر نكمل حجزك ونتواصل معاك — ضيفه من صفحة "حسابي" وارجع كمّل الحجز' : 'We need your phone number first so we can confirm your booking and reach you — add it from "My Account" then come back to finish booking');
+      alert(isRtl ? 'نحتاج رقم جوالك أولًا حتى نتمكن من تأكيد حجزك والتواصل معك — أضفه من صفحة "حسابي" ثم عُد لإتمام الحجز' : 'We need your phone number first so we can confirm your booking and reach you — add it from "My Account" then come back to finish booking');
       return;
     }
     // Final guard against booking a past date — ScheduleStep already blocks
@@ -10521,15 +10934,26 @@ function ReviewStep({ lang, tr, formData, setStep, prevStep, loading, setLoading
           ...(registration_image_url_2 ? { registration_image_url_2 } : {}),
         }).eq('id', carId);
       }
-      const { data: newAppt, error: apptErr } = await supabase.from('appointments').insert([{
-        profile_id: user.id, car_id: carId,
-        appointment_date: formData.isQuoteOnly ? null : formData.date,
-        appointment_time: formData.isQuoteOnly ? null : formData.timeKey,
-        is_quote_request: formData.isQuoteOnly,
-        service_type: serviceType,
-        customer_notes: formData.notes, status: 'pending',
-        carried_forward_service: formData.carriedForwardService || null,
-      }]).select('id').single();
+      // Goes through book_appointment, not a plain insert — the pre-check
+      // above is just an early, friendly heads-up; this RPC is what actually
+      // re-checks capacity and inserts atomically (under an advisory lock on
+      // the exact date+slot), so two customers racing for the last spot
+      // can't both slip past the check and both get booked into it.
+      const { data: newAppt, error: apptErr } = await supabase.rpc('book_appointment', {
+        p_car_id: carId,
+        p_date: formData.isQuoteOnly ? null : formData.date,
+        p_time: formData.isQuoteOnly ? null : formData.timeKey,
+        p_capacity: slot?.capacity ?? 0,
+        p_is_quote_request: formData.isQuoteOnly,
+        p_service_type: serviceType,
+        p_customer_notes: formData.notes,
+        p_carried_forward_service: formData.carriedForwardService || null,
+      }).single();
+      if (apptErr?.message?.includes('slot_full')) {
+        alert(isRtl ? 'هذا الموعد امتلأ للتو — من فضلك اختر موعداً آخر' : 'This time slot just filled up — please pick another time');
+        setLoading(false);
+        return;
+      }
       if (apptErr) throw apptErr;
       // A priced Car Care option (see CarCareView/addToCart) already has a
       // known, customer-facing price — pre-fill it as a real quotation line
@@ -10728,6 +11152,7 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
   const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem('sndk_saved_email'));
   const [fullName, setFullName]   = useState('');
   const [phone, setPhone]         = useState('');
+  const [referralCodeInput, setReferralCodeInput] = useState('');
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState('');
   const [done, setDone]           = useState(false);
@@ -10787,7 +11212,7 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
           email, password,
           // null, not '' — phone_number is unique across profiles, and an
           // empty string would collide with the next phone-less signup.
-          options: { data: { full_name:fullName, phone_number: phone.trim() || null, language_preference:isRtl?'ar':'en' } },
+          options: { data: { full_name:fullName, phone_number: phone.trim() || null, language_preference:isRtl?'ar':'en', referral_code_used: referralCodeInput.trim().toUpperCase() || null } },
         });
         if (signUpErr) {
           // Resending too soon for an existing, unconfirmed signup — the earlier
@@ -10952,6 +11377,12 @@ function AuthModal({ mode, setMode, tr, isRtl, reason, onSuccess }) {
                       className={`${C.inputCls} flex-1`} style={inp}
                       onFocus={e=>e.target.style.borderColor='#722F37'} onBlur={e=>e.target.style.borderColor=C.border}/>
                   </div>
+                </div>
+                <div>
+                  <label className={labelCls} style={{ color:'rgba(114,47,55,0.75)' }}>{isRtl?'كود الدعوة':'Referral Code'} ({isRtl?'اختياري':'optional'})</label>
+                  <input type="text" value={referralCodeInput} onChange={e=>setReferralCodeInput(e.target.value.toUpperCase())} placeholder={isRtl?'لو حد دعاك لسندك':'If a friend invited you to SNDK'}
+                    className={C.inputCls} style={inp} dir="ltr"
+                    onFocus={e=>e.target.style.borderColor='#722F37'} onBlur={e=>e.target.style.borderColor=C.border}/>
                 </div>
               </>
             )}

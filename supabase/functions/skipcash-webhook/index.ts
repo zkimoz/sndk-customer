@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { hmacBase64, loadOrderContactInfo, recordPaymentIfNew } from "../_shared/skipcash.ts";
+import { hmacBase64, loadOrderContactInfo, recordPaymentIfNew, timingSafeEqual } from "../_shared/skipcash.ts";
 
 // Public endpoint SkipCash's own server POSTs to directly when a payment
 // completes — no Supabase JWT is ever sent here, so this function is
@@ -26,7 +26,7 @@ serve(async (req) => {
     parts.push(`VisaId=${body.VisaId}`);
     const expectedSig = await hmacBase64(parts.join(","), SKIPCASH_WEBHOOK_KEY);
 
-    if (authHeader !== expectedSig) {
+    if (!timingSafeEqual(authHeader, expectedSig)) {
       return new Response("Invalid signature", { status: 401 });
     }
 

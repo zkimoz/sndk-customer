@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { hmacBase64, loadPartOrderContactInfo, recordPartOrderPaymentIfNew } from "../_shared/skipcash.ts";
+import { hmacBase64, loadPartOrderContactInfo, recordPartOrderPaymentIfNew, timingSafeEqual } from "../_shared/skipcash.ts";
 
 // Public endpoint SkipCash's own server POSTs to directly when a spare-parts
 // request payment completes — mirrors skipcash-webhook/index.ts exactly
@@ -25,7 +25,7 @@ serve(async (req) => {
     parts.push(`VisaId=${body.VisaId}`);
     const expectedSig = await hmacBase64(parts.join(","), SKIPCASH_WEBHOOK_KEY);
 
-    if (authHeader !== expectedSig) {
+    if (!timingSafeEqual(authHeader, expectedSig)) {
       return new Response("Invalid signature", { status: 401 });
     }
 

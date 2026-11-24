@@ -25,6 +25,19 @@ export async function hmacBase64(message: string, secret: string): Promise<strin
   return base64Encode(new Uint8Array(sig));
 }
 
+// A plain `a !== b` leaks how many leading characters matched through
+// response timing — cheap to close even though it's only a theoretical
+// risk over real network jitter, since this signature is the only thing
+// gating these webhooks (deployed with --no-verify-jwt).
+export function timingSafeEqual(a: string, b: string): boolean {
+  const bytesA = new TextEncoder().encode(a);
+  const bytesB = new TextEncoder().encode(b);
+  if (bytesA.length !== bytesB.length) return false;
+  let diff = 0;
+  for (let i = 0; i < bytesA.length; i++) diff |= bytesA[i] ^ bytesB[i];
+  return diff === 0;
+}
+
 export async function loadSkipCashBase(): Promise<{ base: string; clientId: string | null } | { error: true }> {
   const { data: pm } = await adminClient
     .from("payment_methods")

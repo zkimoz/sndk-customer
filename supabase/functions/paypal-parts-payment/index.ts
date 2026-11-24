@@ -208,13 +208,20 @@ serve(async (req) => {
       const capturedUSD = Number(capture.amount?.value || 0);
       const amountQAR = Math.round(capturedUSD * QAR_PER_USD * 1000) / 1000;
 
+      // Idempotent on part_order_payments.gateway_ref — same unique index/
+      // 23505 pattern the skipcash webhooks already rely on, so a retried
+      // client call or two concurrent tabs can't record this one capture twice.
       const { error: insErr } = await adminClient.from("part_order_payments").insert({
         part_order_id: partOrderId,
         amount: amountQAR,
         method: "paypal",
         recorded_by: null,
+        gateway_ref: capture.id,
       });
-      if (insErr) return jsonResponse({ error: `Payment captured but failed to record: ${insErr.message}` }, 500);
+      if (insErr) {
+        if (insErr.code === "23505") return jsonResponse({ success: true, amountQAR });
+        return jsonResponse({ error: `Payment captured but failed to record: ${insErr.message}` }, 500);
+      }
 
       recordPaypalFee(amountQAR, partOrder.request_number);
 
