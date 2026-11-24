@@ -8522,8 +8522,22 @@ function HistoryOrderDetail({ jobCard, order, car, appt, profile, isRtl, tr, ope
         <button onClick={() => openPartsQuotePDF(po, profile)}
           className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl font-bold text-xs"
           style={{ background:'rgba(0,0,0,0.08)', border:`1px solid ${C.border}`, color:C.text }}>
-          <FileImage size={13}/>{isRtl?'PDF فاتورة قطع الغيار':'Parts Invoice PDF'}
+          <FileImage size={13}/>{isRtl?'عرض عرض السعر PDF':'View Price Quote PDF'}
         </button>
+        {/* Staff-issued official document — stays a payment receipt until the
+            request is delivered, then switches to a real tax invoice (see
+            sndk-admin's generatePartOrderDoc). This is a different, separate
+            document from the quote PDF above — it's the one the customer
+            actually needs for reimbursement/accounting, so it has to say
+            "فاتورة ضريبية" once issued, not just show the price quote again.
+            invoice_url wins once set since it supersedes the receipt. */}
+        {(po.invoice_url || po.receipt_url) && (
+          <a href={po.invoice_url || po.receipt_url} target="_blank" rel="noreferrer"
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl font-bold text-xs"
+            style={{ background:'rgba(34,197,94,0.15)', border:'1px solid rgba(34,197,94,0.35)', color:'#16a34a' }}>
+            <FileImage size={13}/>{po.invoice_url ? (isRtl?'عرض الفاتورة الضريبية':'View Tax Invoice') : (isRtl?'عرض إيصال الدفع':'View Payment Receipt')}
+          </a>
+        )}
       </div>
     );
   }
@@ -8830,6 +8844,12 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
         // of from the synthetic `orders[0]` above, which only carries the
         // display totals this summary list itself needs.
         linkedPartOrder: po,
+        // Marks this row as already fully resolved (single job card, single
+        // matching order) — the per-job-card flattening below must not try
+        // to re-match or drop it the way it does for real, appointment-sourced
+        // rows (where a parts-only job card sharing the same appointment_id
+        // as this one would otherwise show up a second time, unmatched).
+        isSyntheticPartRow: true,
       };
     });
     setHistory(p => ({ ...p, [carId]: [...(data || []), ...syntheticPartAppts] }));
@@ -9403,19 +9423,38 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
               // spinner below keeps working exactly as before.
               const rawCarHistory = history[car.id];
               // An appointment can carry more than one job_cards row (a
-              // parts-only one plus a separately-opened car job) — picking
-              // job_cards[0]/orders[0] blindly could pair one job card's
-              // closed_at with a completely different, still-open job card's
-              // order. Each order's own job_card_id (same match already
-              // established for MyOrdersView's relOrdForRow) says which job
-              // card it actually belongs to; only truly done once every job
-              // card on the appointment is closed or fully rejected.
+              // parts-only one auto-opened while staff worked a separate car
+              // job, both on the same appointment) — this used to render one
+              // row per APPOINTMENT and always grab job_cards[0]/orders[0],
+              // so whichever job card the query happened to return first
+              // decided the row's status/timeline, with the fallback
+              // `?? orders[0]` then pairing it with whatever order it could
+              // find — frequently the OTHER job card's order. One real case:
+              // a parts-only job card (closed, no order of its own) ended up
+              // displayed with a completely unrelated car-service order's
+              // labor total and service names. Flattened here into one row
+              // per CLOSED/rejected job card instead, each matched to its own
+              // order by job_card_id — no row ever borrows another job
+              // card's data again. Parts-only job cards are dropped here
+              // entirely (they have no `orders` row to match in the first
+              // place) since they already get their own, fully-correct row
+              // from the separate synthetic part-order query below.
               const carHistory = rawCarHistory
-                ? rawCarHistory.filter(appt => {
+                ? rawCarHistory.flatMap(appt => {
+                    // Already a single, correctly-matched row (see
+                    // loadCarHistory's synthetic part-order rows) — skip the
+                    // real-appointment matching/dedup logic below entirely,
+                    // which would otherwise drop it as "parts-only" or try
+                    // (and fail) to re-match it to an order it never had.
+                    if (appt.isSyntheticPartRow) return [{ ...appt, _jc: appt.job_cards?.[0] || null, _order: appt.orders?.[0] || null }];
                     const jcs = appt.job_cards || [];
-                    if (jcs.length === 0) return rejectedAllOverride(appt.orders?.[0]);
+                    if (jcs.length === 0) {
+                      return rejectedAllOverride(appt.orders?.[0]) ? [{ ...appt, _jc: null, _order: appt.orders?.[0] }] : [];
+                    }
                     const orderFor = jc => (jcs.length > 1 ? appt.orders?.find(o => o.job_card_id === jc.id) : appt.orders?.[0]);
-                    return jcs.every(jc => jc.closed_at || rejectedAllOverride(orderFor(jc)));
+                    return jcs
+                      .filter(jc => !jc.is_parts_only && (jc.closed_at || rejectedAllOverride(orderFor(jc))))
+                      .map(jc => ({ ...appt, id: jcs.length > 1 ? `${appt.id}-${jc.id}` : appt.id, _jc: jc, _order: orderFor(jc) }));
                   })
                 : rawCarHistory;
               return (
@@ -9649,11 +9688,11 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
                         <div className="divide-y" style={{ borderColor:C.border }}>
                           {carHistory.map(appt => {
                             const svcs = parseServices(appt.service_type);
-                            const jobCardRaw = appt.job_cards?.[0];
-                            // Match this specific job card's own order via
-                            // job_card_id rather than grabbing orders[0]
-                            // blindly — see the carHistory filter above.
-                            const order = ((appt.job_cards?.length > 1) ? appt.orders?.find(o => o.job_card_id === jobCardRaw?.id) : appt.orders?.[0]) ?? appt.orders?.[0];
+                            // Pre-matched by the carHistory flattening step above —
+                            // one row per job card, each already paired with its own
+                            // order via job_card_id (never a blind orders[0] fallback).
+                            const jobCardRaw = appt._jc;
+                            const order = appt._order;
                             // Walk-in appointments (created by staff at reception, not booked
                             // through the app) store the literal placeholder "استقبال مباشر" as
                             // service_type since there's no formal service list yet — once staff
