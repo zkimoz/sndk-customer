@@ -3515,6 +3515,7 @@ function PublicQuickQuoteView({ isRtl, user, token, onNeedsAuth, onApproved }) {
   const [approving, setApproving] = useState(false);
   const [error, setError] = useState('');
   const [carConflict, setCarConflict] = useState(false);
+  const [zoomImage, setZoomImage] = useState(null);
 
   useEffect(() => {
     if (!token) { setLoadState('invalid'); return; }
@@ -3582,9 +3583,25 @@ function PublicQuickQuoteView({ isRtl, user, token, onNeedsAuth, onApproved }) {
 
   const isParts = quote.kind === 'parts';
   const items = quote.items || [];
-  const lineTotal = it => Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
-  const grandTotal = items.reduce((s,it)=>s+lineTotal(it), 0);
   const carLabel = [quote.car_type, quote.car_category, quote.production_year].filter(Boolean).join(' · ');
+
+  // Service kind: mirrors the real job-card quotation's own grouping (by
+  // service_name) — the customer sees exactly the shape they'd see once
+  // it's a real order, not a flat, unfamiliar list.
+  const serviceLineTotal = it => Number(it.sell_price||0) * Number(it.qty||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
+  const serviceGrandTotal = items.reduce((s,it)=>s+serviceLineTotal(it), 0);
+  const groupKeyOf = it => it.service_name?.group_id || null;
+  const serviceGroupsList = [];
+  const seenGroupKeys = new Set();
+  items.forEach(it => {
+    const key = groupKeyOf(it);
+    if (key && !seenGroupKeys.has(key)) { seenGroupKeys.add(key); serviceGroupsList.push({ key, ar: it.service_name?.ar, en: it.service_name?.en }); }
+  });
+  const generalItems = items.filter(it => !groupKeyOf(it));
+
+  // Parts kind: same total basis as a real priced part order.
+  const partLineTotal = it => Number(it.quoted_sell_price||0) * Number(it.quantity||1);
+  const partGrandTotal = items.reduce((s,it)=>s+partLineTotal(it), 0);
 
   return (
     <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-4">
@@ -3599,24 +3616,111 @@ function PublicQuickQuoteView({ isRtl, user, token, onNeedsAuth, onApproved }) {
         {quote.plate_number && <p className="text-sm mt-0.5" style={{ color:C.muted }} dir="ltr">{quote.plate_number}</p>}
       </div>
 
-      <div className="rounded-2xl overflow-hidden" style={{ background:C.panel, border:`1px solid ${C.border}` }}>
-        {items.map((it, i) => (
-          <div key={i} className="flex items-center justify-between gap-2 p-3" style={{ borderBottom: i<items.length-1 ? `1px solid ${C.border}` : 'none' }}>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold truncate" style={{ color:C.text }}>{isRtl ? it.name_ar : (it.name_en || it.name_ar)}</p>
-              <p className="text-xs" style={{ color:C.muted }}>
-                {Number(it.quantity||1)>1 ? `${isRtl?'الكمية':'Qty'}: ${it.quantity} · ` : ''}
-                {Number(it.discount_pct||0)>0 ? (isRtl?`خصم ${it.discount_pct}%`:`-${it.discount_pct}%`) : ''}
-              </p>
+      {isParts ? (
+        <div className="space-y-3">
+          {items.map((it, i) => {
+            const photos = it.admin_image_urls?.length ? it.admin_image_urls : [];
+            const description = it.admin_description?.[isRtl?'ar':'en'] || it.admin_description?.ar;
+            const compatibleCars = it.compatible_cars?.[isRtl?'ar':'en'] || it.compatible_cars?.ar;
+            const availabilityEta = it.availability_eta?.[isRtl?'ar':'en'] || it.availability_eta?.ar;
+            return (
+              <div key={i} className="rounded-xl p-4 space-y-2.5 shadow-sm" style={{ background:C.input, border:`1px solid ${C.gold}35` }}>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-bold text-base" style={{ color:C.text }}>
+                    {isRtl ? it.name_ar : (it.name_en || it.name_ar)}
+                    {Number(it.quantity||1) > 1 && <span style={{ color:C.muted }}> × {it.quantity}</span>}
+                  </p>
+                  <span className="font-black text-sm flex-shrink-0" style={{ color:C.gold }}>{partLineTotal(it).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                </div>
+                {it.part_number && <p className="text-xs font-mono" style={{ color:C.muted }}>{isRtl?'رقم القطعة':'Part No.'}: {it.part_number}</p>}
+                {it.source_country && <p className="text-xs" style={{ color:C.muted }}>{isRtl?'بلد المنشأ':'Country of Origin'}: {it.source_country}</p>}
+                {photos.length > 0 && (
+                  <div className="flex gap-2.5 overflow-x-auto">
+                    {photos.map(url => (
+                      <img key={url} src={url} alt="" onClick={()=>setZoomImage(url)}
+                        className="h-44 rounded-xl object-cover flex-shrink-0 cursor-zoom-in active:opacity-80 transition-opacity"/>
+                    ))}
+                  </div>
+                )}
+                {description && <p className="text-sm leading-relaxed" style={{ color:C.muted }}>{description}</p>}
+                {compatibleCars && (
+                  <div className="pt-1" style={{ borderTop:`1px dashed ${C.gold}25` }}>
+                    <p className="text-xs font-bold mb-0.5" style={{ color:C.muted }}>{isRtl?'تركّب على':'Fits'}</p>
+                    <p className="text-sm" style={{ color:C.text }}>{compatibleCars}</p>
+                  </div>
+                )}
+                {availabilityEta && (
+                  <div>
+                    <p className="text-xs font-bold mb-0.5" style={{ color:C.muted }}>{isRtl?'مدة التوفير':'Availability'}</p>
+                    <p className="text-sm" style={{ color:C.text }}>{availabilityEta}</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          <div className="rounded-2xl overflow-hidden" style={{ background:C.panel, border:`1px solid ${C.border}` }}>
+            <div className="flex items-center justify-between p-3" style={{ background:'rgba(0,0,0,0.08)' }}>
+              <span className="font-black" style={{ color:C.text }}>{isRtl?'الإجمالي':'Total'}</span>
+              <span className="font-black text-lg" style={{ color:C.gold }} dir="ltr">{partGrandTotal.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
             </div>
-            <span className="font-bold flex-shrink-0" style={{ color:C.gold }} dir="ltr">{lineTotal(it).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
           </div>
-        ))}
-        <div className="flex items-center justify-between p-3" style={{ background:'rgba(0,0,0,0.08)' }}>
-          <span className="font-black" style={{ color:C.text }}>{isRtl?'الإجمالي':'Total'}</span>
-          <span className="font-black text-lg" style={{ color:C.gold }} dir="ltr">{grandTotal.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
         </div>
-      </div>
+      ) : (
+        <div className="rounded-2xl overflow-hidden" style={{ background:C.panel, border:`1px solid ${C.border}` }}>
+          {serviceGroupsList.map(g => {
+            const groupItems = items.filter(it => groupKeyOf(it) === g.key);
+            const subtotal = groupItems.reduce((s,it)=>s+serviceLineTotal(it),0);
+            return (
+              <div key={g.key}>
+                <div className="px-3 py-2 font-black text-sm" style={{ background:`${C.gold}15`, color:C.gold }}>
+                  {isRtl ? (g.ar||g.en) : (g.en||g.ar)}
+                </div>
+                {groupItems.map((it, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2 p-3" style={{ borderBottom:`1px solid ${C.border}` }}>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold truncate" style={{ color:C.text }}>{isRtl ? it.name_ar : (it.name_en || it.name_ar)}</p>
+                      <p className="text-xs" style={{ color:C.muted }}>
+                        {Number(it.qty||1)>1 ? `${isRtl?'الكمية':'Qty'}: ${it.qty} · ` : ''}
+                        {Number(it.discount_pct||0)>0 ? (isRtl?`خصم ${it.discount_pct}%`:`-${it.discount_pct}%`) : ''}
+                      </p>
+                    </div>
+                    <span className="font-bold flex-shrink-0" style={{ color:C.gold }} dir="ltr">{serviceLineTotal(it).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between px-3 py-1.5 text-xs font-bold" style={{ color:C.muted }}>
+                  <span>{isRtl?'إجمالي الخدمة':'Service Total'}</span>
+                  <span dir="ltr">{subtotal.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                </div>
+              </div>
+            );
+          })}
+          {generalItems.length > 0 && (
+            <div>
+              {serviceGroupsList.length > 0 && (
+                <div className="px-3 py-2 font-black text-sm" style={{ background:'rgba(0,0,0,0.05)', color:C.muted }}>
+                  {isRtl?'بنود عامة':'General Items'}
+                </div>
+              )}
+              {generalItems.map((it, i) => (
+                <div key={i} className="flex items-center justify-between gap-2 p-3" style={{ borderBottom:`1px solid ${C.border}` }}>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold truncate" style={{ color:C.text }}>{isRtl ? it.name_ar : (it.name_en || it.name_ar)}</p>
+                    <p className="text-xs" style={{ color:C.muted }}>
+                      {Number(it.qty||1)>1 ? `${isRtl?'الكمية':'Qty'}: ${it.qty} · ` : ''}
+                      {Number(it.discount_pct||0)>0 ? (isRtl?`خصم ${it.discount_pct}%`:`-${it.discount_pct}%`) : ''}
+                    </p>
+                  </div>
+                  <span className="font-bold flex-shrink-0" style={{ color:C.gold }} dir="ltr">{serviceLineTotal(it).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center justify-between p-3" style={{ background:'rgba(0,0,0,0.08)' }}>
+            <span className="font-black" style={{ color:C.text }}>{isRtl?'الإجمالي':'Total'}</span>
+            <span className="font-black text-lg" style={{ color:C.gold }} dir="ltr">{serviceGrandTotal.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+          </div>
+        </div>
+      )}
 
       {error && <p className="text-sm text-center" style={{ color:'#ef4444' }}>{error}</p>}
 
@@ -3631,6 +3735,12 @@ function PublicQuickQuoteView({ isRtl, user, token, onNeedsAuth, onApproved }) {
       </p>
 
       {carConflict && <CarOwnedByOtherModal isRtl={isRtl} onClose={()=>setCarConflict(false)}/>}
+      {zoomImage && (
+        <div className="fixed inset-0 bg-black/95 z-[60] flex items-center justify-center p-4" onClick={()=>setZoomImage(null)}>
+          <button onClick={()=>setZoomImage(null)} className="absolute top-4 text-white/80 p-2" style={{ [isRtl?'left':'right']:16 }}><X size={26}/></button>
+          <img src={zoomImage} alt="" className="max-w-full max-h-full object-contain rounded-lg" onClick={e=>e.stopPropagation()}/>
+        </div>
+      )}
     </div>
   );
 }
