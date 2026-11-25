@@ -1212,6 +1212,13 @@ export default function App() {
   // deepLinkJobNumber/highlightJobNumber already uses for job cards.
   const [publicShareToken, setPublicShareToken] = useState(null);
   const [highlightRequestNumber, setHighlightRequestNumber] = useState(null);
+  // A staff-shared "quick quote" link (?qq=<share_token>) — built for a car
+  // with no job card or customer on file yet (see sndk-admin's Quick Quote
+  // screen). Same public-preview-then-login-to-act shape as ?po= above, but
+  // the login step itself is the write: approving is what actually creates
+  // the real appointment/job card (or part request) under whichever account
+  // logs in, auto-adding the car to it first if it isn't already there.
+  const [publicQuoteToken, setPublicQuoteToken] = useState(null);
   // price/extra are only ever passed for a Car Care option (see CarCareView)
   // — everything else (the normal accordion, etc.) keeps calling this with
   // 4 args, so both stay undefined there and the cart item looks exactly
@@ -1388,6 +1395,18 @@ export default function App() {
     window.history.replaceState(null, '', window.location.pathname + window.location.hash);
     setPublicShareToken(po);
     setPage('part-quote');
+    setMenuOpen(false);
+  }, []);
+
+  // Staff-shared quick-quote link (?qq=<share_token>) — opens immediately,
+  // no auth wait, same reasoning as ?po= above: a public preview first,
+  // login only required to actually approve (see PublicQuickQuoteView).
+  useEffect(() => {
+    const qq = new URLSearchParams(window.location.search).get('qq');
+    if (!qq) return;
+    window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+    setPublicQuoteToken(qq);
+    setPage('quick-quote');
     setMenuOpen(false);
   }, []);
 
@@ -1891,6 +1910,13 @@ export default function App() {
             {page==='part-quote' && <PublicPartOrderView isRtl={isRtl} user={user} token={publicShareToken}
               onApproveClick={(requestNumber)=>{ setHighlightRequestNumber(requestNumber); setPage('orders'); if (!user) setAuthModal('signin'); }}/>}
             {page==='public-review' && <PublicReviewView isRtl={isRtl} token={publicReviewToken}/>}
+            {page==='quick-quote' && <PublicQuickQuoteView isRtl={isRtl} user={user} token={publicQuoteToken}
+              onNeedsAuth={()=>setAuthModal('signin')}
+              onApproved={(result)=>{
+                if (result.kind === 'service') setDeepLinkJobNumber(result.job_number);
+                else setHighlightRequestNumber(result.request_number);
+                setPage('orders');
+              }}/>}
             {page==='parts'   && <PartsFlowView lang={lang} isRtl={isRtl} user={user} profile={profile} goHome={goHome} carBrands={carBrands} carCategories={carCategories}/>}
             {page==='booking' && step===2 && <DetailsStep {...shared} prevStep={()=>setPage('home')}/>}
             {page==='booking' && step===3 && <ScheduleStep {...shared} prevStep={()=>setStep(2)}/>}
@@ -3469,6 +3495,138 @@ function PublicPartOrderView({ isRtl, token, onApproveClick }) {
           <img src={zoomImage} alt="" className="max-w-full max-h-full object-contain rounded-lg" onClick={e=>e.stopPropagation()}/>
         </div>
       )}
+    </div>
+  );
+}
+
+// A public, login-free PREVIEW of a staff-built quick quote (?qq=<share_token>,
+// see sndk-admin's Quick Quote screen) for a car with no job card or
+// customer on file yet — unlike PublicPartOrderView, approving here IS the
+// write: it's what actually creates the real appointment/job card (service)
+// or part request (parts) under whichever account logs in, via
+// approve_quick_quote (matches the car on this account by plate+chassis, or
+// adds it if it isn't there yet). If the customer taps Approve while logged
+// out, the click is remembered (wantsApprove) and fires automatically the
+// moment sign-in completes, instead of making them tap Approve twice.
+function PublicQuickQuoteView({ isRtl, user, token, onNeedsAuth, onApproved }) {
+  const [quote, setQuote] = useState(null);
+  const [loadState, setLoadState] = useState('loading'); // loading | invalid | used | ready
+  const [wantsApprove, setWantsApprove] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!token) { setLoadState('invalid'); return; }
+    supabase.rpc('get_quick_quote', { p_token: token }).then(({ data, error }) => {
+      if (error || !data) { setLoadState('invalid'); return; }
+      setQuote(data);
+      setLoadState(data.status === 'linked' ? 'used' : 'ready');
+    }).catch(() => setLoadState('invalid'));
+  }, [token]);
+
+  const doApprove = async () => {
+    if (approving) return;
+    setApproving(true);
+    setError('');
+    const { data, error } = await supabase.rpc('approve_quick_quote', { p_token: token });
+    setApproving(false);
+    if (error) {
+      setError(error.message?.includes('already_used')
+        ? (isRtl ? 'تم استخدام هذا العرض من قبل' : 'This quote has already been used')
+        : (isRtl ? 'حدث خطأ، حاول مرة أخرى' : 'Something went wrong, please try again'));
+      return;
+    }
+    onApproved(data);
+  };
+
+  const handleApproveClick = () => {
+    if (!user) { setWantsApprove(true); onNeedsAuth(); return; }
+    doApprove();
+  };
+
+  // Fires the approval the instant sign-in completes — the customer only
+  // ever taps Approve once, even if that first tap was what opened the
+  // sign-in modal.
+  useEffect(() => {
+    if (user && wantsApprove) { setWantsApprove(false); doApprove(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  if (loadState === 'loading') {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 size={28} className="animate-spin" style={{ color: C.gold }}/>
+      </div>
+    );
+  }
+  if (loadState === 'invalid') {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-2 px-4 text-center">
+        <img src="/logo-static.png" alt="SNDK" className="h-12 mb-2"/>
+        <p className="text-lg font-bold" style={{ color: C.text }}>{isRtl ? 'هذا الرابط غير صالح' : 'This link is invalid'}</p>
+        <p className="text-sm" style={{ color: C.muted }}>{isRtl ? 'تواصل مع فريق سندك لو تحتاج رابط جديد' : 'Contact SNDK if you need a new link'}</p>
+      </div>
+    );
+  }
+  if (loadState === 'used') {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-2 px-4 text-center">
+        <img src="/logo-static.png" alt="SNDK" className="h-12 mb-2"/>
+        <p className="text-lg font-bold" style={{ color: C.text }}>{isRtl ? 'تم استخدام هذا العرض بالفعل' : 'This quote has already been used'}</p>
+        <p className="text-sm" style={{ color: C.muted }}>{isRtl ? 'تواصل مع فريق سندك لو محتاج مساعدة' : 'Contact SNDK if you need help'}</p>
+      </div>
+    );
+  }
+
+  const isParts = quote.kind === 'parts';
+  const items = quote.items || [];
+  const lineTotal = it => Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
+  const grandTotal = items.reduce((s,it)=>s+lineTotal(it), 0);
+  const carLabel = [quote.car_type, quote.car_category, quote.production_year].filter(Boolean).join(' · ');
+
+  return (
+    <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-4">
+      <div className="text-center mb-2">
+        <img src="/logo-static.png" alt="SNDK" className="h-12 mx-auto mb-2"/>
+        <p className="text-xs" style={{ color: C.muted }}>{isParts ? (isRtl ? 'عرض سعر قطع غيار' : 'Spare-Parts Quote') : (isRtl ? 'عرض سعر خدمة' : 'Service Quote')}</p>
+      </div>
+
+      <div className="rounded-2xl p-4" style={{ background:C.panel, border:`1px solid ${C.border}` }}>
+        <p className="text-xs font-bold tracking-widest uppercase mb-1" style={{ color:C.muted }}>{isRtl?'السيارة':'Car'}</p>
+        <p className="font-bold" style={{ color:C.text }}>{carLabel || '—'}</p>
+        {quote.plate_number && <p className="text-sm mt-0.5" style={{ color:C.muted }} dir="ltr">{quote.plate_number}</p>}
+      </div>
+
+      <div className="rounded-2xl overflow-hidden" style={{ background:C.panel, border:`1px solid ${C.border}` }}>
+        {items.map((it, i) => (
+          <div key={i} className="flex items-center justify-between gap-2 p-3" style={{ borderBottom: i<items.length-1 ? `1px solid ${C.border}` : 'none' }}>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold truncate" style={{ color:C.text }}>{isRtl ? it.name_ar : (it.name_en || it.name_ar)}</p>
+              <p className="text-xs" style={{ color:C.muted }}>
+                {Number(it.quantity||1)>1 ? `${isRtl?'الكمية':'Qty'}: ${it.quantity} · ` : ''}
+                {Number(it.discount_pct||0)>0 ? (isRtl?`خصم ${it.discount_pct}%`:`-${it.discount_pct}%`) : ''}
+              </p>
+            </div>
+            <span className="font-bold flex-shrink-0" style={{ color:C.gold }} dir="ltr">{lineTotal(it).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+          </div>
+        ))}
+        <div className="flex items-center justify-between p-3" style={{ background:'rgba(0,0,0,0.08)' }}>
+          <span className="font-black" style={{ color:C.text }}>{isRtl?'الإجمالي':'Total'}</span>
+          <span className="font-black text-lg" style={{ color:C.gold }} dir="ltr">{grandTotal.toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
+        </div>
+      </div>
+
+      {error && <p className="text-sm text-center" style={{ color:'#ef4444' }}>{error}</p>}
+
+      <button onClick={handleApproveClick} disabled={approving}
+        className="w-full py-3.5 rounded-xl text-base font-black flex items-center justify-center gap-2 disabled:opacity-40 transition-all active:scale-95"
+        style={{ background:C.gold, color:C.btnTxt }}>
+        {approving && <Loader2 size={16} className="animate-spin"/>}
+        {isRtl ? 'موافقة والمتابعة' : 'Approve & Continue'}
+      </button>
+      <p className="text-xs text-center" style={{ color:C.muted }}>
+        {isRtl ? 'هتحتاجي تسجّلي دخول أو تعملي حساب جديد للمتابعة' : "You'll need to sign in or create an account to continue"}
+      </p>
     </div>
   );
 }
