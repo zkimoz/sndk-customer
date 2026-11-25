@@ -3514,6 +3514,7 @@ function PublicQuickQuoteView({ isRtl, user, token, onNeedsAuth, onApproved }) {
   const [wantsApprove, setWantsApprove] = useState(false);
   const [approving, setApproving] = useState(false);
   const [error, setError] = useState('');
+  const [carConflict, setCarConflict] = useState(false);
 
   useEffect(() => {
     if (!token) { setLoadState('invalid'); return; }
@@ -3531,6 +3532,7 @@ function PublicQuickQuoteView({ isRtl, user, token, onNeedsAuth, onApproved }) {
     const { data, error } = await supabase.rpc('approve_quick_quote', { p_token: token });
     setApproving(false);
     if (error) {
+      if (error.message?.includes('car_owned_by_other')) { setCarConflict(true); return; }
       setError(error.message?.includes('already_used')
         ? (isRtl ? 'تم استخدام هذا العرض من قبل' : 'This quote has already been used')
         : (isRtl ? 'حدث خطأ، حاول مرة أخرى' : 'Something went wrong, please try again'));
@@ -3627,6 +3629,8 @@ function PublicQuickQuoteView({ isRtl, user, token, onNeedsAuth, onApproved }) {
       <p className="text-xs text-center" style={{ color:C.muted }}>
         {isRtl ? 'هتحتاجي تسجّلي دخول أو تعملي حساب جديد للمتابعة' : "You'll need to sign in or create an account to continue"}
       </p>
+
+      {carConflict && <CarOwnedByOtherModal isRtl={isRtl} onClose={()=>setCarConflict(false)}/>}
     </div>
   );
 }
@@ -4835,6 +4839,47 @@ function TermsGateModal({ isRtl, user, onAccepted }) {
       </div>
 
       <LegalPolicyViewer policy={openPolicy} isRtl={isRtl} onClose={() => setOpenPolicy(null)}/>
+    </div>
+  );
+}
+
+// Shown wherever adding/registering a car hits the database's
+// cars_unique_plate_chassis constraint (same plate+chassis already belongs
+// to a different profile) — surfaced as a specific, actionable message
+// instead of a raw "duplicate key" error, with real tap-to-call/WhatsApp/
+// email links pulled from the same contact_info row ContactView itself
+// reads, so it never drifts from the number/address actually in use.
+function CarOwnedByOtherModal({ isRtl, onClose }) {
+  const [info, setInfo] = useState(null);
+  useEffect(() => {
+    supabase.from('contact_info').select('*').eq('id', 1).maybeSingle().then(({ data }) => setInfo(data));
+  }, []);
+  const rows = [
+    info?.phone_number && { icon:<Phone size={18} style={{ color:C.gold }}/>, label:info.phone_number, href:`tel:${info.phone_number}` },
+    info?.whatsapp_number && { icon:<WhatsAppIcon size={18}/>, label:isRtl?'تواصل عبر واتساب':'Message on WhatsApp', href:`https://wa.me/${info.whatsapp_number.replace(/\D/g,'')}` },
+    info?.email && { icon:<Mail size={18} style={{ color:C.gold }}/>, label:info.email, href:`mailto:${info.email}` },
+  ].filter(Boolean);
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="rounded-2xl w-full max-w-sm p-5 space-y-4" onClick={e=>e.stopPropagation()} style={{ background:C.panel, border:`1px solid ${C.border}` }}>
+        <div className="flex items-center justify-between">
+          <h3 className="font-black text-base" style={{ color:C.text }}>{isRtl?'السيارة مسجلة لعميل آخر':'This car is registered to another customer'}</h3>
+          <button onClick={onClose} className="p-1" style={{ color:C.muted }}><X size={18}/></button>
+        </div>
+        <p className="text-sm" style={{ color:C.muted }}>
+          {isRtl ? 'هذه السيارة مسجلة بالفعل باسم عميل آخر عندنا. يرجى التواصل مع خدمة العملاء لحل الأمر.' : 'This car is already registered to another customer with us. Please contact customer service to resolve this.'}
+        </p>
+        {rows.length > 0 && (
+          <div className="space-y-2">
+            {rows.map((r,i) => (
+              <a key={i} href={r.href} target={r.href?.startsWith('http') ? '_blank' : undefined} rel="noreferrer"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all active:scale-95" style={{ background:C.input }}>
+                {r.icon}<span className="text-sm font-bold" style={{ color:C.text }} dir="ltr">{r.label}</span>
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -9002,6 +9047,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
   const [registrationFile, setRegistrationFile] = useState(null);
   const [registrationFile2, setRegistrationFile2] = useState(null);
   const [addingCar, setAddingCar]           = useState(false);
+  const [carConflict, setCarConflict]       = useState(false);
 
   // Edit car state
   const [editingCarId, setEditingCarId]       = useState(null);
@@ -9236,6 +9282,7 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
     });
     setAddingCar(false);
     if (insErr) {
+      if (insErr.code === '23505') { setCarConflict(true); return; }
       alert((isRtl ? 'خطأ في إضافة السيارة: ' : 'Error adding car: ') + insErr.message);
       return;
     }
@@ -10116,6 +10163,8 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
         )}
       </div>
 
+      {carConflict && <CarOwnedByOtherModal isRtl={isRtl} onClose={()=>setCarConflict(false)}/>}
+
       {/* Registration viewer — in-app instead of a new tab, so there's
           always an obvious way back (mobile Safari/iPad can strand a
           user on a target="_blank" file with no visible way to return). */}
@@ -10828,6 +10877,7 @@ function RenewalFlowView({ lang, tr, isRtl, user, profile, carBrands, carCategor
   const [sigModal, setSigModal] = useState(null); // 'auth' | 'price' | null
   const [regImages, setRegImages] = useState([]); // [{ url, isPdf }]
   const [openImg, setOpenImg] = useState(null);
+  const [carConflict, setCarConflict] = useState(false);
 
   // profile can land a moment after this mounts — fill in whatever's still empty
   useEffect(() => {
@@ -10957,7 +11007,10 @@ function RenewalFlowView({ lang, tr, isRtl, user, profile, carBrands, carCategor
         },
       }).then(({ error }) => { if (error) console.error('notify-staff failed:', error); }).catch(e => console.error('notify-staff failed:', e));
       setStage('done');
-    } catch (err) { alert(tr.errorMsg + ': ' + err.message); }
+    } catch (err) {
+      if (err.code === '23505') { setCarConflict(true); }
+      else { alert(tr.errorMsg + ': ' + err.message); }
+    }
     finally { setLoading(false); }
   };
 
@@ -10981,6 +11034,7 @@ function RenewalFlowView({ lang, tr, isRtl, user, profile, carBrands, carCategor
 
   return (
     <div>
+      {carConflict && <CarOwnedByOtherModal isRtl={isRtl} onClose={()=>setCarConflict(false)}/>}
       {/* Step indicator */}
       <div className="px-4 md:px-8 pt-4 max-w-lg md:mx-auto flex items-center gap-1.5 overflow-x-auto">
         {order.map((k, i) => (
