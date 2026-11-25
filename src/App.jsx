@@ -1910,7 +1910,7 @@ export default function App() {
             {page==='part-quote' && <PublicPartOrderView isRtl={isRtl} user={user} token={publicShareToken}
               onApproveClick={(requestNumber)=>{ setHighlightRequestNumber(requestNumber); setPage('orders'); if (!user) setAuthModal('signin'); }}/>}
             {page==='public-review' && <PublicReviewView isRtl={isRtl} token={publicReviewToken}/>}
-            {page==='quick-quote' && <PublicQuickQuoteView isRtl={isRtl} user={user} token={publicQuoteToken}
+            {page==='quick-quote' && <PublicQuickQuoteView isRtl={isRtl} user={user} token={publicQuoteToken} carBrands={carBrands} carCategories={carCategories}
               onNeedsAuth={()=>setAuthModal('signin')}
               onApproved={(result)=>{
                 if (result.kind === 'service') setDeepLinkJobNumber(result.job_number);
@@ -3058,7 +3058,7 @@ function TrackingTimeline({ stage, isRtl }) {
   );
 }
 
-function PartOrderDetailModal({ partOrder: po, lang, isRtl, profile, onClose, onPay }) {
+function PartOrderDetailModal({ partOrder: po, lang, isRtl, profile, carBrands = [], carCategories = [], onClose, onPay }) {
   const [zoomImage, setZoomImage] = useState(null);
   const [sigOpen, setSigOpen] = useState(false);
   // Local override so the "sign to approve" step reflects instantly without
@@ -3266,7 +3266,7 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, profile, onClose, on
           )}
 
           {(isApproved ? totalQuoted > 0.01 : items.reduce((s,i)=>s+lineTotal(i),0) > 0.01) && (
-            <button onClick={()=>openPartsQuotePDF({ ...po, part_order_items: items, item_decisions: localDecisions, customer_approved_at: localApproval.customer_approved_at, approval_signature_data: localApproval.approval_signature_data, approval_signed_by: localApproval.approval_signed_by }, profile)}
+            <button onClick={()=>openPartsQuotePDF({ ...po, part_order_items: items, item_decisions: localDecisions, customer_approved_at: localApproval.customer_approved_at, approval_signature_data: localApproval.approval_signature_data, approval_signed_by: localApproval.approval_signed_by }, profile, carBrands, carCategories)}
               className="w-full py-3 rounded-xl text-sm font-black transition-all active:scale-95 border-2"
               style={{ borderColor:'#722F37', color:'#722F37' }}>
               {isRtl ? '🖨️ عرض عرض السعر PDF' : '🖨️ View Price Quote PDF'}
@@ -3508,7 +3508,7 @@ function PublicPartOrderView({ isRtl, token, onApproveClick }) {
 // adds it if it isn't there yet). If the customer taps Approve while logged
 // out, the click is remembered (wantsApprove) and fires automatically the
 // moment sign-in completes, instead of making them tap Approve twice.
-function PublicQuickQuoteView({ isRtl, user, token, onNeedsAuth, onApproved }) {
+function PublicQuickQuoteView({ isRtl, user, token, onNeedsAuth, onApproved, carBrands = [], carCategories = [] }) {
   const [quote, setQuote] = useState(null);
   const [loadState, setLoadState] = useState('loading'); // loading | invalid | used | ready
   const [wantsApprove, setWantsApprove] = useState(false);
@@ -3583,7 +3583,7 @@ function PublicQuickQuoteView({ isRtl, user, token, onNeedsAuth, onApproved }) {
 
   const isParts = quote.kind === 'parts';
   const items = quote.items || [];
-  const carLabel = [quote.car_type, quote.car_category, quote.production_year].filter(Boolean).join(' · ');
+  const carLabel = [carTypeLabel(quote, carBrands, isRtl?'ar':'en'), carCategoryLabel(quote, carCategories, isRtl?'ar':'en'), quote.production_year].filter(Boolean).join(' · ');
 
   // Service kind: mirrors the real job-card quotation's own grouping (by
   // service_name) — the customer sees exactly the shape they'd see once
@@ -3745,7 +3745,7 @@ function PublicQuickQuoteView({ isRtl, user, token, onNeedsAuth, onApproved }) {
   );
 }
 
-function openQuotationPDF(order, linked, profile, jobCard, carBrands = []) {
+function openQuotationPDF(order, linked, profile, jobCard, carBrands = [], carCategories = []) {
   const isApproved = !!order.customer_approved;
   const approvalDate = order.approved_at
     ? new Date(order.approved_at).toLocaleString('ar-QA', { dateStyle:'long', timeStyle:'short' }) : '';
@@ -3757,7 +3757,12 @@ function openQuotationPDF(order, linked, profile, jobCard, carBrands = []) {
   const lineTotal = it => Number(it.sell_price||0) * Number(it.quantity||1) * (1 - Math.min(Number(it.discount_pct||0),100)/100);
   const car = linked?.cars || {};
   const carBrandRec = carBrands.find(b => b.name_ar === car.car_type || b.name_en === car.car_type);
+  const carCatRec = carCategories.find(c => c.name_ar === car.car_category || c.name_en === car.car_category);
   const carLogoSrc = carBrandLogoUrl(carBrandRec?.name_en || car.car_type);
+  const carTypeAr = carBrandRec?.name_ar || car.car_type || '';
+  const carTypeEn = carBrandRec?.name_en || '';
+  const carCatAr = carCatRec?.name_ar || car.car_category || '';
+  const carCatEn = carCatRec?.name_en || '';
   const items = (order.order_items || []).filter(it => it.visible_to_customer !== false);
   const approvedItems = decided ? items.filter(it => { const k = groupKeyOf(it); return !k || decisions[k] !== 'rejected'; }) : items;
   const rejectedItems = decided ? items.filter(it => { const k = groupKeyOf(it); return k && decisions[k] === 'rejected'; }) : [];
@@ -3914,7 +3919,7 @@ function openQuotationPDF(order, linked, profile, jobCard, carBrands = []) {
 <div class="section">
   <div class="section-title">بيانات السيارة / Car Info</div>
   <div class="grid2" style="margin-bottom:8px">
-    <div class="field"><div class="field-label">السيارة / Car</div><div class="field-value"><img src="${escapeHtml(carLogoSrc)}" alt="" style="height:26px;vertical-align:middle;margin-inline-end:8px" onerror="this.style.display='none'"/>${escapeHtml([car.car_type, car.car_category, car.production_year].filter(Boolean).join(' ')) || '—'}</div></div>
+    <div class="field"><div class="field-label">السيارة / Car</div><div class="field-value"><img src="${escapeHtml(carLogoSrc)}" alt="" style="height:26px;vertical-align:middle;margin-inline-end:8px" onerror="this.style.display='none'"/>${escapeHtml([carTypeAr, carTypeEn && carTypeEn !== carTypeAr ? `/ ${carTypeEn}` : '', carCatAr, carCatEn && carCatEn !== carCatAr ? `/ ${carCatEn}` : '', car.production_year].filter(Boolean).join(' ')) || '—'}</div></div>
     <div class="field"><div class="field-label">اللوحة / Plate</div><div class="field-value" dir="ltr">${escapeHtml(car.plate_number) || '—'}</div></div>
   </div>
   ${car.chassis_number ? `<div class="field"><div class="field-label">رقم الشاصيه / VIN</div><div class="field-value" dir="ltr" style="font-family:monospace;letter-spacing:1px">${escapeHtml(car.chassis_number)}</div></div>` : ''}
@@ -4069,7 +4074,7 @@ ${isApproved ? `
 // which has its own identical copy — this codebase duplicates print/PDF
 // builders between the two apps the same way printJobCard/printInvoice/
 // printTaxInvoice already are, rather than sharing a module).
-function openPartsQuotePDF(partOrder, profile) {
+function openPartsQuotePDF(partOrder, profile, carBrands = [], carCategories = []) {
   const allItems = partOrder.part_order_items || [];
   const decisions = partOrder.item_decisions || {};
   const isApproved = !!partOrder.customer_approved_at;
@@ -4078,6 +4083,12 @@ function openPartsQuotePDF(partOrder, profile) {
   const items = isApproved ? allItems.filter(it => decisions[it.id] === 'approved') : allItems;
   const rejectedItems = isApproved ? allItems.filter(it => decisions[it.id] === 'rejected') : [];
   const car = partOrder.car_snapshot || {};
+  const carBrandRec = carBrands.find(b => b.name_ar === car.car_type || b.name_en === car.car_type);
+  const carCatRec = carCategories.find(c => c.name_ar === car.car_category || c.name_en === car.car_category);
+  const carTypeAr = carBrandRec?.name_ar || car.car_type || '';
+  const carTypeEn = carBrandRec?.name_en || '';
+  const carCatAr = carCatRec?.name_ar || car.car_category || '';
+  const carCatEn = carCatRec?.name_en || '';
   const lineTotal = it => Number(it.quoted_sell_price||0) * Number(it.quantity||1);
   const grandTotal = items.reduce((s,it)=>s+lineTotal(it),0);
   const totalPaid = (partOrder.part_order_payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
@@ -4186,7 +4197,7 @@ ${rejectedItems.length > 0 ? `
 <div class="section">
   <div class="section-title">بيانات السيارة / Car Info</div>
   <div class="grid2">
-    <div class="field"><div class="field-label">السيارة / Car</div><div class="field-value">${escapeHtml([car.car_type, car.car_category, car.production_year].filter(Boolean).join(' ')) || '—'}</div></div>
+    <div class="field"><div class="field-label">السيارة / Car</div><div class="field-value">${escapeHtml([carTypeAr, carTypeEn && carTypeEn !== carTypeAr ? `/ ${carTypeEn}` : '', carCatAr, carCatEn && carCatEn !== carCatAr ? `/ ${carCatEn}` : '', car.production_year].filter(Boolean).join(' ')) || '—'}</div></div>
     <div class="field"><div class="field-label">اللوحة / Plate</div><div class="field-value" dir="ltr">${escapeHtml(car.plate_number) || '—'}</div></div>
   </div>
 </div>
@@ -5803,7 +5814,10 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
       setDiscountMsg(m => ({ ...m, [orderId]: { type:'error', text } }));
       return;
     }
-    setDiscountMsg(m => ({ ...m, [orderId]: { type:'success', text: isRtl ? `تم تطبيق خصم ${data.discount_pct}%! 🎉` : `${data.discount_pct}% discount applied! 🎉` } }));
+    const giftText = data.referrer_name
+      ? (isRtl ? ` — هدية من صديقك ${data.referrer_name} 🎁` : ` — a gift from your friend ${data.referrer_name} 🎁`)
+      : '';
+    setDiscountMsg(m => ({ ...m, [orderId]: { type:'success', text: (isRtl ? `تم تفعيل كود ${data.code} — خصم ${data.discount_pct}%${giftText}! 🎉` : `Code ${data.code} activated — ${data.discount_pct}% discount applied${giftText}! 🎉`) } }));
     setDiscountInputs(m => ({ ...m, [orderId]: '' }));
     loadData();
   };
@@ -6961,7 +6975,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                             </div>
                           )}
                           {/* PDF */}
-                          <button onClick={() => openQuotationPDF(relOrd, a, profile, jc, carBrandsRef)}
+                          <button onClick={() => openQuotationPDF(relOrd, a, profile, jc, carBrandsRef, carCatsRef)}
                             className="flex items-center justify-center gap-2 w-full px-3 py-3 rounded-xl font-black text-base shadow-md hover:shadow-lg active:scale-95 transition-all"
                             style={{ background:cc.fg, color:'#111111' }}>
                             <FileImage size={16}/>{isRtl ? 'فتح أمر الشغل PDF' : 'Open Job Card PDF'}
@@ -7586,6 +7600,8 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
           lang={lang}
           isRtl={isRtl}
           profile={profile}
+          carBrands={carBrandsRef}
+          carCategories={carCatsRef}
           onClose={() => setViewPartOrder(null)}
           onPay={(amountDue) => { setPayPartOrderModal({ partOrderId:viewPartOrder.id, amount:amountDue, requestNumber:viewPartOrder.request_number }); setViewPartOrder(null); }}
         />
@@ -9027,7 +9043,7 @@ function HistoryOrderDetail({ jobCard, order, car, appt, profile, isRtl, tr, ope
             {isRtl ? `تم رفض: ${rejectedNames.join('، ')}` : `Declined: ${rejectedNames.join(', ')}`}
           </div>
         )}
-        <button onClick={() => openPartsQuotePDF(po, profile)}
+        <button onClick={() => openPartsQuotePDF(po, profile, carBrands, carCategories)}
           className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl font-bold text-xs"
           style={{ background:'rgba(0,0,0,0.08)', border:`1px solid ${C.border}`, color:C.text }}>
           <FileImage size={13}/>{isRtl?'عرض عرض السعر PDF':'View Price Quote PDF'}
@@ -9137,7 +9153,7 @@ function HistoryOrderDetail({ jobCard, order, car, appt, profile, isRtl, tr, ope
       )}
 
       <div className="flex gap-2">
-        <button onClick={() => openQuotationPDF(order || {}, linked, profile, jobCard, carBrands)}
+        <button onClick={() => openQuotationPDF(order || {}, linked, profile, jobCard, carBrands, carCategories)}
           className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl font-bold text-xs"
           style={{ background:'rgba(0,0,0,0.08)', border:`1px solid ${C.border}`, color:C.text }}>
           <FileImage size={13}/>{isRtl?'PDF أمر الشغل':'Job Card PDF'}
