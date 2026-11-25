@@ -5525,6 +5525,12 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
   // at once, making it hard to tell them apart at a glance. Only the id
   // being deep-linked to (see highlightJobNumber below) starts open.
   const [expandedOrderId, setExpandedOrderId] = useState(null);
+  // Discount-code redemption (see redeem_discount_code) — keyed by order id
+  // since several decided-but-unpaid quotations can be open on this screen
+  // at once, each with its own code input/result.
+  const [discountInputs, setDiscountInputs] = useState({});
+  const [discountBusyId, setDiscountBusyId] = useState(null);
+  const [discountMsg, setDiscountMsg] = useState({});
   const seenIdsRef = useRef(new Set());
   // Scrolls to and highlights the job card a staff-shared signing link
   // pointed at (see App()'s highlightJobNumber/?jc= handling) — the ref
@@ -5665,6 +5671,32 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
     requestNotifPerm();
     loadData();
   }, [user]);
+
+  // redeem_discount_code already refuses a closed/already-discounted/
+  // fully-paid order, or an invalid/used/expired code — this just turns
+  // each of those into the right Arabic/English message and, on success,
+  // reloads so Paid/Remaining/Total reflect the new discount immediately.
+  const redeemDiscountCode = async (orderId) => {
+    const code = (discountInputs[orderId] || '').trim();
+    if (!code || discountBusyId) return;
+    setDiscountBusyId(orderId);
+    setDiscountMsg(m => ({ ...m, [orderId]: null }));
+    const { data, error } = await supabase.rpc('redeem_discount_code', { p_order_id: orderId, p_code: code });
+    setDiscountBusyId(null);
+    if (error) {
+      const text = error.message?.includes('invalid_code') ? (isRtl?'الكود غير صحيح':'Invalid code')
+        : error.message?.includes('already_redeemed') ? (isRtl?'تم استخدام هذا الكود من قبل':'This code has already been used')
+        : error.message?.includes('expired') ? (isRtl?'انتهت صلاحية هذا الكود':'This code has expired')
+        : error.message?.includes('already_paid') ? (isRtl?'تم دفع هذا الطلب بالكامل بالفعل':'This has already been paid in full')
+        : error.message?.includes('order_already_discounted') ? (isRtl?'تم تطبيق خصم على هذا الطلب بالفعل':'A discount is already applied to this')
+        : (isRtl?'حدث خطأ، حاول مرة أخرى':'Something went wrong, please try again');
+      setDiscountMsg(m => ({ ...m, [orderId]: { type:'error', text } }));
+      return;
+    }
+    setDiscountMsg(m => ({ ...m, [orderId]: { type:'success', text: isRtl ? `تم تطبيق خصم ${data.discount_pct}%! 🎉` : `${data.discount_pct}% discount applied! 🎉` } }));
+    setDiscountInputs(m => ({ ...m, [orderId]: '' }));
+    loadData();
+  };
 
   // Checks for newly-sent quotations (and merges any other live order
   // change) — used to run on a 20s poll, now fired the moment staff
@@ -6909,6 +6941,37 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                                     <span className="text-base font-bold" style={{ color:C.gold }}>+{pendingExcess.toFixed(3)} {isRtl ? 'ر.ق' : 'QAR'}</span>
                                   </div>
                                 )}
+                              </div>
+                            );
+                          })()}
+                          {/* Discount code — only once the quotation is actually signed (not
+                              while services are still being decided, since redeem_discount_code
+                              reduces the CURRENT total_parts_price/total_labor_price directly; a
+                              later decision change would leave an already-applied discount
+                              amount stale against a now-different total) and only while there's
+                              still something left to pay. */}
+                          {relOrd.customer_approved && !(Number(relOrd.extra_discount_amount)>0) && (() => {
+                            const paidFromPayments = (relOrd.payments || []).reduce((s,p)=>s+Number(p.amount||0),0);
+                            const pendingExcessRaw = (relOrd.wallet_transactions || [])
+                              .filter(w => w.type === 'overpayment_credit' && w.status === 'pending')
+                              .reduce((s,w) => s + Number(w.amount || 0), 0);
+                            const remaining = selectedQuotationTotal(relOrd) - (paidFromPayments + pendingExcessRaw);
+                            if (remaining <= 0.001) return null;
+                            const msg = discountMsg[relOrd.id];
+                            return (
+                              <div className="rounded-xl p-3 space-y-2" style={{ background:'rgba(0,0,0,0.08)' }}>
+                                <p className="text-sm font-bold" style={{ color:cc.sub }}>{isRtl?'عندك كود خصم؟':'Have a discount code?'}</p>
+                                <div className="flex items-center gap-2">
+                                  <input value={discountInputs[relOrd.id] || ''} onChange={e=>setDiscountInputs(m=>({...m,[relOrd.id]:e.target.value.toUpperCase()}))}
+                                    placeholder={isRtl?'اكتب الكود هنا':'Enter code here'} dir="ltr"
+                                    className="flex-1 px-3 py-2 rounded-lg text-sm outline-none" style={{ background:'rgba(255,255,255,0.08)', color:cc.txt, border:`1px solid ${cc.sub}40` }}/>
+                                  <button onClick={()=>redeemDiscountCode(relOrd.id)} disabled={discountBusyId===relOrd.id || !(discountInputs[relOrd.id]||'').trim()}
+                                    className="px-4 py-2 rounded-lg text-sm font-bold flex-shrink-0 disabled:opacity-40 transition-all active:scale-95"
+                                    style={{ background:C.gold, color:C.btnTxt }}>
+                                    {discountBusyId===relOrd.id ? <Loader2 size={14} className="animate-spin"/> : (isRtl?'تطبيق':'Apply')}
+                                  </button>
+                                </div>
+                                {msg && <p className="text-xs font-bold" style={{ color: msg.type==='error' ? '#ef4444' : '#22c55e' }}>{msg.text}</p>}
                               </div>
                             );
                           })()}
