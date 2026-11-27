@@ -5773,6 +5773,11 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
         .from('orders').select('*, order_items(*), payments(*), wallet_transactions(amount, status, type)')
         .in('appointment_id', ids).order('created_at', { ascending: false });
       const loaded = ordData || [];
+      // order_items has no reliable storage order of its own (an in-place
+      // update on one row can relocate it in Postgres's heap) — sort
+      // explicitly by sort_order so services show in the order staff added
+      // them, same as sndk-admin's own quotation editor.
+      loaded.forEach(o => { if (o.order_items) o.order_items = [...o.order_items].sort((a,b) => (a.sort_order ?? 1e9) - (b.sort_order ?? 1e9)); });
       setOrders(loaded);
       // init seen set with already-known ids (no notification for existing on first load)
       if (seenIdsRef.current.size === 0) {
@@ -5836,6 +5841,7 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
       .in('appointment_id', ids)
       .eq('sent_to_customer', true);
     if (!ordData) return;
+    ordData.forEach(o => { if (o.order_items) o.order_items = [...o.order_items].sort((a,b) => (a.sort_order ?? 1e9) - (b.sort_order ?? 1e9)); });
     // detect newly sent quotations
     ordData.forEach(o => {
       if (!seenIdsRef.current.has(o.id)) {
@@ -9342,6 +9348,9 @@ function ProfileView({ lang, tr, isRtl, profile, user, onBook, goServices, onPro
         .eq('car_id', carId)
         .eq('is_parts_only', true),
     ]);
+    (data || []).forEach(a => (a.orders || []).forEach(o => {
+      if (o.order_items) o.order_items = [...o.order_items].sort((x,y) => (x.sort_order ?? 1e9) - (y.sort_order ?? 1e9));
+    }));
     const syntheticPartAppts = (partsJobCards || []).filter(jc => jc.part_orders).map(jc => {
       const po = jc.part_orders;
       const items = po.part_order_items || [];
@@ -10456,6 +10465,9 @@ async function findRejectedServiceFollowup(carId) {
     .select('id, orders(*, order_items(*)), job_cards(is_closed, closed_at, job_number)')
     .eq('car_id', carId)
     .order('appointment_date', { ascending: false });
+  (data || []).forEach(a => (a.orders || []).forEach(o => {
+    if (o.order_items) o.order_items = [...o.order_items].sort((x,y) => (x.sort_order ?? 1e9) - (y.sort_order ?? 1e9));
+  }));
   const groupKeyOf = it => it.service_name?.group_id || it.service_name?.ar || it.service_name?.en || null;
   for (const appt of (data || [])) {
     const jcs = appt.job_cards || [];
