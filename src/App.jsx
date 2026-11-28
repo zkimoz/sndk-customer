@@ -7298,7 +7298,17 @@ function MyOrdersView({ lang, tr, isRtl, user, profile, onCountChange, theme, hi
                                   </div>
                                 </>
                               ) : relOrd.pickup_method === 'team' ? (
-                                <p className="text-sm" style={{ color:cc?cc.txt:C.text }}>{isRtl ? '✅ سيتم استلام سيارتك بواسطة أحد أفراد فريقنا.' : '✅ Your car will be picked up by one of our team members.'}</p>
+                                // Team pickup has no staff-set "completed" flag of its own
+                                // (towing_completed is only ever written for the flatbed
+                                // path) — once the job card's own status has reached
+                                // car_received or later, the car plainly already got
+                                // picked up, so the message should stop reading as a
+                                // future promise.
+                                !jc?.is_parts_only && JOB_STATUS_ORDER.indexOf(jc?.job_status) >= JOB_STATUS_ORDER.indexOf('car_received') ? (
+                                  <p className="text-sm font-bold" style={{ color:'#16a34a' }}>{isRtl ? '✅ تم استلام سيارتك بواسطة أحد أفراد فريقنا.' : '✅ Your car has been picked up by one of our team members.'}</p>
+                                ) : (
+                                  <p className="text-sm" style={{ color:cc?cc.txt:C.text }}>{isRtl ? '✅ سيتم استلام سيارتك بواسطة أحد أفراد فريقنا.' : '✅ Your car will be picked up by one of our team members.'}</p>
+                                )
                               ) : (
                                 <>
                                   {relOrd.towing_completed && (
