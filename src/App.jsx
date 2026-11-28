@@ -1924,9 +1924,11 @@ export default function App() {
             {page==='booking' && step===5 && <SuccessStep  tr={tr} isRtl={isRtl} name={formData.name} isQuoteOnly={formData.isQuoteOnly} resetAll={()=>{ resetForm(); clearCart(); setPage('home'); setStep(1); }} goOrders={()=>{ resetForm(); clearCart(); setStep(1); goOrders(); }}/>}
           </main>
 
-          {/* Mobile Bottom Nav */}
-          <nav className="bottom-nav-glass md:hidden fixed bottom-0 inset-x-0 z-40 flex items-center justify-around px-2 py-2"
-            style={{ background:`${C.panel}B3`, backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)', borderTop:`1px solid ${C.border}`, boxShadow:'inset 0 1px 0 rgba(255,255,255,0.08)' }}>
+          {/* Mobile Bottom Nav — matches the app's floating rounded glass
+              capsule (maroon-tinted blur, gold pill behind the active item)
+              instead of the old flush full-width bar. */}
+          <nav className="bottom-nav-glass md:hidden fixed bottom-3 inset-x-3 z-40 flex items-center justify-around px-2 py-2 rounded-[28px]"
+            style={{ background:'rgba(114,47,55,0.32)', backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)', border:'1px solid rgba(255,255,255,0.16)', boxShadow:'0 8px 28px rgba(0,0,0,0.35)' }}>
             <MobNavItem icon={Home}         label={tr.navHome}    active={page==='home'}    onClick={goHome}/>
             <button onClick={()=>handleBookNow()}
               className="fab-glass relative -top-5 w-14 h-14 rounded-full flex items-center justify-center transition-all active:scale-95"
@@ -1934,17 +1936,18 @@ export default function App() {
               <Plus size={24} color={C.bg} strokeWidth={2.5}/>
             </button>
             <MobNavItem icon={ClipboardList} label={tr.navOrders} active={page==='orders'}  onClick={goOrders} badge={page==='orders'?0:pendingQuotCount}/>
-            <button onClick={() => setCartOpen(true)} className="flex flex-col items-center gap-1 px-3 py-1">
+            <button onClick={() => setCartOpen(true)} className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-2xl"
+              style={{ background: cart.length > 0 ? 'rgba(255,203,116,0.20)' : 'transparent' }}>
               <div className="relative">
-                <ShoppingCart size={20} color={cart.length > 0 ? C.gold : C.dim}/>
+                <ShoppingCart size={18} color={cart.length > 0 ? C.gold : 'rgba(255,255,255,0.55)'}/>
                 {cart.length > 0 && (
                   <span className="absolute -top-1.5 -end-1.5 min-w-[14px] h-[14px] px-0.5 rounded-full text-[8px] font-black flex items-center justify-center"
-                    style={{ background:C.gold, color:C.btnTxt }}>
+                    style={{ background:'#ef4444', color:'#fff' }}>
                     {cart.length > 9 ? '9+' : cart.length}
                   </span>
                 )}
               </div>
-              <span className="text-[9px] font-semibold" style={{ color: cart.length > 0 ? C.gold : C.dim }}>
+              <span className="text-[9px] font-semibold" style={{ color: cart.length > 0 ? C.gold : 'rgba(255,255,255,0.55)' }}>
                 {isRtl ? 'سلتي' : 'Cart'}
               </span>
             </button>
@@ -3185,7 +3188,7 @@ function PartOrderDetailModal({ partOrder: po, lang, isRtl, profile, carBrands =
                     <p className="text-xs font-mono" style={{ color:C.muted }}>{isRtl?'رقم القطعة':'Part No.'}: {it.part_number}</p>
                   )}
                   {it.source_country && (
-                    <p className="text-xs" style={{ color:C.muted }}>{isRtl?'بلد المنشأ':'Country of Origin'}: {it.source_country}</p>
+                    <p className="text-xs" style={{ color:C.muted }}>{isRtl?'بلد المنشأ':'Country of Origin'}: {isRtl ? it.source_country : (it.source_country_en || it.source_country)}</p>
                   )}
                   {photos.length > 0 && (
                     <div className="flex gap-2.5 overflow-x-auto">
@@ -3416,7 +3419,7 @@ function PublicPartOrderView({ isRtl, token, onApproveClick }) {
                   <p className="text-xs font-mono" style={{ color: C.muted }}>{isRtl?'رقم القطعة':'Part No.'}: {it.part_number}</p>
                 )}
                 {it.source_country && (
-                  <p className="text-xs" style={{ color: C.muted }}>{isRtl?'بلد المنشأ':'Country of Origin'}: {it.source_country}</p>
+                  <p className="text-xs" style={{ color: C.muted }}>{isRtl?'بلد المنشأ':'Country of Origin'}: {isRtl ? it.source_country : (it.source_country_en || it.source_country)}</p>
                 )}
                 {photos.length > 0 && (
                   <div className="flex gap-2.5 overflow-x-auto">
@@ -3633,7 +3636,7 @@ function PublicQuickQuoteView({ isRtl, user, token, onNeedsAuth, onApproved, car
                   <span className="font-black text-sm flex-shrink-0" style={{ color:C.gold }}>{partLineTotal(it).toFixed(3)} {isRtl?'ر.ق':'QAR'}</span>
                 </div>
                 {it.part_number && <p className="text-xs font-mono" style={{ color:C.muted }}>{isRtl?'رقم القطعة':'Part No.'}: {it.part_number}</p>}
-                {it.source_country && <p className="text-xs" style={{ color:C.muted }}>{isRtl?'بلد المنشأ':'Country of Origin'}: {it.source_country}</p>}
+                {it.source_country && <p className="text-xs" style={{ color:C.muted }}>{isRtl?'بلد المنشأ':'Country of Origin'}: {isRtl ? it.source_country : (it.source_country_en || it.source_country)}</p>}
                 {photos.length > 0 && (
                   <div className="flex gap-2.5 overflow-x-auto">
                     {photos.map(url => (
@@ -10969,6 +10972,17 @@ function RenewalAuthCard({ a, car, relOrd, cc, isRtl, lang, carBrandsRef, carCat
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [auth, sig, carLabel]);
   const regImages = [car?.registration_image_url, car?.registration_image_url_2].filter(Boolean);
+  // car-registration is a private bucket — the stored URLs are old
+  // getPublicUrl() strings that 403 straight in an <img src>, same issue
+  // resolveSignedUrl/viewingRegistrationSigned already solves elsewhere in
+  // this file. Resolved once per car instead of rendering the raw URL.
+  const [signedRegImages, setSignedRegImages] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(regImages.map(u => resolveSignedUrl(u, 'car-registration'))).then(urls => { if (!cancelled) setSignedRegImages(urls); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [car?.registration_image_url, car?.registration_image_url_2]);
 
   const save = async () => {
     if (!complete || !sig) return;
@@ -10995,9 +11009,9 @@ function RenewalAuthCard({ a, car, relOrd, cc, isRtl, lang, carBrandsRef, carCat
           : "SNDK's team added the registration renewal service to your order — please fill in your details and sign the authorization before continuing."}
       </p>
 
-      {regImages.length > 0 && (
+      {signedRegImages.length > 0 && (
         <div className="grid grid-cols-2 gap-2">
-          {regImages.map((u, i) => (
+          {signedRegImages.map((u, i) => (
             <button key={i} type="button" onClick={() => setOpenImg(u)} className="rounded-lg overflow-hidden" style={{ border:'1px solid rgba(255,255,255,0.15)' }}>
               <img src={u} alt="" className="w-full h-20 object-cover"/>
             </button>
@@ -11823,9 +11837,10 @@ function NavBtns({ tr, onBack, onNext, canNext }) {
 }
 function MobNavItem({ icon:Icon, label, active, onClick, badge }) {
   return (
-    <button onClick={onClick} className="flex flex-col items-center gap-1 px-3 py-1">
+    <button onClick={onClick} className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-2xl"
+      style={{ background: active ? 'rgba(255,203,116,0.20)' : 'transparent' }}>
       <div className="relative">
-        <Icon size={20} color={active?C.gold:C.dim}/>
+        <Icon size={18} color={active?C.gold:'rgba(255,255,255,0.55)'}/>
         {badge > 0 && (
           <span className="absolute -top-1.5 -end-1.5 min-w-[14px] h-[14px] px-0.5 rounded-full text-[8px] font-black flex items-center justify-center"
             style={{ background:'#ef4444', color:'#fff' }}>
@@ -11833,7 +11848,7 @@ function MobNavItem({ icon:Icon, label, active, onClick, badge }) {
           </span>
         )}
       </div>
-      <span className="text-[9px] font-semibold" style={{ color:active?C.gold:C.dim }}>{label}</span>
+      <span className="text-[9px] font-semibold" style={{ color:active?C.gold:'rgba(255,255,255,0.55)' }}>{label}</span>
     </button>
   );
 }
